@@ -2,6 +2,7 @@ import socket
 import json
 import errno
 import sys
+import traceback
 
 from utils import make_header, removeprefix
 
@@ -15,6 +16,8 @@ class HiSockClient:
         self.group = group
         self.header_len = header_len
 
+        self._closed = False
+
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.connect(self.addr)
         self.sock.setblocking(blocking)
@@ -27,22 +30,24 @@ class HiSockClient:
         )
 
     def update(self):
-        try:
-            while True:
-                content_header = self.sock.recv(self.header_len)
+        if not self._closed:
+            try:
+                while True:
+                    content_header = self.sock.recv(self.header_len)
 
-                if not content_header:
-                    print("[SERVER] Connection forcibly closed by server, exiting...")
-                    raise SystemExit
-                content = self.sock.recv(int(content_header.decode()))
+                    if not content_header:
+                        print("[SERVER] Connection forcibly closed by server, exiting...")
+                        raise SystemExit
+                    content = self.sock.recv(int(content_header.decode()))
 
-                for matching_cmd, func in self.funcs.items():
-                    if content.startswith(matching_cmd.encode()):
-                        parse_content = content[len(matching_cmd) + 1:]
-                        func(parse_content)
-        except IOError as e:
-            if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK:
-                print(f"Reading Error: {str(e)}", file=sys.stderr)
+                    for matching_cmd, func in self.funcs.items():
+                        if content.startswith(matching_cmd.encode()):
+                            parse_content = content[len(matching_cmd) + 1:]
+                            func(parse_content)
+            except IOError as e:
+                if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK and not self._closed:
+                    print(f"Reading Error: {str(e)}", file=sys.stderr)
+                    b = traceback.print_exception(type(e), e, e.__traceback__)
 
     class _on:
         """Decorator used to handle something when receiving command"""
@@ -61,8 +66,15 @@ class HiSockClient:
     def on(self, something):
         return HiSockClient._on(self, something)
 
-    def send(self, cmd_name: str, content: bytes):
-        pass
+    def send(self, command: str, content: bytes):
+        content_header = make_header(command.encode() + b" " + content, self.header_len)
+        self.sock.send(
+            content_header + command.encode() + b" " + content
+        )
+
+    def close(self):
+        self._closed = True
+        self.sock.close()
 
 
 def connect(addr, name=None, group=None):
@@ -75,6 +87,12 @@ if __name__ == "__main__":
     @s.on("Joe")
     def hehe(msg):
         print("Wowie", msg)
+        s.send("Sussus", b"Some random msg I guess")
+
+    @s.on("pog")
+    def eee(msg):
+        print("Pog juice:", msg)
+        s.close()
 
     while True:
         s.update()

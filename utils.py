@@ -31,3 +31,9 @@ def dict_tupkey_lookup(multikey, _dict):
     for key, value in _dict.items():
         if multikey in key:
             return value
+
+
+def dict_tupkey_lookup_key(multikey, _dict):
+    for key in _dict.keys():
+        if multikey in key:
+            yield key

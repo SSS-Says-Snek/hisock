@@ -2,7 +2,10 @@ import socket
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 
-from utils import receive_message, removeprefix, make_header
+from utils import (
+    receive_message, removeprefix, make_header,
+    dict_tupkey_lookup_key
+)
 
 
 class HiSockServer:
@@ -56,7 +59,6 @@ class HiSockServer:
                 client_hello = removeprefix(client['data'].decode(), "$CLTHELLO$ ")
                 client_hello = json.loads(client_hello)
 
-                print(client_hello)  # DEBUG PRINT - REMEMBER TO REMOVE
                 self._sockets_list.append(connection)
                 self.clients[connection] = {
                     "ip": address,
@@ -70,7 +72,7 @@ class HiSockServer:
                 )] = connection
 
                 if 'join' in self.funcs:
-                    # Reserved function
+                    # Reserved function - Join
                     self.funcs['join'](
                         {
                             "ip": address,
@@ -78,16 +80,57 @@ class HiSockServer:
                             "group": client_hello['group']
                         }
                     )
+            else:
+                # "header" - The header of the msg, mostly not needed
+                # "data" - The actual data/content of the msg
+                message = receive_message(notified_sock, self.header_len)
+
+                if not message:
+                    # Most likely client disconnect
+                    client_disconnect = self.clients[notified_sock]['ip']
+                    more_client_info = self.clients[notified_sock]
+
+                    self._sockets_list.remove(notified_sock)
+                    del self.clients[notified_sock]
+                    del self.clients_rev[
+                        next(
+                            dict_tupkey_lookup_key(client_disconnect, self.clients_rev)
+                        )
+                    ]
+
+                    if 'leave' in self.funcs:
+                        # Reserved function - Leave
+                        self.funcs['leave'](
+                            {
+                                "ip": client_disconnect,
+                                "name": more_client_info['name'],
+                                "group": more_client_info['group']
+                            }
+                        )
+                else:
+                    for matching_cmd, func in self.funcs.items():
+                        if message['data'].startswith(matching_cmd.encode()):
+                            parse_content = message['data'][len(matching_cmd) + 1:]
+                            func(parse_content)
 
 
 if __name__ == "__main__":
+    print("Starting server...")
     s = HiSockServer(('192.168.1.131', 33333))
 
     @s.on("join")
     def test_sussus(yum_data):
-        print("Sussus amogus, function successfully called by HiSock class")
+        print("Whomst join, ahh it is", yum_data['name'])
         print(yum_data)
         s.send_all_clients("Joe", b"Bidome")
+
+    @s.on("leave")
+    def bruh(yum_data):
+        print("Hmmm whomst leaved, ah it is", yum_data['name'])
+
+    @s.on("Sussus")
+    def a(msg):
+        s.send_all_clients("pog", msg)
 
     while True:
         s.run()
