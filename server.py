@@ -1,10 +1,11 @@
 import socket
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
+import re
 
 from utils import (
     receive_message, removeprefix, make_header,
-    dict_tupkey_lookup_key
+    dict_tupkey_lookup, dict_tupkey_lookup_key
 )
 
 
@@ -47,6 +48,38 @@ class HiSockServer:
             client.send(
                 content_header + command.encode() + b" " + content
             )
+
+    def send_client(self, client, command: str, content: bytes):
+        content_header = make_header(command.encode() + b" " + content, self.header_len)
+        # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
+
+        if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
+            # I don't care that the regex doesn't quite work, now shh
+            # Try IP Address, should be unique
+            split_client = client.split(':')
+            try:
+                split_client[0] = map(int, split_client[0].split('.'))
+            except ValueError:
+                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+            try:
+                split_client[1] = int(split_client[1])
+            except ValueError:
+                raise ValueError("Port is not numerical (only IPv4 currently supported)")
+
+            for subip in split_client[0]:
+                if not 0 <= subip < 255:
+                    raise ValueError(f"{client} is not a valid IP address")
+            if not 0 < split_client[1] < 65535:
+                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
+
+            client = dict_tupkey_lookup((client.split(':')[0], split_client[1]), self.clients_rev)
+
+            client.send(
+                content_header + command.encode() + b" " + content
+            )
+        else:
+            # Try name
+            pass
 
     def run(self):
         read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
@@ -113,6 +146,13 @@ class HiSockServer:
                             parse_content = message['data'][len(matching_cmd) + 1:]
                             func(parse_content)
 
+                    if 'message' in self.funcs:
+                        self.funcs['message'](message['data'])
+
+
+def start_server(addr, max_connections=0, header_len=16):
+    return HiSockServer(addr, max_connections, header_len)
+
 
 if __name__ == "__main__":
     print("Starting server...")
@@ -123,6 +163,7 @@ if __name__ == "__main__":
         print("Whomst join, ahh it is", yum_data['name'])
         print(yum_data)
         s.send_all_clients("Joe", b"Bidome")
+        s.send_client(f"{yum_data['ip'][0]}:{yum_data['ip'][1]}", "Bruh", b"E")
 
     @s.on("leave")
     def bruh(yum_data):

@@ -72,6 +72,17 @@ class HiSockClient:
             content_header + command.encode() + b" " + content
         )
 
+    def raw_send(self, content):
+        header = make_header(content, self.header_len)
+        self.sock.send(
+            header + content
+        )
+
+    def wait_recv(self):
+        msg_len = int(self.sock.recv(self.header_len).decode())
+        message = self.sock.recv(msg_len)
+        return message
+
     def close(self):
         self._closed = True
         self.sock.close()
@@ -87,6 +98,8 @@ if __name__ == "__main__":
     @s.on("Joe")
     def hehe(msg):
         print("Wowie", msg)
+        yes = s.wait_recv()
+        print(yes)
         s.send("Sussus", b"Some random msg I guess")
 
     @s.on("pog")
