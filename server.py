@@ -2,6 +2,7 @@ import socket
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 import re
+import warnings
 
 from utils import (
     receive_message, removeprefix, make_header,
@@ -54,7 +55,7 @@ class HiSockServer:
         # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
 
         if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
-            # I don't care that the regex doesn't quite work, now shh
+            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
             # Try IP Address, should be unique
             split_client = client.split(':')
             try:
@@ -72,14 +73,37 @@ class HiSockServer:
             if not 0 < split_client[1] < 65535:
                 raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
 
-            client = dict_tupkey_lookup((client.split(':')[0], split_client[1]), self.clients_rev)
+            try:
+                client_sock = next(dict_tupkey_lookup((client.split(':')[0], split_client[1]), self.clients_rev))
+            except StopIteration:
+                raise TypeError(f"Client with IP {client} is not connected")
 
-            client.send(
+            client_sock.send(
                 content_header + command.encode() + b" " + content
             )
         else:
-            # Try name
-            pass
+            # Try name or group
+            try:
+                mod_clients_rev = {}
+                for key, value in self.clients_rev.items():
+                    mod_key = (key[0], key[1])  # Groups shouldn't count
+                    mod_clients_rev[mod_key] = value
+
+                client_sock = list(dict_tupkey_lookup(client, mod_clients_rev))
+            except StopIteration:
+                raise TypeError(f"Client with name \"{client}\"does not exist")
+
+            content_header = make_header(command.encode() + b" " + content, self.header_len)
+
+            if len(client_sock) > 1:
+                warnings.warn(
+                    f"{len(client_sock)} clients with name \"{client}\" detected; sending data to "
+                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
+                )
+
+            client_sock[0].send(
+                content_header + command.encode() + b" " + content
+            )
 
     def run(self):
         read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
@@ -93,11 +117,14 @@ class HiSockServer:
                 client_hello = json.loads(client_hello)
 
                 self._sockets_list.append(connection)
-                self.clients[connection] = {
+
+                clt_info = {
                     "ip": address,
                     "name": client_hello['name'],
                     "group": client_hello['group']
                 }
+
+                self.clients[connection] = clt_info
                 self.clients_rev[(
                     address,
                     client_hello['name'],
@@ -107,12 +134,16 @@ class HiSockServer:
                 if 'join' in self.funcs:
                     # Reserved function - Join
                     self.funcs['join'](
-                        {
-                            "ip": address,
-                            "name": client_hello['name'],
-                            "group": client_hello['group']
-                        }
+                        clt_info
                     )
+                clt_cnt_header = make_header(f"$CLTCONN$ {json.dumps(clt_info)}", self.header_len)
+                clt_to_send = [clt for clt in self.clients if clt != connection]
+
+                for sock_client in clt_to_send:
+                    sock_client.send(
+                        clt_cnt_header + f"$CLTCONN$ {json.dumps(clt_info)}".encode()
+                    )
+
             else:
                 # "header" - The header of the msg, mostly not needed
                 # "data" - The actual data/content of the msg
@@ -147,7 +178,7 @@ class HiSockServer:
                             func(parse_content)
 
                     if 'message' in self.funcs:
-                        self.funcs['message'](message['data'])
+                        self.funcs['message'](self.clients[notified_sock], message['data'])
 
 
 def start_server(addr, max_connections=0, header_len=16):
@@ -164,10 +195,17 @@ if __name__ == "__main__":
         print(yum_data)
         s.send_all_clients("Joe", b"Bidome")
         s.send_client(f"{yum_data['ip'][0]}:{yum_data['ip'][1]}", "Bruh", b"E")
+        s.send_client("Sussus", "e", b"E")
 
     @s.on("leave")
     def bruh(yum_data):
         print("Hmmm whomst leaved, ah it is", yum_data['name'])
+
+    @s.on("message")
+    def why(client_data, message):
+        print("OOOOH")
+        print("Client data:", client_data)
+        print("Message:", message)
 
     @s.on("Sussus")
     def a(msg):
