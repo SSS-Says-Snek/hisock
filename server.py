@@ -195,7 +195,7 @@ if __name__ == "__main__":
         print(yum_data)
         s.send_all_clients("Joe", b"Bidome")
         s.send_client(f"{yum_data['ip'][0]}:{yum_data['ip'][1]}", "Bruh", b"E")
-        s.send_client("Sussus", "e", b"E")
+        s.send_client(':'.join(map(str, yum_data['ip'])), "e", b"E")
 
     @s.on("leave")
     def bruh(yum_data):
@@ -203,7 +203,7 @@ if __name__ == "__main__":
 
     @s.on("message")
     def why(client_data, message):
-        print("OOOOH")
+        print("Message reserved function aaa")
         print("Client data:", client_data)
         print("Message:", message)
 

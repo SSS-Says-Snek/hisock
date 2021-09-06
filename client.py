@@ -1,14 +1,20 @@
+import re
 import socket
 import json
 import errno
 import sys
 import traceback
 
+from functools import wraps
 from utils import make_header, removeprefix
 
 
 class HiSockClient:
     def __init__(self, addr, name, group, blocking=True, header_len=16):
+        """
+        The client class for HiSock.
+        HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
+        """
         self.funcs = {}
 
         self.addr = addr
@@ -55,7 +61,7 @@ class HiSockClient:
                             func(parse_content)
             except IOError as e:
                 if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK and not self._closed:
-                    # Fatal Error, abort client
+                    # Fatal Error, abort client (print exception, print log, exit python)
                     traceback.print_exception(
                         type(e), e, e.__traceback__, file=sys.stderr
                     )
@@ -66,19 +72,26 @@ class HiSockClient:
 
     class _on:
         """Decorator used to handle something when receiving command"""
-        def __init__(self, outer, something):
+        def __init__(self, outer, command):
             self.outer = outer
-            self.something = something
+            self.command = command
 
         def __call__(self, func):
             def inner_func(*args, **kwargs):
+                """Adds a function that gets called when the client receives a matching command"""
                 ret = func(*args, **kwargs)
                 return ret
 
-            self.outer.funcs[self.something] = func
+            if re.search(r"\$.+\$", self.command):
+                raise ValueError(
+                    "The format \"$command$\" is used for reserved functions - "
+                    "Consider using a different format"
+                )
+            self.outer.funcs[self.command] = func
             return inner_func
 
     def on(self, something):
+        """Adds a function that gets called when the client receives a matching command"""
         return HiSockClient._on(self, something)
 
     def send(self, command: str, content: bytes):
@@ -87,18 +100,39 @@ class HiSockClient:
             content_header + command.encode() + b" " + content
         )
 
-    def raw_send(self, content):
+    def raw_send(self, content: bytes):
+        """
+        Sends a message to the server: NO COMMAND REQUIRED.
+        This is preferable in some situations, where clients need to send
+        multiple data over the server, without overcomplicating it with commands
+
+        Args:
+          content:
+            A bytes-like object, with the content/message
+            to send
+
+        Returns:
+          Nothing
+        """
         header = make_header(content, self.header_len)
         self.sock.send(
             header + content
         )
 
     def wait_recv(self):
+        """
+        Waits (blocks) until a message is sent, and returns that message
+
+        Returns:
+          A bytes-like object, containing the content/message
+          the client first receives
+        """
         msg_len = int(self.sock.recv(self.header_len).decode())
         message = self.sock.recv(msg_len)
         return message
 
     def close(self):
+        """Closes the client; running `client.update()` won't do anything now"""
         self._closed = True
         self.sock.close()
 
@@ -126,6 +160,10 @@ if __name__ == "__main__":
     def please(data):
         print("YESSSSSSSSSSS")
         print(data)
+
+    @s.on("$CLTCONN$")
+    def hehehe(msg):
+        print("This will not be able to")
 
     while True:
         s.update()
