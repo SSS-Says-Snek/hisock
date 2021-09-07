@@ -1,23 +1,81 @@
+from __future__ import annotations
+
 import socket
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 import re
 import warnings
+from typing import Callable
 
 from utils import (
     receive_message, removeprefix, make_header,
     dict_tupkey_lookup, dict_tupkey_lookup_key
 )
+from functools import wraps
 
 
 class HiSockServer:
+    """
+    The server class for HiSock
+    HiSockServer offers a neater way to send and receive data than
+    sockets. You don't need to worry about headers now, yay!
+
+    Args:
+      addr: tuple
+        A two-element tuple, containing the IP address and the
+        port number of where the server should be hosted.
+        Due to the nature of reserved ports, it is recommended to host the
+        server with a port number that's higher than 1023.
+        Only IPv4 currently supported
+      blocking: bool
+        A boolean, set to whether the server should block the loop
+        while waiting for message or not.
+        Default passed in by `start_server` is True
+      max_connections: int
+        The number of maximum connections `HiSockServer` should accept, before
+        refusing clients' connections. Pass in 0 for unlimited connections.
+        Default passed in  by `start_server` is 0
+      header_len: int
+        An integer, defining the header length of every message.
+        A smaller header length would mean a smaller maximum message
+        length (about 10**header_len).
+        Any client connecting MUST have the same header length as the server,
+        or else it will crash.
+        Default passed in by `start_server` is 16 (maximum length: 10 quadrillion bytes)
+    """
+    def __init__(
+        self,
+        addr: tuple[str, int],
+        blocking: bool,
+        max_connections: int,
+        header_len: int
+    ):
+        self.addr = addr
+        self.header_len = header_len
+
+        # Socket initialization
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.sock.setblocking(blocking)
+        self.sock.bind(addr)
+        self.sock.listen(max_connections)
+
+        self.funcs = {}
+
+        # Dictionaries and Lists for client lookup
+        self._sockets_list = [self.sock]
+        self.clients = {}
+        self.clients_rev = {}
+
     class _on:
         """Decorator used to handle something when receiving command"""
         def __init__(self, outer, cmd_activation):
             self.outer = outer
             self.cmd_activation = cmd_activation
 
-        def __call__(self, func):
+        def __call__(self, func: Callable):
+            """Adds a function that gets called when the server receives a matching command"""
+
+            @wraps(func)
             def inner_func(*args, **kwargs):
                 ret = func(*args, **kwargs)
                 return ret
@@ -25,23 +83,21 @@ class HiSockServer:
             self.outer.funcs[self.cmd_activation] = func
             return inner_func
 
-    def __init__(self, addr, max_connections=0, header_len=16):
-        self.addr = addr
-        self.header_len = header_len
+    def on(self, command: str):
+        """
+        A decorator that adds a function that gets called when the server
+        receives a matching command
 
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setblocking(True)
-        self.sock.bind(addr)
-        self.sock.listen(max_connections)
+        Args:
+          command: str
+            A string, representing the command the function should activate
+            when receiving it
 
-        self.funcs = {}
-
-        self._sockets_list = [self.sock]
-        self.clients = {}
-        self.clients_rev = {}
-
-    def on(self, something):
-        return HiSockServer._on(self, something)
+        Returns:
+          The same function
+          (The decorator just appended the function to a stack)
+        """
+        return self._on(self, command)
 
     def send_all_clients(self, command: str, content: bytes):
         content_header = make_header(command.encode() + b" " + content, self.header_len)
@@ -51,6 +107,28 @@ class HiSockServer:
             )
 
     def send_client(self, client, command: str, content: bytes):
+        """
+        Sends data to a specific client.
+        Different formats of the client is supported. It can be:
+          - An IP + Port format, written as "ip:port"
+          - A client name, if it exists
+
+        Args:
+          client: str
+            The client to send data to. The format could be either by IP+Port,
+            or a client name
+          command: str
+            A string, containing the command to send
+          content: bytes
+            A bytes-like object, with the content/message
+            to send
+
+        Raises:
+          ValueError, if the client format is wrong
+          TypeError, if client does not exist
+          Warning, if using client name and more than one client with
+            the same name is detected
+        """
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
 
@@ -106,6 +184,11 @@ class HiSockServer:
             )
 
     def run(self):
+        """
+        Runs the server. This method handles the sending and receiving of data,
+        so it should be run once every iteration of a while loop, as to not
+        lose valuable information
+        """
         read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
 
         for notified_sock in read_sock:
@@ -181,8 +264,14 @@ class HiSockServer:
                         self.funcs['message'](self.clients[notified_sock], message['data'])
 
 
-def start_server(addr, max_connections=0, header_len=16):
-    return HiSockServer(addr, max_connections, header_len)
+def start_server(addr, blocking=True, max_connections=0, header_len=16):
+    """
+    Creates a `HiSockServer` instance. See `HiSockServer` for more details
+
+    Returns:
+      A `HiSockServer` instance
+    """
+    return HiSockServer(addr, blocking, max_connections, header_len)
 
 
 if __name__ == "__main__":

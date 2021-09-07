@@ -14,6 +14,42 @@ from utils import make_header, removeprefix
 
 
 class HiSockClient:
+    """
+    The client class for HiSock.
+    HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
+
+    Args:
+      addr: tuple
+        A two-element tuple, containing the IP address and the
+        port number of the server wishing to connect to
+        Only IPv4 currently supported
+      name: str, None
+        Either a string or NoneType, representing the name the client
+        goes by. Having a name provides an easy interface of sending
+        data to a specific client and identifying clients. It is therefore
+        highly recommended to pass in a name
+
+        Pass in NoneType for no name (`connect` should handle that)
+      group: str, None
+        Either a string or NoneType, representing the group the client
+        is in. Being in a group provides an easy interface of sending
+        data to multiple specific clients, and identifying multiple clients.
+        It is highly recommended to provide a group for complex servers
+
+        Pass in NoneType for no group (`connect` should handle that)
+      blocking: bool = True
+        A boolean, set to whether the client should block the loop
+        while waiting for message or not.
+        Default sets to True
+      header_len: int = 16
+        An integer, defining the header length of every message.
+        A smaller header length would mean a smaller maximum message
+        length (about 10**header_len).
+        The header length MUST be the same as the server connecting, or it will
+        crash.
+        Default sets to 16 (maximum length: 10 quadrillion bytes)
+    """
+
     def __init__(
             self,
             addr: tuple[str, int],
@@ -22,39 +58,6 @@ class HiSockClient:
             blocking: bool = True,
             header_len: int = 16
     ):
-        """
-        The client class for HiSock.
-        HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
-
-        Args:
-          addr: tuple
-            A two-element tuple, containing the IP address and the
-            port number of the server wishing to connect to
-            Only IPv4 currently supported
-          name: str, None
-            Either a string or NoneType, representing the name the client
-            goes by. Having a name provides an easy interface of sending
-            data to a specific client and identifying clients. It is therefore
-            highly recommended to pass in a name
-
-            Pass in NoneType for no name (`connect` should handle that)
-          group: str, None
-            Either a string or NoneType, representing the group the client
-            is in. Being in a group provides an easy interface of sending
-            data to multiple specific clients, and identifying multiple clients.
-            It is highly recommended to provide a group for complex servers
-
-            Pass in NoneType for no group (`connect` should handle that)
-          blocking: bool = True
-            A boolean, set to whether the client should block the loop
-            while waiting for message or not.
-            Default sets to True
-          header_len: int = 16
-            An integer, defining the header length of every message.
-            A smaller header length would mean a smaller maximum message
-            length (about 10**header_len).
-            Default sets to 16 (maximum length: 10 quadrillion bytes)
-        """
         self.funcs = {}
 
         self.addr = addr
@@ -127,9 +130,10 @@ class HiSockClient:
             self.command = command
 
         def __call__(self, func: Callable):
+            """Adds a function that gets called when the client receives a matching command"""
+
             @wraps(func)
             def inner_func(*args, **kwargs):
-                """Adds a function that gets called when the client receives a matching command"""
                 ret = func(*args, **kwargs)
                 return ret
 
@@ -155,7 +159,7 @@ class HiSockClient:
           The same function
           (The decorator just appended the function to a stack)
         """
-        return HiSockClient._on(self, command)
+        return self._on(self, command)
 
     def send(self, command: str, content: bytes):
         """
