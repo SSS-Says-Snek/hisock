@@ -40,7 +40,11 @@ def dict_tupkey_lookup(multikey, _dict, idx_to_match=None):
                 yield value
 
 
-def dict_tupkey_lookup_key(multikey, _dict):
+def dict_tupkey_lookup_key(multikey, _dict, idx_to_match=None):
     for key in _dict.keys():
-        if multikey in key:
-            yield key
+        if idx_to_match is None:
+            if multikey in key:
+                yield key
+        elif isinstance(idx_to_match, int):
+            if multikey == key[idx_to_match]:
+                yield key
