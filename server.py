@@ -5,7 +5,7 @@ import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 import re  # Regex, to make sure arguments are passed correctly
 import warnings
-from typing import Callable
+from typing import Callable, Union
 
 from utils import (
     receive_message, removeprefix, make_header,
@@ -204,12 +204,10 @@ class HiSockServer:
             split_client = client.split(':')
             reconstructed_client = []
             try:
-                # split_client[0] = map(int, split_client[0].split('.'))
                 reconstructed_client.append(map(int, split_client[0].split('.')))
             except ValueError:
                 raise ValueError("IP is not numerical (only IPv4 currently supported)")
             try:
-                # split_client[1] = int(split_client[1])
                 reconstructed_client.append(int(split_client[1]))
             except ValueError:
                 raise ValueError("Port is not numerical (only IPv4 currently supported)")
@@ -366,7 +364,7 @@ class HiSockServer:
         mod_group_clients = []
 
         if len(group_clients) == 0:
-            raise ValueError(f"Group {group} does not exist")
+            raise TypeError(f"Group {group} does not exist")
 
         for clt in group_clients:
             clt_conn = self.clients_rev[clt]
@@ -379,6 +377,118 @@ class HiSockServer:
             mod_group_clients.append(mod_dict)
 
         return mod_group_clients
+
+    def get_client(self, client: Union[str, tuple[str, int]]):
+        """
+        Gets a specific client's information, based on either:
+            1. The client name
+            2. The client IP+Port
+            3. The client IP+Port, in a 2-element tuple
+
+        Args:
+          client: str, tuple
+            A parameter, representing the specific client to look up.
+            As shown above, it can either be represented
+            as a string, or as a tuple.
+
+        Returns:
+          A dictionary of the client's info, including
+          IP+Port, Name, Group, and Socket
+
+        Raises:
+          ValueError, if the client argument is invalid
+          TypeError, if the client doesn't exist
+        """
+        if isinstance(client, tuple):
+            if len(client) == 2 and isinstance(client[0], str):
+                if re.search(r"(((\d?){3}\.){3}(\d?){3})", client[0]) and isinstance(client[1], int):
+                    client = f"{client[0]}:{client[1]}"
+                else:
+                    raise ValueError(
+                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                        f"{client}"
+                    )
+            else:
+                raise ValueError(
+                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                    f"{client}"
+                )
+
+        if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
+            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
+            # Try IP Address, should be unique
+            split_client = client.split(':')
+            reconstructed_client = []
+            try:
+                reconstructed_client.append(map(int, split_client[0].split('.')))
+            except ValueError:
+                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+            try:
+                reconstructed_client.append(int(split_client[1]))
+            except ValueError:
+                raise ValueError("Port is not numerical (only IPv4 currently supported)")
+
+            for subip in reconstructed_client[0]:
+                if not 0 <= subip < 255:
+                    raise ValueError(f"{client} is not a valid IP address")
+            if not 0 < reconstructed_client[1] < 65535:
+                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
+
+            try:
+                client_tup = (client.split(':')[0], reconstructed_client[1])
+                client_sock = next(
+                    dict_tupkey_lookup(
+                        client_tup, self.clients_rev,
+                        idx_to_match=0
+                    )
+                )
+                client_info = next(
+                    dict_tupkey_lookup_key(
+                        client_tup, self.clients_rev,
+                        idx_to_match=0
+                    )
+                )
+                client_dict = {
+                    "ip": client_info[0],
+                    "name": client_info[1],
+                    "group": client_info[2],
+                    "socket": client_sock
+                }
+
+                return client_dict
+            except StopIteration:
+                raise TypeError(f"Client with IP {client} is not connected")
+        else:
+            mod_clients_rev = {}
+            for key, value in self.clients_rev.items():
+                mod_key = (key[0], key[1])  # Groups shouldn't count
+                mod_clients_rev[mod_key] = value
+
+            client_sock = list(dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
+
+            if len(client_sock) == 0:
+                raise TypeError(f"Client with name \"{client}\"does not exist")
+            elif len(client_sock) > 1:
+                warnings.warn(
+                    f"{len(client_sock)} clients with name \"{client}\" detected; getting info from "
+                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
+                )
+
+            client_info = next(
+                dict_tupkey_lookup_key(
+                    client, self.clients_rev,
+                    idx_to_match=1
+                )
+            )
+
+            client_dict = {
+                "ip": client_info[0],
+                "name": client_info[1],
+                "group": client_info[2],
+                "socket": client_sock[0]
+            }
+
+            return client_dict
 
     def get_addr(self):
         return self.addr
