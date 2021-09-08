@@ -69,7 +69,8 @@ class HiSockClient:
 
         # Remember to update them as more rev funcs are added
         self.reserved_functions = [
-            'client_connect'
+            'client_connect',
+            'client_disconnect'
         ]
 
         # Socket intialization
@@ -79,7 +80,7 @@ class HiSockClient:
 
         # Send client hello
         hello_dict = {"name": self.name, "group": self.group}
-        conn_header = make_header(f"$CLTHELLO$ {hello_dict}", self.header_len)
+        conn_header = make_header(f"$CLTHELLO$ {json.dumps(hello_dict)}", self.header_len)
 
         self.sock.send(
             conn_header + f"$CLTHELLO$ {json.dumps(hello_dict)}".encode()
@@ -100,11 +101,24 @@ class HiSockClient:
                         raise SystemExit
                     content = self.sock.recv(int(content_header.decode()))
 
+                    for matching in self.funcs.keys():
+                        if re.search(r"\$.+\$", matching):
+                            raise ValueError(
+                                "The format \"$command$\" is used for reserved functions - "
+                                "Consider using a different format\n"
+                                f"(Found with function \"{matching}\""
+                            )
+
                     if content.startswith(b"$CLTCONN$") and 'client_connect' in self.funcs:
                         clt_content = json.loads(
                             removeprefix(content, b"$CLTCONN$ ")
                         )
                         self.funcs['client_connect'](clt_content)
+                    elif content.startswith(b"$CLTDISCONN$") and 'client_disconnect' in self.funcs:
+                        clt_content = json.loads(
+                            removeprefix(content, b"$CLTDISCONN$ ")
+                        )
+                        self.funcs['client_disconnect'](clt_content)
 
                     for matching_cmd, func in self.funcs.items():
                         if content.startswith(matching_cmd.encode()) and \
@@ -112,6 +126,7 @@ class HiSockClient:
                             parse_content = content[len(matching_cmd) + 1:]
                             func(parse_content)
             except IOError as e:
+                # Normal, means message has ended
                 if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK and not self._closed:
                     # Fatal Error, abort client (print exception, print log, exit python)
                     traceback.print_exception(
@@ -235,28 +250,32 @@ def connect(addr, name=None, group=None):
 
 if __name__ == "__main__":
     s = connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
-    help(wraps)
-
 
     @s.on("Joe")
-    def hehe(msg):
-        print("Wowie", msg)
-        yes = s.wait_recv()
-        print(yes)
+    def hehe(_):
+        print("This message was sent from server after client connection\n"
+              "(Sent to every client)")
         s.send("Sussus", b"Some random msg I guess")
 
 
     @s.on("pog")
     def eee(msg):
-        print("Pog juice:", msg)
+        print("Follow up message sent by server\n"
+              "(Also sent to every client)")
+        print("Message:", msg)
         # s.close()
-
 
     @s.on("client_connect")
     def please(data):
-        print("YESSSSSSSSSSS")
-        print(data)
+        print(f"Client {':'.join(map(str, data['ip']))} connected :)")
 
+    @s.on("client_disconnect")
+    def haha_bois(disconn_data):
+        print(f"Aww man, {':'.join(map(str, disconn_data['ip']))} disconnected :(")
+
+    @s.on("Test")
+    def test(data):
+        print("Group message received:", data)
 
     while True:
         s.update()

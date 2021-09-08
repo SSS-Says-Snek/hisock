@@ -30,10 +30,14 @@ def removeprefix(string: Union[str, bytes], prefix: Union[str, bytes], /) -> Uni
         return string[:]
 
 
-def dict_tupkey_lookup(multikey, _dict):
+def dict_tupkey_lookup(multikey, _dict, idx_to_match=None):
     for key, value in _dict.items():
-        if multikey in key:
-            yield value
+        if idx_to_match is None:
+            if multikey in key:
+                yield value
+        elif isinstance(idx_to_match, int):
+            if multikey == key[idx_to_match]:
+                yield value
 
 
 def dict_tupkey_lookup_key(multikey, _dict):
