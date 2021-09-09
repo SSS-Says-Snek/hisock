@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import re
 import socket
 import json
@@ -10,12 +11,12 @@ import traceback
 from functools import wraps
 from typing import Union, Callable, Any
 
-from utils import make_header, removeprefix
+from utils import make_header, _removeprefix
 
 
 class HiSockClient:
     """
-    The client class for HiSock.
+    The client class for hisock.
     HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
 
     Args:
@@ -111,20 +112,37 @@ class HiSockClient:
 
                     if content.startswith(b"$CLTCONN$") and 'client_connect' in self.funcs:
                         clt_content = json.loads(
-                            removeprefix(content, b"$CLTCONN$ ")
+                            _removeprefix(content, b"$CLTCONN$ ")
                         )
-                        self.funcs['client_connect'](clt_content)
+                        self.funcs['client_connect']['func'](clt_content)
                     elif content.startswith(b"$CLTDISCONN$") and 'client_disconnect' in self.funcs:
                         clt_content = json.loads(
-                            removeprefix(content, b"$CLTDISCONN$ ")
+                            _removeprefix(content, b"$CLTDISCONN$ ")
                         )
-                        self.funcs['client_disconnect'](clt_content)
+                        self.funcs['client_disconnect']['func'](clt_content)
 
                     for matching_cmd, func in self.funcs.items():
                         if content.startswith(matching_cmd.encode()) and \
                                 matching_cmd not in self.reserved_functions:
                             parse_content = content[len(matching_cmd) + 1:]
-                            func(parse_content)
+                            if func['type_hint'] == str:
+                                try:
+                                    parse_content = parse_content.decode()
+                                except UnicodeDecodeError as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to string failed "
+                                        f"for function {func['name']}:\n           {e}"
+                                    )
+                            elif func['type_hint'] == int:
+                                try:
+                                    parse_content = int(parse_content)
+                                except ValueError as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to int "
+                                        f"failed for function {func['name']}:\n           {e}"
+                                    ) from ValueError
+
+                            func['func'](parse_content)
             except IOError as e:
                 # Normal, means message has ended
                 if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK and not self._closed:
@@ -157,7 +175,18 @@ class HiSockClient:
                     "The format \"$command$\" is used for reserved functions - "
                     "Consider using a different format"
                 )
-            self.outer.funcs[self.command] = func
+            annots = inspect.getfullargspec(func).annotations
+
+            try:
+                msg_annotation = __builtins__.__dict__[annots[list(annots.keys())[0]]]
+            except IndexError:
+                msg_annotation = None
+            func_dict = {
+                "func": func,
+                "name": self.command,
+                "type_hint": msg_annotation
+            }
+            self.outer.funcs[self.command] = func_dict
             return inner_func
 
     def on(self, command: str):

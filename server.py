@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import inspect
 import socket  # Socket module, duh
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
@@ -8,15 +9,15 @@ import warnings
 from typing import Callable, Union
 
 from utils import (
-    receive_message, removeprefix, make_header,
-    dict_tupkey_lookup, dict_tupkey_lookup_key
+    receive_message, _removeprefix, make_header,
+    _dict_tupkey_lookup, _dict_tupkey_lookup_key
 )
 from functools import wraps
 
 
 class HiSockServer:
     """
-    The server class for HiSock
+    The server class for hisock
     HiSockServer offers a neater way to send and receive data than
     sockets. You don't need to worry about headers now, yay!
 
@@ -87,7 +88,18 @@ class HiSockServer:
                 ret = func(*args, **kwargs)
                 return ret
 
-            self.outer.funcs[self.cmd_activation] = func
+            annots = inspect.getfullargspec(func).annotations
+
+            try:
+                msg_annotation = __builtins__.__dict__[annots[list(annots.keys())[1]]]
+            except IndexError:
+                msg_annotation = None
+            func_dict = {
+                "func": func,
+                "type_hint": msg_annotation
+            }
+
+            self.outer.funcs[self.cmd_activation] = func_dict
             return inner_func
 
     def on(self, command: str):
@@ -142,7 +154,7 @@ class HiSockServer:
         Raises:
           TypeError, if the group does not exist
         """
-        group_clients = dict_tupkey_lookup(
+        group_clients = _dict_tupkey_lookup(
             group, self.clients_rev,
             idx_to_match=2
         )
@@ -220,7 +232,7 @@ class HiSockServer:
 
             try:
                 client_sock = next(
-                    dict_tupkey_lookup(
+                    _dict_tupkey_lookup(
                         (client.split(':')[0], reconstructed_client[1]), self.clients_rev,
                         idx_to_match=0
                     )
@@ -239,7 +251,7 @@ class HiSockServer:
                     mod_key = (key[0], key[1])  # Groups shouldn't count
                     mod_clients_rev[mod_key] = value
 
-                client_sock = list(dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
+                client_sock = list(_dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
             except StopIteration:
                 raise TypeError(f"Client with name \"{client}\"does not exist")
 
@@ -268,7 +280,7 @@ class HiSockServer:
                 connection, address = self.sock.accept()
                 client = receive_message(connection, self.header_len)
 
-                client_hello = removeprefix(client['data'].decode(), "$CLTHELLO$ ")
+                client_hello = _removeprefix(client['data'].decode(), "$CLTHELLO$ ")
                 client_hello = json.loads(client_hello)
 
                 self._sockets_list.append(connection)
@@ -288,7 +300,7 @@ class HiSockServer:
 
                 if 'join' in self.funcs:
                     # Reserved function - Join
-                    self.funcs['join'](
+                    self.funcs['join']['func'](
                         clt_info
                     )
                 clt_cnt_header = make_header(f"$CLTCONN$ {json.dumps(clt_info)}", self.header_len)
@@ -313,13 +325,13 @@ class HiSockServer:
                     del self.clients[notified_sock]
                     del self.clients_rev[
                         next(
-                            dict_tupkey_lookup_key(client_disconnect, self.clients_rev)
+                            _dict_tupkey_lookup_key(client_disconnect, self.clients_rev)
                         )
                     ]
 
                     if 'leave' in self.funcs:
                         # Reserved function - Leave
-                        self.funcs['leave'](
+                        self.funcs['leave']['func'](
                             {
                                 "ip": client_disconnect,
                                 "name": more_client_info['name'],
@@ -334,13 +346,30 @@ class HiSockServer:
                             clt_dcnt_header + f"$CLTDISCONN$ {json.dumps(more_client_info)}".encode()
                         )
                 else:
+                    clt_data = self.clients[notified_sock]
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
                             parse_content = message['data'][len(matching_cmd) + 1:]
-                            func(parse_content)
+
+                            if func['type_hint'] == str:
+                                try:
+                                    parse_content = parse_content.decode()
+                                except UnicodeDecodeError as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to string failed\n{str(e)}"
+                                    )
+                            elif func['type_hint'] == int:
+                                try:
+                                    parse_content = int(parse_content)
+                                except ValueError as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to int failed: {e}"
+                                    ) from ValueError
+
+                            func['func'](clt_data, parse_content)
 
                     if 'message' in self.funcs:
-                        self.funcs['message'](self.clients[notified_sock], message['data'])
+                        self.funcs['message']['func'](self.clients[notified_sock], message['data'])
 
     def get_group(self, group: str):
         """
@@ -357,7 +386,7 @@ class HiSockServer:
         Raises:
           TypeError, if the group does not exist
         """
-        group_clients = list(dict_tupkey_lookup_key(
+        group_clients = list(_dict_tupkey_lookup_key(
             group, self.clients_rev,
             idx_to_match=2
         ))
@@ -437,13 +466,13 @@ class HiSockServer:
             try:
                 client_tup = (client.split(':')[0], reconstructed_client[1])
                 client_sock = next(
-                    dict_tupkey_lookup(
+                    _dict_tupkey_lookup(
                         client_tup, self.clients_rev,
                         idx_to_match=0
                     )
                 )
                 client_info = next(
-                    dict_tupkey_lookup_key(
+                    _dict_tupkey_lookup_key(
                         client_tup, self.clients_rev,
                         idx_to_match=0
                     )
@@ -464,7 +493,7 @@ class HiSockServer:
                 mod_key = (key[0], key[1])  # Groups shouldn't count
                 mod_clients_rev[mod_key] = value
 
-            client_sock = list(dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
+            client_sock = list(_dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
 
             if len(client_sock) == 0:
                 raise TypeError(f"Client with name \"{client}\"does not exist")
@@ -475,7 +504,7 @@ class HiSockServer:
                 )
 
             client_info = next(
-                dict_tupkey_lookup_key(
+                _dict_tupkey_lookup_key(
                     client, self.clients_rev,
                     idx_to_match=1
                 )
@@ -532,7 +561,7 @@ if __name__ == "__main__":
 
 
     @s.on("Sussus")
-    def a(msg):
+    def a(clt_data, msg):
         s.send_all_clients("pog", msg)
 
 
