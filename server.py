@@ -115,6 +115,28 @@ class HiSockServer:
         Returns:
           The same function
           (The decorator just appended the function to a stack)
+
+        Extra:
+          Reserved functions are functions that get activated on
+          specific events. Currently, there are 3 for HiSockServer:
+            1. join - Activated when a client connects to the server
+            2. leave - Activated when a client disconnects from the server
+            3. message - Activated when a client messages to the server
+
+          The parameters of the function depend on the command to listen.
+          For example, reserved commands `join` and `leave` have only one
+          client parameter passed, while reserved command `message` has two:
+          Client Data, and Message.
+          Other nonreserved functions will also be passed in the same
+          parameters as `message`
+
+          In addition, certain type casting is available to nonreserved functions.
+          That means, that, using type hints, you can automatically convert
+          between needed instances. The type casting currently supports:
+            1. bytes -> int (Will raise exception if bytes is not numerical)
+            2. bytes -> str (Will raise exception if there's a unicode error)
+          Type casting for reserved commands is scheduled to be
+          implemented, and is currently being worked on.
         """
         return self._on(self, command)
 
@@ -561,7 +583,7 @@ if __name__ == "__main__":
 
 
     @s.on("Sussus")
-    def a(clt_data, msg):
+    def a(_, msg):  # _ actually is clt_data
         s.send_all_clients("pog", msg)
 
 

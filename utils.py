@@ -10,6 +10,18 @@ __all__ = [
 ]
 
 
+class ClientException(Exception):
+    pass
+
+
+class ServerException(Exception):
+    pass
+
+
+class NoMessageException(Exception):
+    pass
+
+
 def make_header(header_msg, header_len, encode=True):
     len_msg = len(header_msg)
     constructed_header = f"{len_msg}{' ' * (header_len - len(str(len_msg)))}"
@@ -27,12 +39,15 @@ def receive_message(connection, header_len):
             data = connection.recv(msg_len)
 
             return {"header": header_msg, "data": data}
-        return False
+        raise NoMessageException(
+            "No header received, aborting..."
+        )
     except ConnectionResetError:
         pass
 
 
 def _removeprefix(string: Union[str, bytes], prefix: Union[str, bytes], /) -> Union[str, bytes]:
+    """A backwards-compatible alternative of str.removeprefix"""
     if string.startswith(prefix):
         return string[len(prefix):]
     else:
@@ -40,6 +55,10 @@ def _removeprefix(string: Union[str, bytes], prefix: Union[str, bytes], /) -> Un
 
 
 def _dict_tupkey_lookup(multikey, _dict, idx_to_match=None):
+    """
+    Returns the value of the dict looked up,
+    given a key that is part of a key-tuple
+    """
     for key, value in _dict.items():
         if idx_to_match is None:
             if multikey in key:
@@ -50,6 +69,10 @@ def _dict_tupkey_lookup(multikey, _dict, idx_to_match=None):
 
 
 def _dict_tupkey_lookup_key(multikey, _dict, idx_to_match=None):
+    """
+    Returns the key of the dict looked up,
+    given a key that is part of a key-tuple
+    """
     for key in _dict.keys():
         if idx_to_match is None:
             if multikey in key:

@@ -202,6 +202,25 @@ class HiSockClient:
         Returns:
           The same function
           (The decorator just appended the function to a stack)
+
+        Extra:
+          Reserved functions are functions that get activated on
+          specific events. Currently, there are 2 for HiSockClient:
+            1. client_connect - Activated when a client connects to the server
+            2. client_disconnect - Activated when a client disconnects from the server
+
+          The parameters of the function depend on the command to listen.
+          For example, reserved functions `client_connect` and
+          `client_disconnect` gets the client's data passed in as an argument.
+          All other nonreserved functions get the message passed in.
+
+          In addition, certain type casting is available to nonreserved functions.
+          That means, that, using type hints, you can automatically convert
+          between needed instances. The type casting currently supports:
+            1. bytes -> int (Will raise exception if bytes is not numerical)
+            2. bytes -> str (Will raise exception if there's a unicode error)
+          Type casting for reserved commands is scheduled to be
+          implemented, and is currently being worked on.
         """
         return self._on(self, command)
 
