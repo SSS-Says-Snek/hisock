@@ -38,6 +38,9 @@ def handle_hello(msg):
     print("In response, I'm going to send the server a request to do some processing")
 
     s.send("processing1", b"randnum**2")
+    result = int(s.wait_recv())
+
+    print(f"WHOAAA! The result is {result}! Thanks server!")
 
 
 while True:

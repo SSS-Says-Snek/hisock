@@ -6,6 +6,7 @@ import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 import re  # Regex, to make sure arguments are passed correctly
 import warnings
+import builtins
 from typing import Callable, Union
 
 from utils import (
@@ -106,11 +107,15 @@ class HiSockServer:
             if self.cmd_activation not in self.outer.reserved_functions or \
                     self.cmd_activation == "message":
                 try:
-                    clt_annotation = __builtins__.__dict__[annots[args[0]]]
+                    clt_annotation = annots[args[0]]
+                    if isinstance(clt_annotation, str):
+                        clt_annotation = builtins.__dict__[annots[args[0]]]
                 except KeyError:
                     clt_annotation = None
                 try:
-                    msg_annotation = __builtins__.__dict__[annots[args[1]]]
+                    msg_annotation = annots[args[1]]
+                    if isinstance(msg_annotation, str):
+                        msg_annotation = builtins.__dict__[annots[args[1]]]
                 except KeyError:
                     msg_annotation = None
             else:
@@ -317,6 +322,102 @@ class HiSockServer:
                 content_header + command.encode() + b" " + content
             )
 
+    def send_client_raw(self, client, content: bytes):
+        """
+        Sends data to a specific client, *without a command*
+        Different formats of the client is supported. It can be:
+          - An IP + Port format, written as "ip:port"
+          - A client name, if it exists
+
+        Args:
+          client: str, tuple
+            The client to send data to. The format could be either by IP+Port,
+            or a client name
+          content: bytes
+            A bytes-like object, with the content/message
+            to send
+
+        Raises:
+          ValueError, if the client format is wrong
+          TypeError, if client does not exist
+          Warning, if using client name and more than one client with
+            the same name is detected
+        """
+        content_header = make_header(content, self.header_len)
+        # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
+
+        if isinstance(client, tuple):
+            if len(client) == 2 and isinstance(client[0], str):
+                if re.search(r"(((\d?){3}\.){3}(\d?){3})", client[0]) and isinstance(client[1], int):
+                    client = f"{client[0]}:{client[1]}"
+                else:
+                    raise ValueError(
+                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                        f"{client}"
+                    )
+            else:
+                raise ValueError(
+                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                    f"{client}"
+                )
+
+        if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
+            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
+            # Try IP Address, should be unique
+            split_client = client.split(':')
+            reconstructed_client = []
+            try:
+                reconstructed_client.append(map(int, split_client[0].split('.')))
+            except ValueError:
+                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+            try:
+                reconstructed_client.append(int(split_client[1]))
+            except ValueError:
+                raise ValueError("Port is not numerical (only IPv4 currently supported)")
+
+            for subip in reconstructed_client[0]:
+                if not 0 <= subip < 255:
+                    raise ValueError(f"{client} is not a valid IP address")
+            if not 0 < reconstructed_client[1] < 65535:
+                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
+
+            try:
+                client_sock = next(
+                    _dict_tupkey_lookup(
+                        (client.split(':')[0], reconstructed_client[1]), self.clients_rev,
+                        idx_to_match=0
+                    )
+                )
+            except StopIteration:
+                raise TypeError(f"Client with IP {client} is not connected")
+
+            client_sock.send(
+                content_header + content
+            )
+        else:
+            # Try name or group
+            try:
+                mod_clients_rev = {}
+                for key, value in self.clients_rev.items():
+                    mod_key = (key[0], key[1])  # Groups shouldn't count
+                    mod_clients_rev[mod_key] = value
+
+                client_sock = list(_dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
+            except StopIteration:
+                raise TypeError(f"Client with name \"{client}\"does not exist")
+
+            content_header = make_header(content, self.header_len)
+
+            if len(client_sock) > 1:
+                warnings.warn(
+                    f"{len(client_sock)} clients with name \"{client}\" detected; sending data to "
+                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
+                )
+
+            client_sock[0].send(
+                content_header + content
+            )
+
     def run(self):
         """
         Runs the server. This method handles the sending and receiving of data,
@@ -400,7 +501,6 @@ class HiSockServer:
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
                             parse_content = message['data'][len(matching_cmd) + 1:]
-                            print(func['type_hint'])
 
                             if func['type_hint']['msg'] == str:
                                 try:

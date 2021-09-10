@@ -1,6 +1,7 @@
 import sys
 import time
-from hisock import start_server, get_local_ip
+import random
+from hisock import start_server, get_local_ip, ip_tup2str
 
 ADDR = get_local_ip()
 PORT = 6969
@@ -27,8 +28,20 @@ def client_join(client_data):
 
 
 @server.on("processing1")
-def process(client, process_request):
-    print(f"")
+def process(client, process_request: str):
+    print(f"\nAlright, looks like {ip_tup2str(client['ip'])} received the hello message, "
+          "\nas now they're trying to compute something on the server, because they have "
+          "potato computers")
+    print("Their processing request is:", process_request)
+
+    for _ in range(process_request.count("randnum")):
+        randnum = str(random.randint(1, 100000000))
+        process_request = process_request.replace("randnum", randnum, 1)
+
+    result = eval(process_request)  # Insecure, but I'm lazy, so...
+    print(f"Cool! The result is {result}! I'mma send it to the client")
+
+    server.send_client_raw(client['ip'], str(result).encode())
 
 
 while True:

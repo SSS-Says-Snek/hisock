@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import builtins
 import inspect
 import re
 import socket
@@ -178,7 +179,7 @@ class HiSockClient:
             annots = inspect.getfullargspec(func).annotations
 
             try:
-                msg_annotation = __builtins__.__dict__[annots[list(annots.keys())[0]]]
+                msg_annotation = builtins.__dict__[annots[list(annots.keys())[0]]]
             except IndexError:
                 msg_annotation = None
             func_dict = {
