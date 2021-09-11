@@ -3,11 +3,17 @@ from __future__ import annotations
 import socket
 from typing import Union
 
-__all__ = [
-    'make_header', 'receive_message',
-    'get_local_ip', 'ip_str2tup',
-    'ip_tup2str'
-]
+__all__ = dir(__file__)
+
+for obj in __all__:
+    if obj.startswith('_'):
+        __all__.remove(obj)
+
+# __all__ = [
+#     'make_header', 'receive_message',
+#     'get_local_ip', 'ipstr_to_tup',
+#     'iptup_to_str'
+# ]
 
 
 class ClientException(Exception):
@@ -19,6 +25,10 @@ class ServerException(Exception):
 
 
 class NoMessageException(Exception):
+    pass
+
+
+class ServerNotRunning(Exception):
     pass
 
 
@@ -93,7 +103,7 @@ def get_local_ip():
     return socket.gethostbyname(socket.gethostname())
 
 
-def ip_str2tup(formatted_ip: str):
+def ipstr_to_tup(formatted_ip: str):
     """
     Converts a string IP address into a tuple equivalent
 
@@ -111,7 +121,7 @@ def ip_str2tup(formatted_ip: str):
     return tuple(ip_split)
 
 
-def ip_tup2str(formatted_tuple: tuple[str, int]):
+def iptup_to_str(formatted_tuple: tuple[str, int]):
     """
     Converts a tuple IP address into a string equivalent
 

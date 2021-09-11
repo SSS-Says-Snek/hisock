@@ -1,19 +1,28 @@
-from __future__ import annotations
+"""
+This module contains the HiSockServer, used to power the server
+of HiSock, but also contains a `start_server` function, to pass in
+things automatically. It is strongly advised to use `start_server`
+over `HiSockServer`
+"""
 
-import inspect
+# Imports
+from __future__ import annotations  # Remove when 3.10 is used by majority
+
+import inspect  # Inspect, for type-hinting detection
 import socket  # Socket module, duh
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 import re  # Regex, to make sure arguments are passed correctly
-import warnings
-import builtins
-from typing import Callable, Union
+import warnings  # Warnings, for errors that aren't severe
+import builtins  # Builtins, to convert string methods into builtins
+from typing import Callable, Union  # Typing, for cool type hints
 
+# Utilities
 from utils import (
     receive_message, _removeprefix, make_header,
-    _dict_tupkey_lookup, _dict_tupkey_lookup_key
+    _dict_tupkey_lookup, _dict_tupkey_lookup_key,
 )
-from functools import wraps
+from functools import wraps  # Functools, to wrap decorator docstring
 
 
 class HiSockServer:
@@ -63,6 +72,7 @@ class HiSockServer:
         self.sock.bind(addr)
         self.sock.listen(max_connections)
 
+        # Function related storage
         self.funcs = {}
         self.reserved_functions = [
             'join', 'leave',
@@ -81,6 +91,8 @@ class HiSockServer:
         """Decorator used to handle something when receiving command"""
 
         def __init__(self, outer, cmd_activation):
+            # `outer` arg is for the HiSockServer instance
+            # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.cmd_activation = cmd_activation
 
@@ -90,39 +102,52 @@ class HiSockServer:
             # Inner function that's returned
             @wraps(func)
             def inner_func(*args, **kwargs):
+                # Executes the function normally
                 ret = func(*args, **kwargs)
                 return ret
 
-            args = inspect.getfullargspec(func).args
+            func_args = inspect.getfullargspec(func).args
 
-            if len(args) != 2 and (
+            if len(func_args) != 2 and (
                     self.cmd_activation not in self.outer.reserved_functions or
                     self.cmd_activation == "message"):
                 raise ValueError(
-                    f"Incorrect number of arguments: {len(args)} != 2"
+                    f"Incorrect number of arguments: {len(func_args)} != 2"
                 )
 
             annots = inspect.getfullargspec(func).annotations
 
             if self.cmd_activation not in self.outer.reserved_functions or \
                     self.cmd_activation == "message":
+                # Processes nonreserved commands and reserved `message `
+
+                # `func_args` looks like ['clt_data', 'msg']
+                # `annots` look like {'msg': str}
                 try:
-                    clt_annotation = annots[args[0]]
+                    # Try to map first arg (client data)
+                    # Into type hint compliant one
+                    clt_annotation = annots[func_args[0]]
                     if isinstance(clt_annotation, str):
-                        clt_annotation = builtins.__dict__[annots[args[0]]]
+                        clt_annotation = builtins.__dict__[annots[func_args[0]]]
                 except KeyError:
+                    # KeyError means there is no type hint
                     clt_annotation = None
                 try:
-                    msg_annotation = annots[args[1]]
+                    # Try to map second arg (content)
+                    # Into type hint compliant one
+                    msg_annotation = annots[func_args[1]]
                     if isinstance(msg_annotation, str):
-                        msg_annotation = builtins.__dict__[annots[args[1]]]
+                        msg_annotation = builtins.__dict__[annots[func_args[1]]]
                 except KeyError:
+                    # KeyError means there is no type hint
                     msg_annotation = None
             else:
                 # None for now, will add support for reserved functions
                 # soon tm
                 clt_annotation = None
                 msg_annotation = None
+
+            # Creates function dictionary to add to `outer.funcs`
             func_dict = {
                 "func": func,
                 "name": func.__name__,
@@ -133,6 +158,8 @@ class HiSockServer:
             }
 
             self.outer.funcs[self.cmd_activation] = func_dict
+
+            # Returns inner function, like a decorator would do
             return inner_func
 
     def on(self, command: str):
@@ -171,6 +198,7 @@ class HiSockServer:
           Type casting for reserved commands is scheduled to be
           implemented, and is currently being worked on.
         """
+        # Passes in outer to _on decorator/class
         return self._on(self, command)
 
     def send_all_clients(self, command: str, content: bytes):
@@ -209,6 +237,7 @@ class HiSockServer:
         Raises:
           TypeError, if the group does not exist
         """
+        # Identifies group
         group_clients = _dict_tupkey_lookup(
             group, self.clients_rev,
             idx_to_match=2
@@ -219,6 +248,7 @@ class HiSockServer:
             raise TypeError(f"Group {group} does not exist")
         else:
             content_header = make_header(command.encode() + b" " + content, self.header_len)
+            # Send content and header to all clients in group
             for clt_to_send in group_clients:
                 clt_to_send.send(
                     content_header + command.encode() + b" " + content
@@ -251,6 +281,7 @@ class HiSockServer:
         # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
 
         if isinstance(client, tuple):
+            # Formats client IP tuple, and raises Exceptions if format's wrong
             if len(client) == 2 and isinstance(client[0], str):
                 if re.search(r"(((\d?){3}\.){3}(\d?){3})", client[0]) and isinstance(client[1], int):
                     client = f"{client[0]}:{client[1]}"
@@ -270,6 +301,8 @@ class HiSockServer:
             # Try IP Address, should be unique
             split_client = client.split(':')
             reconstructed_client = []
+
+            # Checks IP correctness
             try:
                 reconstructed_client.append(map(int, split_client[0].split('.')))
             except ValueError:
@@ -424,16 +457,21 @@ class HiSockServer:
         so it should be run once every iteration of a while loop, as to not
         lose valuable information
         """
+        # gets all sockets from select.select
         read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
 
         for notified_sock in read_sock:
+            # loops through all sockets
             if notified_sock == self.sock:  # Got new connection
                 connection, address = self.sock.accept()
+
+                # Handle client hello
                 client = receive_message(connection, self.header_len)
 
                 client_hello = _removeprefix(client['data'].decode(), "$CLTHELLO$ ")
                 client_hello = json.loads(client_hello)
 
+                # Establishes socket lists and dicts
                 self._sockets_list.append(connection)
 
                 clt_info = {
@@ -454,6 +492,8 @@ class HiSockServer:
                     self.funcs['join']['func'](
                         clt_info
                     )
+
+                # Send reserved functions over to existing clients
                 clt_cnt_header = make_header(f"$CLTCONN$ {json.dumps(clt_info)}", self.header_len)
                 clt_to_send = [clt for clt in self.clients if clt != connection]
 
@@ -468,10 +508,11 @@ class HiSockServer:
                 message = receive_message(notified_sock, self.header_len)
 
                 if not message:
-                    # Most likely client disconnect
+                    # Most likely client disconnect, sometimes can be client error
                     client_disconnect = self.clients[notified_sock]['ip']
                     more_client_info = self.clients[notified_sock]
 
+                    # Remove socket from lists and dictionaries
                     self._sockets_list.remove(notified_sock)
                     del self.clients[notified_sock]
                     del self.clients_rev[
@@ -490,6 +531,7 @@ class HiSockServer:
                             }
                         )
 
+                    # Send reserved functions to existing clients
                     clt_dcnt_header = make_header(f"$CLTDISCONN$ {json.dumps(more_client_info)}", self.header_len)
 
                     for clt_to_send in self.clients:
@@ -497,6 +539,7 @@ class HiSockServer:
                             clt_dcnt_header + f"$CLTDISCONN$ {json.dumps(more_client_info)}".encode()
                         )
                 else:
+                    # Actual client message received
                     clt_data = self.clients[notified_sock]
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
@@ -507,23 +550,33 @@ class HiSockServer:
                                     parse_content = parse_content.decode()
                                 except UnicodeDecodeError as e:
                                     raise TypeError(
-                                        f"Type casting from bytes to string failed\n{str(e)}"
+                                        f"Type casting from bytes to string failed for function "
+                                        f"\"{func['name']}\"\n{str(e)}"
                                     )
                             elif func['type_hint']['msg'] == int:
                                 try:
                                     parse_content = int(parse_content)
                                 except ValueError as e:
                                     raise TypeError(
-                                        f"Type casting from bytes to int failed: {e}"
+                                        f"Type casting from bytes to int failed for function "
+                                        f"\"{func['name']}\":\n           {e}"
                                     ) from ValueError
-
+                            elif func['type_hint']['msg'] == float:
+                                try:
+                                    parse_content = float(parse_content)
+                                except ValueError as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to float failed for function "
+                                        f"\"{func['name']}\":\n           {e}"
+                                    ) from ValueError
                             func['func'](clt_data, parse_content)
 
                     if 'message' in self.funcs:
-                        print(self.funcs['message']['type_hint'])
+                        # Reserved function - message
                         inner_clt_data = self.clients[notified_sock]
                         parse_content = message['data']
 
+                        # Type hinting -> Type casting
                         if self.funcs['message']['type_hint']['msg'] == str:
                             try:
                                 parse_content = message['data'].decode()
@@ -533,10 +586,19 @@ class HiSockServer:
                                 )
                         elif self.funcs['message']['type_hint']['msg'] == int:
                             try:
-                                parse_content = int(message['data'])
+                                parse_content = float(message['data'])
                             except ValueError as e:
                                 raise TypeError(
                                     f"Type casting from bytes to int failed for function "
+                                    f"\"{self.funcs['message']['name']}\":\n"
+                                    f"           {e}"
+                                ) from ValueError
+                        elif self.funcs['message']['type_hint']['msg'] == float:
+                            try:
+                                parse_content = int(message['data'])
+                            except ValueError as e:
+                                raise TypeError(
+                                    f"Type casting from bytes to float failed for function "
                                     f"\"{self.funcs['message']['name']}\":\n"
                                     f"           {e}"
                                 ) from ValueError
