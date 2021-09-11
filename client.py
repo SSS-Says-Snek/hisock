@@ -1,7 +1,15 @@
-from __future__ import annotations
+"""
+This module contains the HiSockClient, used to power the client
+of HiSock, but also contains a `connect` function, to pass in
+things automatically. It is strongly advised to use `connect`
+over `HiSockClient`
+"""
 
-import builtins
-import inspect
+# Imports
+from __future__ import annotations  # Remove when 3.10 is used by majority
+
+import builtins  # Builtins, to convert string methods into builtins
+import inspect  # Inspect, for type-hinting detection
 import re
 import socket
 import json
@@ -12,7 +20,11 @@ import traceback
 from functools import wraps
 from typing import Union, Callable, Any
 
-from utils import make_header, _removeprefix
+# Utilities
+from utils import (
+    make_header, _removeprefix,
+    ServerNotRunning
+)
 
 
 class HiSockClient:
@@ -62,11 +74,13 @@ class HiSockClient:
     ):
         self.funcs = {}
 
+        # Info for socket
         self.addr = addr
         self.name = name
         self.group = group
         self.header_len = header_len
 
+        # Flats
         self._closed = False
 
         # Remember to update them as more rev funcs are added
@@ -77,7 +91,13 @@ class HiSockClient:
 
         # Socket intialization
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.connect(self.addr)
+        try:
+            self.sock.connect(self.addr)
+        except ConnectionRefusedError:
+            raise ServerNotRunning(
+                "Server is not running! Aborting..."
+            ) from ConnectionRefusedError
+
         self.sock.setblocking(blocking)
 
         # Send client hello
@@ -93,9 +113,10 @@ class HiSockClient:
         Handles newly received messages, excluding the received messages for `wait_recv`
         This method must be called every iteration of a while loop, as to not lose valuable info
         """
-        if not self._closed:
+        if not self._closed:  # Checks if client hasn't been closed with `close`
             try:
                 while True:
+                    # Receives header - If doesn't exist, server error
                     content_header = self.sock.recv(self.header_len)
 
                     if not content_header:
@@ -111,6 +132,7 @@ class HiSockClient:
                                 f"(Found with function \"{matching}\""
                             )
 
+                    # Handle "reserved functions"
                     if content.startswith(b"$CLTCONN$") and 'client_connect' in self.funcs:
                         clt_content = json.loads(
                             _removeprefix(content, b"$CLTCONN$ ")
@@ -126,13 +148,15 @@ class HiSockClient:
                         if content.startswith(matching_cmd.encode()) and \
                                 matching_cmd not in self.reserved_functions:
                             parse_content = content[len(matching_cmd) + 1:]
+
+                            # Type Hint -> Type Cast
                             if func['type_hint'] == str:
                                 try:
                                     parse_content = parse_content.decode()
                                 except UnicodeDecodeError as e:
                                     raise TypeError(
                                         f"Type casting from bytes to string failed "
-                                        f"for function {func['name']}:\n           {e}"
+                                        f"for function \"{func['name']}\":\n           {e}"
                                     )
                             elif func['type_hint'] == int:
                                 try:
@@ -140,7 +164,15 @@ class HiSockClient:
                                 except ValueError as e:
                                     raise TypeError(
                                         f"Type casting from bytes to int "
-                                        f"failed for function {func['name']}:\n           {e}"
+                                        f"failed for function \"{func['name']}\":\n           {e}"
+                                    ) from ValueError
+                            elif func['type_hint'] == float:
+                                try:
+                                    parse_content = float(parse_content)
+                                except ValueError as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to float "
+                                        f"failed for function \"{func['name']}\":\n           {e}"
                                     ) from ValueError
 
                             func['func'](parse_content)
@@ -160,6 +192,8 @@ class HiSockClient:
         """Decorator used to handle something when receiving command"""
 
         def __init__(self, outer: Any, command: str):
+            # `outer` arg is for the HiSockClient instance
+            # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.command = command
 
@@ -168,26 +202,35 @@ class HiSockClient:
 
             @wraps(func)
             def inner_func(*args, **kwargs):
+                # Executes the function normally
                 ret = func(*args, **kwargs)
                 return ret
 
+            # Checks for illegal $cmd$ notation (used for reserved functions)
             if re.search(r"\$.+\$", self.command):
                 raise ValueError(
                     "The format \"$command$\" is used for reserved functions - "
                     "Consider using a different format"
                 )
+            # Gets annotations of function
             annots = inspect.getfullargspec(func).annotations
 
             try:
+                # Try to map first arg (client data)
+                # Into type hint compliant one
                 msg_annotation = builtins.__dict__[annots[list(annots.keys())[0]]]
             except IndexError:
                 msg_annotation = None
+
+            # Creates function dictionary to add to `outer.funcs`
             func_dict = {
                 "func": func,
                 "name": self.command,
                 "type_hint": msg_annotation
             }
             self.outer.funcs[self.command] = func_dict
+
+            # Returns the inner function, like a decorator
             return inner_func
 
     def on(self, command: str):
@@ -223,6 +266,7 @@ class HiSockClient:
           Type casting for reserved commands is scheduled to be
           implemented, and is currently being worked on.
         """
+        # Passes in outer to _on decorator/class
         return self._on(self, command)
 
     def send(self, command: str, content: bytes):
@@ -236,6 +280,7 @@ class HiSockClient:
             A bytes-like object, with the content/message
             to send
         """
+        # Creates header and sends to server
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         self.sock.send(
             content_header + command.encode() + b" " + content
@@ -252,12 +297,13 @@ class HiSockClient:
             A bytes-like object, with the content/message
             to send
         """
+        # Creates header and send content to server, but no command
         header = make_header(content, self.header_len)
         self.sock.send(
             header + content
         )
 
-    def wait_recv(self):
+    def recv_raw(self):
         """
         Waits (blocks) until a message is sent, and returns that message
 
@@ -265,12 +311,15 @@ class HiSockClient:
           A bytes-like object, containing the content/message
           the client first receives
         """
+        # Blocks depending on your blocking settings, until message
         msg_len = int(self.sock.recv(self.header_len).decode())
         message = self.sock.recv(msg_len)
         return message
 
     def close(self):
         """Closes the client; running `client.update()` won't do anything now"""
+        # Changes _closed flag to True to prevent
+        # `update` being crazy
         self._closed = True
         self.sock.close()
 
