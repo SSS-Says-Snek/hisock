@@ -200,12 +200,6 @@ class HiSockClient:
         def __call__(self, func: Callable):
             """Adds a function that gets called when the client receives a matching command"""
 
-            @wraps(func)
-            def inner_func(*args, **kwargs):
-                # Executes the function normally
-                ret = func(*args, **kwargs)
-                return ret
-
             # Checks for illegal $cmd$ notation (used for reserved functions)
             if re.search(r"\$.+\$", self.command):
                 raise ValueError(
@@ -214,24 +208,27 @@ class HiSockClient:
                 )
             # Gets annotations of function
             annots = inspect.getfullargspec(func).annotations
+            func_args = inspect.getfullargspec(func).args
 
             try:
                 # Try to map first arg (client data)
                 # Into type hint compliant one
-                msg_annotation = builtins.__dict__[annots[list(annots.keys())[0]]]
-            except IndexError:
+                msg_annotation = annots[func_args[0]]
+                if isinstance(msg_annotation, str):
+                    msg_annotation = builtins.__dict__[annots[func_args[0]]]
+            except KeyError:
                 msg_annotation = None
 
             # Creates function dictionary to add to `outer.funcs`
             func_dict = {
                 "func": func,
-                "name": self.command,
+                "name": func.__name__,
                 "type_hint": msg_annotation
             }
             self.outer.funcs[self.command] = func_dict
 
             # Returns the inner function, like a decorator
-            return inner_func
+            return func
 
     def on(self, command: str):
         """

@@ -99,13 +99,6 @@ class HiSockServer:
         def __call__(self, func: Callable):
             """Adds a function that gets called when the server receives a matching command"""
 
-            # Inner function that's returned
-            @wraps(func)
-            def inner_func(*args, **kwargs):
-                # Executes the function normally
-                ret = func(*args, **kwargs)
-                return ret
-
             func_args = inspect.getfullargspec(func).args
 
             if len(func_args) != 2 and (
@@ -160,7 +153,7 @@ class HiSockServer:
             self.outer.funcs[self.cmd_activation] = func_dict
 
             # Returns inner function, like a decorator would do
-            return inner_func
+            return func
 
     def on(self, command: str):
         """
