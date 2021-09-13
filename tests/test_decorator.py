@@ -1,122 +1,14 @@
-import builtins
-import inspect
-import re
-from functools import wraps
-from typing import Callable, Any
+"""
+Tests the decorators that make up the core of hisock's receiving system
+"""
 
 import pytest
 
+from server import HiSockServer
+from client import HiSockClient
 
-class _ServerDec:
-    """Decorator used to handle something when receiving command"""
-
-    def __init__(self, outer, cmd_activation):
-        # `outer` arg is for the HiSockServer instance
-        # `cmd_activation` is the command... on activation (WOW)
-        self.outer = outer
-        self.cmd_activation = cmd_activation
-
-    def __call__(self, func: Callable):
-        """Adds a function that gets called when the server receives a matching command"""
-
-        func_args = inspect.getfullargspec(func).args
-
-        if len(func_args) != 2 and (
-                self.cmd_activation not in self.outer.reserved_functions or
-                self.cmd_activation == "message"):
-            raise ValueError(
-                f"Incorrect number of arguments: {len(func_args)} != 2"
-            )
-
-        annots = inspect.getfullargspec(func).annotations
-
-        if self.cmd_activation not in self.outer.reserved_functions or \
-                self.cmd_activation == "message":
-            # Processes nonreserved commands and reserved `message `
-
-            # `func_args` looks like ['clt_data', 'msg']
-            # `annots` look like {'msg': str}
-            try:
-                # Try to map first arg (client data)
-                # Into type hint compliant one
-                clt_annotation = annots[func_args[0]]
-                if isinstance(clt_annotation, str):
-                    clt_annotation = builtins.__dict__[annots[func_args[0]]]
-            except KeyError:
-                # KeyError means there is no type hint
-                clt_annotation = None
-            try:
-                # Try to map second arg (content)
-                # Into type hint compliant one
-                msg_annotation = annots[func_args[1]]
-                if isinstance(msg_annotation, str):
-                    msg_annotation = builtins.__dict__[annots[func_args[1]]]
-            except KeyError:
-                # KeyError means there is no type hint
-                msg_annotation = None
-        else:
-            # None for now, will add support for reserved functions
-            # soon tm
-            clt_annotation = None
-            msg_annotation = None
-
-        # Creates function dictionary to add to `outer.funcs`
-        func_dict = {
-            "func": func,
-            "name": func.__name__,
-            "type_hint": {
-                "clt": clt_annotation,
-                "msg": msg_annotation
-            }
-        }
-
-        self.outer.funcs[self.cmd_activation] = func_dict
-
-        # Returns inner function, like a decorator would do
-        return func
-
-
-class _ClientDec:
-    """Decorator used to handle something when receiving command"""
-
-    def __init__(self, outer: Any, command: str):
-        # `outer` arg is for the HiSockClient instance
-        # `cmd_activation` is the command... on activation (WOW)
-        self.outer = outer
-        self.command = command
-
-    def __call__(self, func: Callable):
-        """Adds a function that gets called when the client receives a matching command"""
-
-        # Checks for illegal $cmd$ notation (used for reserved functions)
-        if re.search(r"\$.+\$", self.command):
-            raise ValueError(
-                "The format \"$command$\" is used for reserved functions - "
-                "Consider using a different format"
-            )
-        # Gets annotations of function
-        annots = inspect.getfullargspec(func).annotations
-        func_args = inspect.getfullargspec(func).args
-
-        try:
-            # Try to map first arg (client data)
-            # Into type hint compliant one
-            msg_annotation = annots[func_args[0]]
-            if isinstance(msg_annotation, str):
-                msg_annotation = builtins.__dict__[annots[func_args[0]]]
-        except KeyError:
-            msg_annotation = None
-
-        # Creates function dictionary to add to `outer.funcs`
-        func_dict = {
-            "func": func,
-            "name": func.__name__,
-            "type_hint": msg_annotation
-        }
-        self.outer.funcs[self.command] = func_dict
-
-        # Returns the inner function, like a decorator
-        return func
+serv_on = HiSockServer._on
+cli_on = HiSockClient._on
 
 
 class DummyFuncClassServer:
@@ -136,6 +28,9 @@ class DummyFuncClassClient(DummyFuncClassServer):
             'client_disconnect'
         ]
 
+
+_ServerDec = serv_on
+_ClientDec = cli_on
 
 server_dummy = DummyFuncClassServer()
 client_dummy = DummyFuncClassClient()

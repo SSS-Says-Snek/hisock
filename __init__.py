@@ -1,3 +1,6 @@
+import client
+import server
+
 from server import start_server
 from client import connect
 from utils import (

@@ -20,7 +20,7 @@ from typing import Callable, Union  # Typing, for cool type hints
 # Utilities
 from utils import (
     receive_message, _removeprefix, make_header,
-    _dict_tupkey_lookup, _dict_tupkey_lookup_key,
+    _dict_tupkey_lookup, _dict_tupkey_lookup_key, _type_cast_server,
 )
 from functools import wraps  # Functools, to wrap decorator docstring
 
@@ -84,8 +84,36 @@ class HiSockServer:
         self.clients = {}
         self.clients_rev = {}
 
+        self.tls_arguments = {
+            "tls": False  # If TLS is false, then no TLS
+        }
+
     def __str__(self):
         return f"<HiSockServer serving at {':'.join(map(str, self.addr))}>"
+
+    class _TLS:
+        """
+        Base class for establishing TLS connections,
+        and getting information about it
+
+        TLS (Transport Layer Security) is a protocol, that basically is
+        used on every internet connection. It establishes
+        a secure connection between the client and the server, to prevent
+        eavesdropping.
+
+        While TLS usually allows clients and servers to pick what "suites"
+        they have available, there is currently only one predefined suite
+        to be used. Of course, as the projects gets bigger, more suites
+        would be added.
+
+        CLASS AND TLS IMPLEMENTATION NOT READY YET - DO NOT USE
+        """
+
+        def __init__(self, outer):
+            self.outer = outer
+
+        def enable(self):
+            pass
 
     class _on:
         """Decorator used to handle something when receiving command"""
@@ -538,30 +566,12 @@ class HiSockServer:
                         if message['data'].startswith(matching_cmd.encode()):
                             parse_content = message['data'][len(matching_cmd) + 1:]
 
-                            if func['type_hint']['msg'] == str:
-                                try:
-                                    parse_content = parse_content.decode()
-                                except UnicodeDecodeError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to string failed for function "
-                                        f"\"{func['name']}\"\n{str(e)}"
-                                    )
-                            elif func['type_hint']['msg'] == int:
-                                try:
-                                    parse_content = int(parse_content)
-                                except ValueError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to int failed for function "
-                                        f"\"{func['name']}\":\n           {e}"
-                                    ) from ValueError
-                            elif func['type_hint']['msg'] == float:
-                                try:
-                                    parse_content = float(parse_content)
-                                except ValueError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to float failed for function "
-                                        f"\"{func['name']}\":\n           {e}"
-                                    ) from ValueError
+                            temp_parse_content = _type_cast_server(
+                                func['type_hint']['msg'], parse_content,
+                                parse_content
+                            )
+                            if temp_parse_content is not None:
+                                parse_content = temp_parse_content
                             func['func'](clt_data, parse_content)
 
                     if 'message' in self.funcs:

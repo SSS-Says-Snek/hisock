@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import socket
 from typing import Union
 
@@ -90,6 +91,50 @@ def _dict_tupkey_lookup_key(multikey, _dict, idx_to_match=None):
         elif isinstance(idx_to_match, int):
             if multikey == key[idx_to_match]:
                 yield key
+
+
+def _type_cast_server(type_cast, content_to_typecast: bytes, func_dict: dict):
+    """
+    Basis for type casting on the server
+    If testing, replace `func_dict` with a dummy one
+    Currently NOT guarenteed to return, please remember to change this API
+    """
+    if type_cast == str:
+        try:
+            typecasted_content = content_to_typecast.decode()
+            return typecasted_content  # Remember to change this, but I"m lazy rn
+        except UnicodeDecodeError as e:
+            raise TypeError(
+                f"Type casting from bytes to string failed for function "
+                f"\"{func_dict['name']}\"\n{str(e)}"
+            )
+    elif type_cast == int:
+        try:
+            typecasted_content = int(content_to_typecast)
+            return typecasted_content  # Remember to change this, but I"m lazy rn
+        except ValueError as e:
+            raise TypeError(
+                f"Type casting from bytes to int failed for function "
+                f"\"{func_dict['name']}\":\n           {e}"
+            ) from ValueError
+    elif type_cast == float:
+        try:
+            typecasted_content = float(content_to_typecast)
+            return typecasted_content  # Remember to change this, but I"m lazy rn
+        except ValueError as e:
+            raise TypeError(
+                f"Type casting from bytes to float failed for function "
+                f"\"{func_dict['name']}\":\n           {e}"
+            ) from ValueError
+    # elif type_cast == list:
+    #     try:
+    #         _dict = json.loads(content_to_typecast)
+    #         typecasted_content = list(_dict.values())
+    #         return typecasted_content  # Remember to change this, but I"m lazy rn
+    #     except json.decoder.JSONDecodeError as e:
+    #         raise TypeError(
+    #             f"Type casting from bytes to list"
+    #         )
 
 
 def get_local_ip():
