@@ -72,7 +72,13 @@ class HiSockClient:
             blocking: bool = True,
             header_len: int = 16
     ):
+        # Function storage
         self.funcs = {}
+
+        # TLS arguments
+        self.tls_arguments = {
+            "tls": False  # If TLS is false, then no TLS
+        }
 
         # Info for socket
         self.addr = addr
@@ -80,7 +86,7 @@ class HiSockClient:
         self.group = group
         self.header_len = header_len
 
-        # Flats
+        # Flags
         self._closed = False
 
         # Remember to update them as more rev funcs are added
@@ -107,6 +113,30 @@ class HiSockClient:
         self.sock.send(
             conn_header + f"$CLTHELLO$ {json.dumps(hello_dict)}".encode()
         )
+
+    class _TLS:
+        """
+        Base class for establishing TLS connections,
+        and getting information about it
+
+        TLS (Transport Layer Security) is a protocol, that basically is
+        used on every internet connection. It establishes
+        a secure connection between the client and the server, to prevent
+        eavesdropping.
+
+        While TLS usually allows clients and servers to pick what "suites"
+        they have available, there is currently only one predefined suite
+        to be used. Of course, as the projects gets bigger, more suites
+        would be added.
+
+        CLASS AND TLS IMPLEMENTATION NOT READY YET - DO NOT USE
+        """
+
+        def __init__(self, outer):
+            self.outer = outer
+
+        def enable(self):
+            pass
 
     def update(self):
         """
@@ -346,6 +376,7 @@ def connect(addr, name=None, group=None):
 if __name__ == "__main__":
     s = connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
 
+
     @s.on("Joe")
     def hehe(_):
         print("This message was sent from server after client connection\n"
@@ -360,17 +391,21 @@ if __name__ == "__main__":
         print("Message:", msg)
         # s.close()
 
+
     @s.on("client_connect")
     def please(data):
         print(f"Client {':'.join(map(str, data['ip']))} connected :)")
+
 
     @s.on("client_disconnect")
     def haha_bois(disconn_data):
         print(f"Aww man, {':'.join(map(str, disconn_data['ip']))} disconnected :(")
 
+
     @s.on("Test")
     def test(data):
         print("Group message received:", data)
+
 
     while True:
         s.update()
