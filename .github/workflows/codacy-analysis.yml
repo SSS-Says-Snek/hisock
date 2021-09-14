@@ -18,6 +18,7 @@ jobs:
       - name: Run Codacy Analysis CLI
         uses: codacy/codacy-analysis-cli-action@master
         with:
+          tool: Prospector
           output: results.sarif
           format: sarif
           # Adjust severity of non-security issues
