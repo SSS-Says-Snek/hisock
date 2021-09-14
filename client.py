@@ -95,6 +95,11 @@ class HiSockClient:
             'client_disconnect'
         ]
 
+        self.tls_arguments = {
+            "tls": False
+        }
+        self.called_update = False
+
         # Socket intialization
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -135,14 +140,34 @@ class HiSockClient:
         def __init__(self, outer):
             self.outer = outer
 
-        def enable(self):
-            pass
+        def enable(
+                self,
+                rsa_privkey_filepath='.privkey',
+                suite="default"
+        ):
+            if not self.outer.called_update:
+                self.outer.tls_arguments = {
+                    "tls": True,
+                    "rsa_privkey_filepath": rsa_privkey_filepath,
+                    "suite": suite
+                }
+
+                dh_num_header = make_header("$DH_NUMS$", self.outer.header_len)
+                self.outer.sock.send(
+                    dh_num_header + b"$DH_NUMS$"
+                )
+            else:
+                raise TypeError(
+                    "TLS attempted to enable after `update` called"
+                )
 
     def update(self):
         """
         Handles newly received messages, excluding the received messages for `wait_recv`
         This method must be called every iteration of a while loop, as to not lose valuable info
         """
+        self.called_update = True
+
         if not self._closed:  # Checks if client hasn't been closed with `close`
             try:
                 while True:
@@ -308,6 +333,11 @@ class HiSockClient:
             to send
         """
         # Creates header and sends to server
+        if re.search(r"\$.+\$", command):
+            raise TypeError(
+                "Command format \"$command$\" is used for reserved functions - "
+                "consider using a different command"
+            )
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         self.sock.send(
             content_header + command.encode() + b" " + content
@@ -325,6 +355,11 @@ class HiSockClient:
             to send
         """
         # Creates header and send content to server, but no command
+        if re.search(b"^\$.+\$", content):
+            raise TypeError(
+                "Command format \"$command$\" is used for reserved functions - "
+                "consider not sending a message starting with $command$"
+            )
         header = make_header(content, self.header_len)
         self.sock.send(
             header + content

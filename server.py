@@ -18,11 +18,11 @@ import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
 
 # Utilities
+import constants
 from utils import (
     receive_message, _removeprefix, make_header,
     _dict_tupkey_lookup, _dict_tupkey_lookup_key, _type_cast_server,
 )
-from functools import wraps  # Functools, to wrap decorator docstring
 
 
 class HiSockServer:
@@ -87,6 +87,7 @@ class HiSockServer:
         self.tls_arguments = {
             "tls": False  # If TLS is false, then no TLS
         }
+        self.called_run = False
 
     def __str__(self):
         return f"<HiSockServer serving at {':'.join(map(str, self.addr))}>"
@@ -112,8 +113,23 @@ class HiSockServer:
         def __init__(self, outer):
             self.outer = outer
 
-        def enable(self):
-            pass
+        def enable(
+                self,
+                rsa_authentication_dir='.pubkeys',
+                suite="default",
+                diffie_hellman=constants.DH_DEFAULT
+        ):
+            if not self.outer.called_run:
+                self.outer.tls_arguments = {
+                    "tls": True,
+                    "rsa_authentication_dir": rsa_authentication_dir,
+                    "suite": suite,
+                    "diffie_hellman": diffie_hellman
+                }
+            else:
+                raise TypeError(
+                    "TLS attempted to enable after `run` called"
+                )
 
     class _on:
         """Decorator used to handle something when receiving command"""
@@ -478,6 +494,8 @@ class HiSockServer:
         so it should be run once every iteration of a while loop, as to not
         lose valuable information
         """
+        self.called_run = True
+
         # gets all sockets from select.select
         read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
 
