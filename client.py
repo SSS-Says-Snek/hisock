@@ -95,6 +95,7 @@ class HiSockClient:
             'client_disconnect'
         ]
 
+        self.tls = self._TLS(self)
         self.tls_arguments = {
             "tls": False
         }
@@ -156,6 +157,13 @@ class HiSockClient:
                 self.outer.sock.send(
                     dh_num_header + b"$DH_NUMS$"
                 )
+                dh_info = self.outer.recv_raw()
+                print("E", dh_info)
+
+                if dh_info == b"$NOTLS$":
+                    raise TypeError(
+                        "Server has not enabled TLS"
+                    )
             else:
                 raise TypeError(
                     "TLS attempted to enable after `update` called"
@@ -410,6 +418,7 @@ def connect(addr, name=None, group=None):
 
 if __name__ == "__main__":
     s = connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
+    s.tls.enable()
 
 
     @s.on("Joe")

@@ -60,7 +60,8 @@ class HiSockServer:
             addr: tuple[str, int],
             blocking: bool = True,
             max_connections: int = 0,
-            header_len: int = 16
+            header_len: int = 16,
+            tls: Union[dict, str] = None
     ):
         # Binds address and header length to class attributes
         self.addr = addr
@@ -84,9 +85,20 @@ class HiSockServer:
         self.clients = {}
         self.clients_rev = {}
 
-        self.tls_arguments = {
-            "tls": False  # If TLS is false, then no TLS
-        }
+        if tls is None:
+            self.tls_arguments = {
+                "tls": False  # If TLS is false, then no TLS
+            }
+        else:
+            if isinstance(tls, dict):
+                self.tls_arguments = tls
+            elif isinstance(tls, str):
+                if tls == "default":
+                    self.tls_arguments = {
+                        "rsa_authentication_dir": '.pubkeys',
+                        "suite": "default",
+                        "diffie_hellman": constants.DH_DEFAULT
+                    }
         self.called_run = False
 
     def __str__(self):
@@ -112,24 +124,6 @@ class HiSockServer:
 
         def __init__(self, outer):
             self.outer = outer
-
-        def enable(
-                self,
-                rsa_authentication_dir='.pubkeys',
-                suite="default",
-                diffie_hellman=constants.DH_DEFAULT
-        ):
-            if not self.outer.called_run:
-                self.outer.tls_arguments = {
-                    "tls": True,
-                    "rsa_authentication_dir": rsa_authentication_dir,
-                    "suite": suite,
-                    "diffie_hellman": diffie_hellman
-                }
-            else:
-                raise TypeError(
-                    "TLS attempted to enable after `run` called"
-                )
 
     class _on:
         """Decorator used to handle something when receiving command"""
@@ -580,6 +574,16 @@ class HiSockServer:
                 else:
                     # Actual client message received
                     clt_data = self.clients[notified_sock]
+
+                    if message['data'] == b"$DH_NUMS$":
+                        if not self.tls_arguments['tls']:
+                            # The server's not using TLS
+                            no_tls_header = make_header("$NOTLS$", self.header_len)
+                            notified_sock.send(
+                                no_tls_header + b"$NOTLS$"
+                            )
+                        continue
+
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
                             parse_content = message['data'][len(matching_cmd) + 1:]
