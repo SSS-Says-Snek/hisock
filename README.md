@@ -1,12 +1,14 @@
 ![CircleCI Badge](https://img.shields.io/circleci/build/github/SSS-Says-Snek/hisock)
+[![Documentation Status](https://readthedocs.org/projects/hisock/badge/?version=latest)](https://hisock.readthedocs.io/en/latest/?badge=latest)
 
 # highsock
 A higher-level extension of the socket module, with simpler and more efficient usages
 
 ## Documentation
-Documentation's currently unavailable, though a crude form of it is available 
-by examining the docstrings of desired functions. There will also soon be 
-functioning examples, to show the main features of hisock
+Currently, the best form of documentation is available 
+by examining the docstrings of desired functions. However, there is documentation on 
+[ReadTheDocs](https://hisock.readthedocs.io), though it does not contain a lot of information.
+There will also soon be functioning examples, to show the main features of hisock.
 
 ## Examples
 hisock utilizes decorators as the core of receiving messages. 
