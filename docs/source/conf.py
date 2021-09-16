@@ -85,4 +85,3 @@ html_theme = 'furo'
 html_static_path = []  # Can include '_static'
 
 master_doc = "index"
-autodoc_mock_imports = ['__future__']
