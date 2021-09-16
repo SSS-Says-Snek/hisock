@@ -31,37 +31,38 @@ class HiSockClient:
     """
     The client class for hisock.
     HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
+    HiSockClient also utilizes decorators to receive messages, as an easy way of organizing your
+    code structure (methods are provided, like :method:`recv_raw`, of course)
 
-    Args:
-      addr: tuple
-        A two-element tuple, containing the IP address and the
+    :param addr: A two-element tuple, containing the IP address and the
         port number of the server wishing to connect to
         Only IPv4 currently supported
-      name: str, None
-        Either a string or NoneType, representing the name the client
+    :type addr: tuple
+    :param name: Either a string or NoneType, representing the name the client
         goes by. Having a name provides an easy interface of sending
         data to a specific client and identifying clients. It is therefore
         highly recommended to pass in a name
 
         Pass in NoneType for no name (`connect` should handle that)
-      group: str, None
-        Either a string or NoneType, representing the group the client
+    :type name: str, optional
+    :param group: Either a string or NoneType, representing the group the client
         is in. Being in a group provides an easy interface of sending
         data to multiple specific clients, and identifying multiple clients.
         It is highly recommended to provide a group for complex servers
 
         Pass in NoneType for no group (`connect` should handle that)
-      blocking: bool = True
-        A boolean, set to whether the client should block the loop
+    :type group: str, optional
+    :param blocking: A boolean, set to whether the client should block the loop
         while waiting for message or not.
         Default sets to True
-      header_len: int = 16
-        An integer, defining the header length of every message.
+    :type blocking: bool, optional
+    :param header_len: An integer, defining the header length of every message.
         A smaller header length would mean a smaller maximum message
         length (about 10**header_len).
         The header length MUST be the same as the server connecting, or it will
-        crash.
-        Default sets to 16 (maximum length: 10 quadrillion bytes)
+        crash (hard to debug though).
+        Default sets to 16 (maximum length of content: 10 quadrillion bytes)
+    :type header_len: int, optional
     """
 
     def __init__(
@@ -95,6 +96,7 @@ class HiSockClient:
             'client_disconnect'
         ]
 
+        # TLS stuff (soon to be added)
         self.tls = self._TLS(self)
         self.tls_arguments = {
             "tls": False
@@ -106,6 +108,7 @@ class HiSockClient:
         try:
             self.sock.connect(self.addr)
         except ConnectionRefusedError:
+            # Server not running
             raise ServerNotRunning(
                 "Server is not running! Aborting..."
             ) from ConnectionRefusedError
@@ -146,6 +149,7 @@ class HiSockClient:
                 rsa_privkey_filepath='.privkey',
                 suite="default"
         ):
+            # TLS NOT ADDED CURRENTLY; NOT PRIORITY
             if not self.outer.called_update:
                 self.outer.tls_arguments = {
                     "tls": True,
@@ -172,7 +176,9 @@ class HiSockClient:
     def update(self):
         """
         Handles newly received messages, excluding the received messages for `wait_recv`
-        This method must be called every iteration of a while loop, as to not lose valuable info
+        This method must be called every iteration of a while loop, as to not lose valuable info.
+        In some cases, it is recommended to run this in a thread, as to not block the
+        program
         """
         self.called_update = True
 
@@ -238,6 +244,7 @@ class HiSockClient:
                                         f"failed for function \"{func['name']}\":\n           {e}"
                                     ) from ValueError
 
+                            # Call function
                             func['func'](parse_content)
             except IOError as e:
                 # Normal, means message has ended
@@ -298,33 +305,31 @@ class HiSockClient:
         A decorator that adds a function that gets called when the client
         receives a matching command
 
-        Args:
-          command: str
-            A string, representing the command the function should activate
+        Reserved functions are functions that get activated on
+        specific events. Currently, there are 2 for HiSockClient:
+          1. client_connect - Activated when a client connects to the server
+          2. client_disconnect - Activated when a client disconnects from the server
+
+        The parameters of the function depend on the command to listen.
+        For example, reserved functions `client_connect` and
+        `client_disconnect` gets the client's data passed in as an argument.
+        All other nonreserved functions get the message passed in.
+
+        In addition, certain type casting is available to nonreserved functions.
+        That means, that, using type hints, you can automatically convert
+        between needed instances. The type casting currently supports:
+          1. bytes -> int (Will raise exception if bytes is not numerical)
+          2. bytes -> str (Will raise exception if there's a unicode error)
+        Type casting for reserved commands is scheduled to be
+        implemented, and is currently being worked on.
+
+        :param command: A string, representing the command the function should activate
             when receiving it
+        :type command: str
 
-        Returns:
-          The same function
-          (The decorator just appended the function to a stack)
-
-        Extra:
-          Reserved functions are functions that get activated on
-          specific events. Currently, there are 2 for HiSockClient:
-            1. client_connect - Activated when a client connects to the server
-            2. client_disconnect - Activated when a client disconnects from the server
-
-          The parameters of the function depend on the command to listen.
-          For example, reserved functions `client_connect` and
-          `client_disconnect` gets the client's data passed in as an argument.
-          All other nonreserved functions get the message passed in.
-
-          In addition, certain type casting is available to nonreserved functions.
-          That means, that, using type hints, you can automatically convert
-          between needed instances. The type casting currently supports:
-            1. bytes -> int (Will raise exception if bytes is not numerical)
-            2. bytes -> str (Will raise exception if there's a unicode error)
-          Type casting for reserved commands is scheduled to be
-          implemented, and is currently being worked on.
+        :return: The same function
+            (The decorator just appended the function to a stack
+        :rtype: function
         """
         # Passes in outer to _on decorator/class
         return self._on(self, command)
@@ -333,12 +338,11 @@ class HiSockClient:
         """
         Sends a command & content to the server, where it will be interpreted
 
-        Args:
-          command: str
-            A string, containing the command to send
-          content: bytes
-            A bytes-like object, with the content/message
+        :param command: A string, containing the command to send
+        :type command: str
+        :param content: A bytes-like object, with the content/message
             to send
+        :type content: bytes
         """
         # Creates header and sends to server
         if re.search(r"\$.+\$", command):
@@ -347,6 +351,8 @@ class HiSockClient:
                 "consider using a different command"
             )
         content_header = make_header(command.encode() + b" " + content, self.header_len)
+
+        # Sends to server
         self.sock.send(
             content_header + command.encode() + b" " + content
         )
@@ -357,10 +363,9 @@ class HiSockClient:
         This is preferable in some situations, where clients need to send
         multiple data over the server, without overcomplicating it with commands
 
-        Args:
-          content: bytes
-            A bytes-like object, with the content/message
+        :param content: A bytes-like object, with the content/message
             to send
+        :type content: bytes
         """
         # Creates header and send content to server, but no command
         if re.search(b"^\$.+\$", content):
@@ -375,15 +380,20 @@ class HiSockClient:
 
     def recv_raw(self):
         """
-        Waits (blocks) until a message is sent, and returns that message
+        Waits (blocks) until a message is sent, and returns that message.
+        This is not recommended for content with commands attached;
+        it is meant to be used alongside with :method:`HiSockServer.send_client_raw` and
+        :method:`HiSockServer.send_group_raw`
 
-        Returns:
-          A bytes-like object, containing the content/message
+        :return: A bytes-like object, containing the content/message
           the client first receives
+        :rtype: bytes
         """
         # Blocks depending on your blocking settings, until message
         msg_len = int(self.sock.recv(self.header_len).decode())
         message = self.sock.recv(msg_len)
+
+        # Returns message
         return message
 
     def close(self):
@@ -398,20 +408,19 @@ def connect(addr, name=None, group=None):
     """
     Creates a `HiSockClient` instance. See HiSockClient for more details
 
-    Args:
-      addr: tuple
-        A two-element tuple, containing the IP address and
+    :param addr: A two-element tuple, containing the IP address and
         the port number
-      name: str = None
-        A string, containing the name of what the client should go by.
+    :type addr: tuple
+    :param name: A string, containing the name of what the client should go by.
         This argument is optional
-      group: str = None
-        A string, containing the "group" the client is in.
+    :type name: str, optional
+    :param group: A string, containing the "group" the client is in.
         Groups can be utilized to send specific messages to them only.
         This argument is optional
+    :type: str, optional
 
-    Returns:
-        A `HiSockClient` instance
+    :return: A :class:`HiSockClient` instance
+    :rtype: instance
     """
     return HiSockClient(addr, name, group)
 

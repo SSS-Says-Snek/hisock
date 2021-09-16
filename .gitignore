@@ -52,6 +52,9 @@ coverage.xml
 .pytest_cache/
 cover/
 
+# Sphinx
+docs/build/
+
 # Translations
 *.mo
 *.pot

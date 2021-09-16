@@ -1,3 +1,5 @@
+import constants
+
 # Configuration file for the Sphinx documentation builder.
 #
 # This file only contains a selection of the most common options. For a full
@@ -17,12 +19,12 @@
 
 # -- Project information -----------------------------------------------------
 
-project = 'hisock'
-copyright = '2021, SSS-Says-Snek'
-author = 'SSS-Says-Snek'
+project = constants.__name__
+copyright = constants.__copyright__
+author = constants.__author__
 
 # The full version, including alpha/beta/rc tags
-release = '0.0.0'
+release = constants.__version__
 
 
 # -- General configuration ---------------------------------------------------
@@ -31,7 +33,8 @@ release = '0.0.0'
 # extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
 # ones.
 extensions = [
-    'sphinx.ext.duration'
+    'sphinx.ext.duration',
+    'sphinx.ext.autodoc'
 ]
 
 # Add any paths that contain templates here, relative to this directory.

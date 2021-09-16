@@ -31,28 +31,27 @@ class HiSockServer:
     HiSockServer offers a neater way to send and receive data than
     sockets. You don't need to worry about headers now, yay!
 
-    Args:
-      addr: tuple
-        A two-element tuple, containing the IP address and the
+    :poram addr: A two-element tuple, containing the IP address and the
         port number of where the server should be hosted.
         Due to the nature of reserved ports, it is recommended to host the
         server with a port number that's higher than 1023.
         Only IPv4 currently supported
-      blocking: bool
-        A boolean, set to whether the server should block the loop
+    :type addr: tuple
+    :param blocking: A boolean, set to whether the server should block the loop
         while waiting for message or not.
         Default passed in by `start_server` is True
-      max_connections: int
-        The number of maximum connections `HiSockServer` should accept, before
+    :type blocking: bool, optional
+    :param max_connections: The number of maximum connections `HiSockServer` should accept, before
         refusing clients' connections. Pass in 0 for unlimited connections.
         Default passed in  by `start_server` is 0
-      header_len: int
-        An integer, defining the header length of every message.
+    :type max_connections: int, optional
+    :param header_len: An integer, defining the header length of every message.
         A smaller header length would mean a smaller maximum message
         length (about 10**header_len).
         Any client connecting MUST have the same header length as the server,
         or else it will crash.
         Default passed in by `start_server` is 16 (maximum length: 10 quadrillion bytes)
+    :type header_len: int, optional
     """
 
     def __init__(
@@ -198,36 +197,33 @@ class HiSockServer:
         A decorator that adds a function that gets called when the server
         receives a matching command
 
-        Args:
-          command: str
-            A string, representing the command the function should activate
+        Reserved functions are functions that get activated on
+        specific events. Currently, there are 3 for HiSockServer:
+          1. join - Activated when a client connects to the server
+          2. leave - Activated when a client disconnects from the server
+          3. message - Activated when a client messages to the server
+
+        The parameters of the function depend on the command to listen.
+        For example, reserved commands `join` and `leave` have only one
+        client parameter passed, while reserved command `message` has two:
+        Client Data, and Message.
+        Other nonreserved functions will also be passed in the same
+        parameters as `message`
+
+        In addition, certain type casting is available to nonreserved functions.
+        That means, that, using type hints, you can automatically convert
+        between needed instances. The type casting currently supports:
+          1. bytes -> int (Will raise exception if bytes is not numerical)
+          2. bytes -> str (Will raise exception if there's a unicode error)
+        Type casting for reserved commands is scheduled to be
+        implemented, and is currently being worked on.
+
+        :param command: A string, representing the command the function should activate
             when receiving it
+        :type command: str
 
-        Returns:
-          The same function
-          (The decorator just appended the function to a stack)
-
-        Extra:
-          Reserved functions are functions that get activated on
-          specific events. Currently, there are 3 for HiSockServer:
-            1. join - Activated when a client connects to the server
-            2. leave - Activated when a client disconnects from the server
-            3. message - Activated when a client messages to the server
-
-          The parameters of the function depend on the command to listen.
-          For example, reserved commands `join` and `leave` have only one
-          client parameter passed, while reserved command `message` has two:
-          Client Data, and Message.
-          Other nonreserved functions will also be passed in the same
-          parameters as `message`
-
-          In addition, certain type casting is available to nonreserved functions.
-          That means, that, using type hints, you can automatically convert
-          between needed instances. The type casting currently supports:
-            1. bytes -> int (Will raise exception if bytes is not numerical)
-            2. bytes -> str (Will raise exception if there's a unicode error)
-          Type casting for reserved commands is scheduled to be
-          implemented, and is currently being worked on.
+        :return: The same function (The decorator just appended the function to a stack)
+        :rtype: function
         """
         # Passes in outer to _on decorator/class
         return self._on(self, command)
@@ -235,13 +231,12 @@ class HiSockServer:
     def send_all_clients(self, command: str, content: bytes):
         """
         Sends the commmand and content to *ALL* clients connected
-        
-        Args:
-          command: str
-            A string, representing the command to send to every client
-          content: bytes
-            A bytes-like object, containing the message/content to send
+
+        :param command: A string, representing the command to send to every client
+        :type command: str
+        :param content: A bytes-like object, containing the message/content to send
             to each client
+        :type content: bytes
         """
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         for client in self.clients:
@@ -256,17 +251,14 @@ class HiSockServer:
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
 
-        Args:
-          group: str
-            A string, representing the group to send data to
-          command: str
-            A string, containing the command to send
-          content: bytes
-            A bytes-like object, with the content/message
+        :param group: A string, representing the group to send data to
+        :type group: str
+        :param command: A string, containing the command to send
+        :type command: str
+        :param content: A bytes-like object, with the content/message
             to send
-
-        Raises:
-          TypeError, if the group does not exist
+        :type content: bytes
+        :raise TypeError: The group does not exist
         """
         # Identifies group
         group_clients = _dict_tupkey_lookup(
@@ -285,27 +277,24 @@ class HiSockServer:
                     content_header + command.encode() + b" " + content
                 )
 
-    def send_client(self, client, command: str, content: bytes):
+    def send_client(self, client: Union[str, tuple], command: str, content: bytes):
         """
         Sends data to a specific client.
         Different formats of the client is supported. It can be:
           - An IP + Port format, written as "ip:port"
           - A client name, if it exists
 
-        Args:
-          client: str, tuple
-            The client to send data to. The format could be either by IP+Port,
+        :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
-          command: str
-            A string, containing the command to send
-          content: bytes
-            A bytes-like object, with the content/message
+        :type client: Union[str, tuple]
+        :param command: A string, containing the command to send
+        :type command: str
+        :param content: A bytes-like object, with the content/message
             to send
-
-        Raises:
-          ValueError, if the client format is wrong
-          TypeError, if client does not exist
-          Warning, if using client name and more than one client with
+        :type content: bytes
+        :raise ValueError: Client format is wrong
+        :raise TypeError: Client does not exist
+        :raise Warning: Using client name, and more than one client with
             the same name is detected
         """
         content_header = make_header(command.encode() + b" " + content, self.header_len)
@@ -393,18 +382,15 @@ class HiSockServer:
           - An IP + Port format, written as "ip:port"
           - A client name, if it exists
 
-        Args:
-          client: str, tuple
-            The client to send data to. The format could be either by IP+Port,
+        :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
-          content: bytes
-            A bytes-like object, with the content/message
+        :type client: Union[str, tuple]
+        :param content: A bytes-like object, with the content/message
             to send
-
-        Raises:
-          ValueError, if the client format is wrong
-          TypeError, if client does not exist
-          Warning, if using client name and more than one client with
+        :type content: bytes
+        :raise ValueError: Client format is wrong
+        :raise TypeError: Client does not exist
+        :raise Warning: Using client name and more than one client with
             the same name is detected
         """
         content_header = make_header(content, self.header_len)
@@ -481,6 +467,40 @@ class HiSockServer:
             client_sock[0].send(
                 content_header + content
             )
+
+    def send_group_raw(self, group: str, content: bytes):
+        """
+        Sends data to a specific group, without commands.
+        Groups are recommended for more complicated servers or multipurpose
+        servers, as it allows clients to be divided, which allows clients to
+        be sent different data for different purposes.
+
+        Non-command-attached content is recommended to be used alongside with
+        :method:`HiSockClient.recv_raw`
+
+        :param group: A string, representing the group to send data to
+        :type group: str
+        :param content: A bytes-like object, with the content/message
+            to send
+        :type content: bytes
+        :raise TypeError: The group does not exist
+        """
+        # Identifies group
+        group_clients = _dict_tupkey_lookup(
+            group, self.clients_rev,
+            idx_to_match=2
+        )
+        group_clients = list(group_clients)
+
+        if len(group_clients) == 0:
+            raise TypeError(f"Group {group} does not exist")
+        else:
+            content_header = make_header(content, self.header_len)
+            # Send content and header to all clients in group
+            for clt_to_send in group_clients:
+                clt_to_send.send(
+                    content_header + content
+                )
 
     def run(self):
         """
@@ -634,16 +654,13 @@ class HiSockServer:
         """
         Gets all clients from a specific group
 
-        Args:
-          group: str
-            A string, representing the group to look up
+        :param group: A string, representing the group to look up
+        :type group: str
+        :raise TypeError: Group does not exist
 
-        Returns:
-          A list of dictionaries of clients in that group, containing
+        :return: A list of dictionaries of clients in that group, containing
           the address, name, group, and socket
-
-        Raises:
-          TypeError, if the group does not exist
+        :rtype: list
         """
         group_clients = list(_dict_tupkey_lookup_key(
             group, self.clients_rev,
@@ -655,6 +672,7 @@ class HiSockServer:
             raise TypeError(f"Group {group} does not exist")
 
         for clt in group_clients:
+            # Loops through group clients and append to list
             clt_conn = self.clients_rev[clt]
             mod_dict = {
                 "ip": clt[0],
@@ -673,19 +691,16 @@ class HiSockServer:
             2. The client IP+Port
             3. The client IP+Port, in a 2-element tuple
 
-        Args:
-          client: str, tuple
-            A parameter, representing the specific client to look up.
+        :param client: A parameter, representing the specific client to look up.
             As shown above, it can either be represented
             as a string, or as a tuple.
+        :type client: Union[str, tuple]
+        :raise ValueError: Client argument is invalid
+        :raise TypeError: Client does not exist
 
-        Returns:
-          A dictionary of the client's info, including
+        :return: A dictionary of the client's info, including
           IP+Port, Name, Group, and Socket
-
-        Raises:
-          ValueError, if the client argument is invalid
-          TypeError, if the client doesn't exist
+        :rtype: dict
         """
         if isinstance(client, tuple):
             if len(client) == 2 and isinstance(client[0], str):
@@ -779,15 +794,20 @@ class HiSockServer:
             return client_dict
 
     def get_addr(self):
+        """
+        Gets the address of where the hisock server is serving
+        at.
+
+        :return: A tuple, with the format (str IP, int port)
+        """
         return self.addr
 
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
-    Creates a `HiSockServer` instance. See `HiSockServer` for more details
+    Creates a :class:`HiSockServer` instance. See :class:`HiSockServer` for more details
 
-    Returns:
-      A `HiSockServer` instance
+    :return: A :class:`HiSockServer` instance
     """
     return HiSockServer(addr, blocking, max_connections, header_len)
 
