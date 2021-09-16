@@ -31,3 +31,4 @@ Table of Contents
 .. toctree::
 
    usage
+   server

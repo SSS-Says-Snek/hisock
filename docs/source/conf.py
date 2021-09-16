@@ -1,3 +1,15 @@
+import sys
+import os
+import pathlib
+
+path = pathlib.Path(os.path.dirname(__file__))
+
+sys.path.append(
+    os.path.join(
+        str(path), str(path.parent.parent)
+    )
+)
+
 import constants
 
 # Configuration file for the Sphinx documentation builder.
@@ -26,7 +38,6 @@ author = constants.__author__
 # The full version, including alpha/beta/rc tags
 release = constants.__version__
 
-
 # -- General configuration ---------------------------------------------------
 
 # Add any Sphinx extension module names here, as strings. They can be
@@ -34,6 +45,7 @@ release = constants.__version__
 # ones.
 extensions = [
     'sphinx.ext.duration',
+    'sphinx.ext.napoleon',
     'sphinx.ext.autodoc'
 ]
 
@@ -44,7 +56,6 @@ templates_path = ['_templates']
 # directories to ignore when looking for source files.
 # This pattern also affects html_static_path and html_extra_path.
 exclude_patterns = []
-
 
 # -- Options for HTML output -------------------------------------------------
 

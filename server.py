@@ -31,7 +31,7 @@ class HiSockServer:
     HiSockServer offers a neater way to send and receive data than
     sockets. You don't need to worry about headers now, yay!
 
-    :poram addr: A two-element tuple, containing the IP address and the
+    :param addr: A two-element tuple, containing the IP address and the
         port number of where the server should be hosted.
         Due to the nature of reserved ports, it is recommended to host the
         server with a port number that's higher than 1023.
@@ -199,9 +199,9 @@ class HiSockServer:
 
         Reserved functions are functions that get activated on
         specific events. Currently, there are 3 for HiSockServer:
-          1. join - Activated when a client connects to the server
-          2. leave - Activated when a client disconnects from the server
-          3. message - Activated when a client messages to the server
+        1. join - Activated when a client connects to the server
+        2. leave - Activated when a client disconnects from the server
+        3. message - Activated when a client messages to the server
 
         The parameters of the function depend on the command to listen.
         For example, reserved commands `join` and `leave` have only one
@@ -213,8 +213,8 @@ class HiSockServer:
         In addition, certain type casting is available to nonreserved functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
-          1. bytes -> int (Will raise exception if bytes is not numerical)
-          2. bytes -> str (Will raise exception if there's a unicode error)
+        1. bytes -> int (Will raise exception if bytes is not numerical)
+        2. bytes -> str (Will raise exception if there's a unicode error)
         Type casting for reserved commands is scheduled to be
         implemented, and is currently being worked on.
 
@@ -281,8 +281,8 @@ class HiSockServer:
         """
         Sends data to a specific client.
         Different formats of the client is supported. It can be:
-          - An IP + Port format, written as "ip:port"
-          - A client name, if it exists
+        - An IP + Port format, written as "ip:port"
+        - A client name, if it exists
 
         :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
@@ -379,8 +379,8 @@ class HiSockServer:
         """
         Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
-          - An IP + Port format, written as "ip:port"
-          - A client name, if it exists
+        - An IP + Port format, written as "ip:port"
+        - A client name, if it exists
 
         :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
@@ -476,7 +476,7 @@ class HiSockServer:
         be sent different data for different purposes.
 
         Non-command-attached content is recommended to be used alongside with
-        :method:`HiSockClient.recv_raw`
+        `HiSockClient.recv_raw`
 
         :param group: A string, representing the group to send data to
         :type group: str
