@@ -1,5 +1,3 @@
-.. module:: server
-
 hisock.server
 -------------
 A module containing the main server classes and functions, including
@@ -13,7 +11,7 @@ A module containing the main server classes and functions, including
    for hisock that utilizes ints to bump the header utilization from
    `10**x` to `2**(7x)` (where x is the header length)
 
-.. autoclass:: HiSockServer
+.. autoclass:: server.HiSockServer
 
    .. automethod:: get_addr
    .. automethod:: get_client

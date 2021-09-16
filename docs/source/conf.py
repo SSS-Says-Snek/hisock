@@ -1,3 +1,5 @@
+from unittest.mock import Mock
+
 import sys
 import os
 import pathlib
@@ -9,6 +11,20 @@ sys.path.append(
         str(path), str(path.parent.parent)
     )
 )
+
+sys.path.insert(0, os.path.abspath('.'))
+sys.path.insert(0, os.path.abspath('../'))
+sys.path.insert(
+    0, os.path.abspath(
+        '../../'
+    )
+)
+
+sys.modules["__future__"] = Mock()
+
+print("Source files live in:", os.path.abspath(
+        '../../'
+    ))
 
 import constants
 
@@ -45,7 +61,6 @@ release = constants.__version__
 # ones.
 extensions = [
     'sphinx.ext.duration',
-    'sphinx.ext.napoleon',
     'sphinx.ext.autodoc'
 ]
 
@@ -67,6 +82,7 @@ html_theme = 'furo'
 # Add any paths that contain custom static files (such as style sheets) here,
 # relative to this directory. They are copied after the builtin static files,
 # so a file named "default.css" will overwrite the builtin "default.css".
-html_static_path = ['_static']
+html_static_path = []  # Can include '_static'
 
 master_doc = "index"
+autodoc_mock_imports = ['__future__', 'server']
