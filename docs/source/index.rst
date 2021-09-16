@@ -16,7 +16,7 @@ utilizes decorators to maintain a good code structure.
    that needs improvement, submit an issue on the `GitHub Repository <https://github.com/SSS-Says-Snek/hisock/>`_
 
 .. toctree::
-   :maxdepth: 2
+   :maxdepth: 1
    :caption: Contents:
 
 
@@ -32,8 +32,8 @@ Table of Contents
 
    usage
 
-.. toctree::
-   :maxdepth: 3
-   :caption: API Reference
-   
-   server
+   .. toctree::
+      :maxdepth: 2
+      :caption: API Reference
+
+      server
