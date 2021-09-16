@@ -21,6 +21,7 @@ sys.path.insert(0, os.path.abspath('.'))
 # )
 
 sys.modules["__future__"] = Mock()
+sys.modules["__future__.annotations"] = Mock()
 
 print("Source files live in:", os.path.abspath(
         '../../'
