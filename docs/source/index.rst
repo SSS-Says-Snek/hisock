@@ -29,6 +29,7 @@ Table of Contents
 * :ref:`search`
 
 .. toctree::
+   :maxdepth: 1
 
    usage
 
