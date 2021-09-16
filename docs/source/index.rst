@@ -31,4 +31,9 @@ Table of Contents
 .. toctree::
 
    usage
+
+.. toctree::
+   :maxdepth: 3
+   :caption: API Reference
+   
    server
