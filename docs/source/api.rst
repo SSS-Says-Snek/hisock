@@ -1,7 +1,10 @@
+API Reference
+=============
+
 hisock.server
 -------------
 A module containing the main server classes and functions, including
-:class:`HiSockServer` and `start_server`
+:class:`HiSockServer` and :func:`start_server`
 
 .. note::
 
@@ -28,3 +31,16 @@ A module containing the main server classes and functions, including
    .. automethod:: send_client_raw
    .. automethod:: send_group
    .. automethod:: send_group_raw
+
+hisock.client
+-------------
+A module containing the main client classes and functions, including
+:class:`HiSockClient` and :func:`connect`
+
+.. autoclass:: client.HiSockClient
+
+   .. automethod:: close
+   .. automethod:: on
+   .. automethod:: raw_send
+   .. automethod:: recv_raw
+   .. automethod:: update
