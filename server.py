@@ -13,6 +13,7 @@ import socket  # Socket module, duh
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
 import re  # Regex, to make sure arguments are passed correctly
+import threading
 import warnings  # Warnings, for errors that aren't severe
 import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
@@ -843,6 +844,28 @@ class HiSockServer:
         return self.addr
 
 
+class _ThreadedHiSockServer(threading.Thread):
+    """
+    Attempt to run while loop of a HiSockServer in a thread.
+    CURRENTLY STILL IN PROGRESS
+    """
+
+    def __init__(self,
+                 addr, blocking=True, max_connections=0, header_len=16,
+                 *args, **kwargs):
+        super(_ThreadedHiSockServer, self).__init__(*args, **kwargs)
+
+        self._stop_event = threading.Event()
+        self.server = HiSockServer(addr, blocking, max_connections, header_len)
+
+    def stop_server(self):
+        self._stop_event.set()
+
+    def run(self):
+        while self._stop_event:
+            self.server.run()
+
+
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
     Creates a :class:`HiSockServer` instance. See :class:`HiSockServer` for more details
@@ -851,6 +874,8 @@ def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
     return HiSockServer(addr, blocking, max_connections, header_len)
 
+
+start_threaded_server = _ThreadedHiSockServer
 
 if __name__ == "__main__":
     print("Starting server...")
