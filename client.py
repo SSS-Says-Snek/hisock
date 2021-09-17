@@ -32,7 +32,7 @@ class HiSockClient:
     The client class for hisock.
     HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
     HiSockClient also utilizes decorators to receive messages, as an easy way of organizing your
-    code structure (methods are provided, like :method:`recv_raw`, of course)
+    code structure (methods are provided, like :func:`recv_raw`, of course)
 
     :param addr: A two-element tuple, containing the IP address and the
         port number of the server wishing to connect to
@@ -310,8 +310,10 @@ class HiSockClient:
 
         Reserved functions are functions that get activated on
         specific events. Currently, there are 2 for HiSockClient:
-          1. client_connect - Activated when a client connects to the server
-          2. client_disconnect - Activated when a client disconnects from the server
+
+        1. client_connect - Activated when a client connects to the server
+
+        2. client_disconnect - Activated when a client disconnects from the server
 
         The parameters of the function depend on the command to listen.
         For example, reserved functions `client_connect` and
@@ -321,8 +323,11 @@ class HiSockClient:
         In addition, certain type casting is available to nonreserved functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
-          1. bytes -> int (Will raise exception if bytes is not numerical)
-          2. bytes -> str (Will raise exception if there's a unicode error)
+
+        1. bytes -> int (Will raise exception if bytes is not numerical)
+
+        2. bytes -> str (Will raise exception if there's a unicode error)
+
         Type casting for reserved commands is scheduled to be
         implemented, and is currently being worked on.
 
@@ -386,8 +391,8 @@ class HiSockClient:
         """
         Waits (blocks) until a message is sent, and returns that message.
         This is not recommended for content with commands attached;
-        it is meant to be used alongside with :method:`HiSockServer.send_client_raw` and
-        :method:`HiSockServer.send_group_raw`
+        it is meant to be used alongside with :func:`HiSockServer.send_client_raw` and
+        :func:`HiSockServer.send_group_raw`
 
         :return: A bytes-like object, containing the content/message
           the client first receives

@@ -41,18 +41,18 @@ class HiSockServer:
     :type addr: tuple
     :param blocking: A boolean, set to whether the server should block the loop
         while waiting for message or not.
-        Default passed in by `start_server` is True
+        Default passed in by :func:`start_server` is True
     :type blocking: bool, optional
-    :param max_connections: The number of maximum connections `HiSockServer` should accept, before
+    :param max_connections: The number of maximum connections :class:`HiSockServer` should accept, before
         refusing clients' connections. Pass in 0 for unlimited connections.
-        Default passed in  by `start_server` is 0
+        Default passed in  by :func:`start_server` is 0
     :type max_connections: int, optional
     :param header_len: An integer, defining the header length of every message.
         A smaller header length would mean a smaller maximum message
         length (about 10**header_len).
         Any client connecting MUST have the same header length as the server,
         or else it will crash.
-        Default passed in by `start_server` is 16 (maximum length: 10 quadrillion bytes)
+        Default passed in by :func:`start_server` is 16 (maximum length: 10 quadrillion bytes)
     :type header_len: int, optional
     """
 
@@ -201,8 +201,11 @@ class HiSockServer:
 
         Reserved functions are functions that get activated on
         specific events. Currently, there are 3 for HiSockServer:
+
         1. join - Activated when a client connects to the server
+
         2. leave - Activated when a client disconnects from the server
+
         3. message - Activated when a client messages to the server
 
         The parameters of the function depend on the command to listen.
@@ -215,8 +218,11 @@ class HiSockServer:
         In addition, certain type casting is available to nonreserved functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
+
         1. bytes -> int (Will raise exception if bytes is not numerical)
+
         2. bytes -> str (Will raise exception if there's a unicode error)
+
         Type casting for reserved commands is scheduled to be
         implemented, and is currently being worked on.
 
@@ -283,7 +289,9 @@ class HiSockServer:
         """
         Sends data to a specific client.
         Different formats of the client is supported. It can be:
+
         - An IP + Port format, written as "ip:port"
+
         - A client name, if it exists
 
         :param client: The client to send data to. The format could be either by IP+Port,
@@ -381,7 +389,9 @@ class HiSockServer:
         """
         Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
+
         - An IP + Port format, written as "ip:port"
+
         - A client name, if it exists
 
         :param client: The client to send data to. The format could be either by IP+Port,
@@ -478,7 +488,7 @@ class HiSockServer:
         be sent different data for different purposes.
 
         Non-command-attached content is recommended to be used alongside with
-        `HiSockClient.recv_raw`
+        :func:`HiSockClient.recv_raw`
 
         :param group: A string, representing the group to send data to
         :type group: str
@@ -728,9 +738,12 @@ class HiSockServer:
     def get_client(self, client: Union[str, tuple[str, int]]):
         """
         Gets a specific client's information, based on either:
-            1. The client name
-            2. The client IP+Port
-            3. The client IP+Port, in a 2-element tuple
+
+        1. The client name
+
+        2. The client IP+Port
+
+        3. The client IP+Port, in a 2-element tuple
 
         :param client: A parameter, representing the specific client to look up.
             As shown above, it can either be represented
