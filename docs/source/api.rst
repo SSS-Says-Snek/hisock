@@ -17,6 +17,7 @@ A module containing the main server classes and functions, including
 .. autoclass:: server.HiSockServer
 
    .. automethod:: get_addr
+   .. automethod:: get_all_clients
    .. automethod:: get_client
    .. automethod:: get_group
    .. automethod:: on
