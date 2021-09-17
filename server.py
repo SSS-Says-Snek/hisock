@@ -21,7 +21,8 @@ from typing import Callable, Union  # Typing, for cool type hints
 import constants
 from utils import (
     receive_message, _removeprefix, make_header,
-    _dict_tupkey_lookup, _dict_tupkey_lookup_key, _type_cast_server,
+    _dict_tupkey_lookup, _dict_tupkey_lookup_key,
+    _type_cast_server,
 )
 
 
@@ -683,6 +684,45 @@ class HiSockServer:
             mod_group_clients.append(mod_dict)
 
         return mod_group_clients
+
+    def get_all_clients(self, key: Union[Callable, str] = None):
+        """
+        Get all clients currently connected to the server.
+        This is recommended over the class attribute `self._clients` or
+        `self.clients_rev`, as it is in a dictionary-like format
+
+        :param key: If specified, there are two outcomes: If it is a string,
+            it will search for the dictionary for the key,
+            and output it to a list (currently support "ip", "name", "group").
+            Finally, if it is a callable, it will try to integrate the callable
+            into the output (CURRENTLY NOT SUPPORTED YET)
+        :type key: Union[Callable, str], optional
+        :return: A list of dictionaries, with the clients
+        :rtype: list[dict, ...]
+        """
+        clts = []
+        for clt in self.clients_rev:
+            clt_dict = {
+                dict_key: clt[value] for value, dict_key in
+                enumerate(["ip", "name", "group"])
+            }
+            clts.append(clt_dict)
+
+        filter_clts = []
+        if isinstance(key, str):
+            if key in ["ip", "name", "group"]:
+                for filter_clt in clts:
+                    filter_clts.append(filter_clt[key])
+        elif isinstance(key, Callable):
+            filter_clts = list(
+                filter(
+                    key, clts
+                )
+            )
+
+        if filter_clts:
+            return filter_clts
+        return clts
 
     def get_client(self, client: Union[str, tuple[str, int]]):
         """

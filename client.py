@@ -23,7 +23,7 @@ from typing import Union, Callable, Any
 # Utilities
 from utils import (
     make_header, _removeprefix,
-    ServerNotRunning
+    ServerNotRunning, iptup_to_str
 )
 
 
@@ -122,6 +122,9 @@ class HiSockClient:
         self.sock.send(
             conn_header + f"$CLTHELLO$ {json.dumps(hello_dict)}".encode()
         )
+
+    def __str__(self):
+        return f"<HiSockClient connected to {iptup_to_str(self.addr)}>"
 
     class _TLS:
         """
@@ -226,7 +229,7 @@ class HiSockClient:
                                     raise TypeError(
                                         f"Type casting from bytes to string failed "
                                         f"for function \"{func['name']}\":\n           {e}"
-                                    )
+                                    ) from ValueError
                             elif func['type_hint'] == int:
                                 try:
                                     parse_content = int(parse_content)
@@ -354,7 +357,8 @@ class HiSockClient:
 
         # Sends to server
         self.sock.send(
-            content_header + command.encode() + b" " + content
+            content_header + command.encode() +
+            b" " + content
         )
 
     def raw_send(self, content: bytes):
@@ -427,7 +431,6 @@ def connect(addr, name=None, group=None):
 
 if __name__ == "__main__":
     s = connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
-    s.tls.enable()
 
 
     @s.on("Joe")
