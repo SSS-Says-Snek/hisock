@@ -7,7 +7,7 @@ README = (ROOT / "README.md").read_text()
 
 setup(
     name="hisock",
-    version="0.0.1.post7",
+    version="0.0.2",
     description="A higher-level extension of the socket module, with simpler and more efficient usages",
     long_description=README,
     long_description_content_type="text/markdown",
