@@ -4,8 +4,8 @@ Tests the decorators that make up the core of hisock's receiving system
 
 import pytest
 
-from server import HiSockServer
-from client import HiSockClient
+from hisock.server import HiSockServer
+from hisock.client import HiSockClient
 
 serv_on = HiSockServer._on
 cli_on = HiSockClient._on

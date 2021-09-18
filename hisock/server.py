@@ -19,8 +19,8 @@ import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
 
 # Utilities
-import constants
-from utils import (
+from hisock import constants
+from .utils import (
     receive_message, _removeprefix, make_header,
     _dict_tupkey_lookup, _dict_tupkey_lookup_key,
     _type_cast_server,

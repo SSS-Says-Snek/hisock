@@ -21,7 +21,7 @@ from functools import wraps
 from typing import Union, Callable, Any
 
 # Utilities
-from utils import (
+from .utils import (
     make_header, _removeprefix,
     ServerNotRunning, iptup_to_str
 )

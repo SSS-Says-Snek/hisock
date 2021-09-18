@@ -6,7 +6,7 @@ type casting for hisock will crash. We don't want that!
 
 import pytest
 
-from utils import _type_cast_server
+from hisock.utils import _type_cast_server
 
 
 class TestServerTypeCast:

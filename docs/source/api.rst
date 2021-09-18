@@ -14,7 +14,7 @@ A module containing the main server classes and functions, including
    for hisock that utilizes ints to bump the header utilization from
    `10**x` to `2**(7x)` (where x is the header length)
 
-.. autoclass:: server.HiSockServer
+.. autoclass:: hisock.server.HiSockServer
 
    .. automethod:: get_addr
    .. automethod:: get_client
@@ -37,7 +37,7 @@ hisock.client
 A module containing the main client classes and functions, including
 :class:`HiSockClient` and :func:`connect`
 
-.. autoclass:: client.HiSockClient
+.. autoclass:: hisock.client.HiSockClient
 
    .. automethod:: close
    .. automethod:: on

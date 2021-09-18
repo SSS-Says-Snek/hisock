@@ -4,12 +4,6 @@ import json
 import socket
 from typing import Union
 
-__all__ = dir(__file__)
-
-for obj in __all__:
-    if obj.startswith('_'):
-        __all__.remove(obj)
-
 # __all__ = [
 #     'make_header', 'receive_message',
 #     'get_local_ip', 'ipstr_to_tup',
