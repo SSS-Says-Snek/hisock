@@ -31,5 +31,5 @@ Table of Contents
 .. toctree::
    :maxdepth: 2
 
-   usage
+   quickstart/index
    API Reference <api>

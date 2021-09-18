@@ -41,19 +41,30 @@ class HiSockServer:
     :type addr: tuple
     :param blocking: A boolean, set to whether the server should block the loop
         while waiting for message or not.
-        Default passed in by :func:`start_server` is True
+        Default passed in by :meth:`start_server` is True
     :type blocking: bool, optional
     :param max_connections: The number of maximum connections :class:`HiSockServer` should accept, before
         refusing clients' connections. Pass in 0 for unlimited connections.
-        Default passed in  by :func:`start_server` is 0
+        Default passed in  by :meth:`start_server` is 0
     :type max_connections: int, optional
     :param header_len: An integer, defining the header length of every message.
         A smaller header length would mean a smaller maximum message
         length (about 10**header_len).
         Any client connecting MUST have the same header length as the server,
         or else it will crash.
-        Default passed in by :func:`start_server` is 16 (maximum length: 10 quadrillion bytes)
+        Default passed in by :meth:`start_server` is 16 (maximum length: 10 quadrillion bytes)
     :type header_len: int, optional
+
+    :ivar tuple addr: A two-element tuple, containing the IP address and the
+        port number
+    :ivar int header_len: An integer, storing the header length of each "message"
+    :ivar dict clients: A dictionary, with the socket as its key, and the client info as its value
+    :ivar dict clients_rev: A dictionary, with the client info as its key, and the socket as its value
+
+    .. note::
+
+       It is advised to use :meth:`get_client` or :meth:`get_all_clients` instead of
+       using :attr:`clients` and :attr:`clients_rev`
     """
 
     def __init__(
@@ -103,6 +114,7 @@ class HiSockServer:
         self.called_run = False
 
     def __str__(self):
+        """Example: <HiSockServer serving at 192.168.1.133:33333>"""
         return f"<HiSockServer serving at {':'.join(map(str, self.addr))}>"
 
     class _TLS:
@@ -488,7 +500,7 @@ class HiSockServer:
         be sent different data for different purposes.
 
         Non-command-attached content is recommended to be used alongside with
-        :func:`HiSockClient.recv_raw`
+        :meth:`HiSockClient.recv_raw`
 
         :param group: A string, representing the group to send data to
         :type group: str

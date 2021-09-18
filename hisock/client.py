@@ -124,6 +124,7 @@ class HiSockClient:
         )
 
     def __str__(self):
+        """Example: <HiSockClient connected to 192.168.1.133:33333"""
         return f"<HiSockClient connected to {iptup_to_str(self.addr)}>"
 
     class _TLS:

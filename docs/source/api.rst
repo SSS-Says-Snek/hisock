@@ -33,6 +33,8 @@ A module containing the main server classes and functions, including
    .. automethod:: send_group
    .. automethod:: send_group_raw
 
+.. autofunction:: hisock.server.start_server
+
 hisock.client
 -------------
 A module containing the main client classes and functions, including
@@ -44,9 +46,12 @@ A module containing the main client classes and functions, including
    .. automethod:: on
    .. automethod:: raw_send
    .. automethod:: recv_raw
+   .. automethod:: send
    .. automethod:: update
    .. note::
 
       This is the main method to run HiSockClient. This **MUST** be called
       every iteration in a while loop, as to keep waiting time as short as possible
       between client and server. It is also recommended to put this in a thread.
+
+.. autofunction:: hisock.client.connect

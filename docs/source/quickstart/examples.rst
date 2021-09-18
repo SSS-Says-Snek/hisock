@@ -1,27 +1,5 @@
-Usage
-=====
-
-Installation
-------------
-
-In order to install hisock, you must clone it on Github. It is located
-`here <https://github.com/SSS-Says-Snek/hisock/>`_. You can either clone it with the website
-or Github Desktop, but you can also clone it with Git:
-
-.. code-block:: console
-
-    $ git clone https://github.com/SSS-Says-Snek/hisock.git
-
-Then, copy-paste the module into your code, and it should work!
-
-.. warning::
-    I'm aware that hisock has not been published to PyPI yet, so it is extremely
-    weird to just copy-paste a module into your code. However, after I learn how to
-    publish a package on PyPI, hisock will be published on there, and this page
-    will be updated to include the PyPI installation
-
 Examples
---------
+========
 
 Examples are located in the `./examples` directory in hisock.
 You can take a look at some of them. The basic client-server examples are:
