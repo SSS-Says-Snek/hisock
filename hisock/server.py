@@ -879,26 +879,41 @@ class HiSockServer:
         return self.addr
 
 
-class _ThreadedHiSockServer(threading.Thread):
+class _BaseThreadServer(HiSockServer):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+    def _run(self):
+        HiSockServer.run(self)
+
+
+class _ThreadedHiSockServer(_BaseThreadServer):
     """
     Attempt to run while loop of a HiSockServer in a thread.
     CURRENTLY STILL IN PROGRESS
     """
 
     def __init__(self,
-                 addr, blocking=True, max_connections=0, header_len=16,
-                 *args, **kwargs):
-        super(_ThreadedHiSockServer, self).__init__(*args, **kwargs)
+                 addr, blocking=True, max_connections=0, header_len=16):
+        super().__init__(
+            addr, blocking, max_connections, header_len
+        )
+        self._thread = threading.Thread(target=self.run)
 
         self._stop_event = threading.Event()
-        self.server = HiSockServer(addr, blocking, max_connections, header_len)
 
     def stop_server(self):
         self._stop_event.set()
 
     def run(self):
         while self._stop_event:
-            self.server.run()
+            self._run()
+
+    def start_server(self):
+        self._thread.start()
+
+    def join(self):
+        self._thread.join()
 
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
@@ -914,7 +929,8 @@ start_threaded_server = _ThreadedHiSockServer
 
 if __name__ == "__main__":
     print("Starting server...")
-    s = HiSockServer(('192.168.1.131', 33333))
+    # s = HiSockServer(('192.168.1.131', 33333))
+    s = start_threaded_server(('192.168.1.131', 33333))
 
 
     @s.on("join")
@@ -944,5 +960,6 @@ if __name__ == "__main__":
         s.send_all_clients("pog", msg)
 
 
-    while True:
-        s.run()
+    # while True:
+    #     s.run()
+    s.start_server()
