@@ -62,7 +62,8 @@ release = constants.__version__
 # ones.
 extensions = [
     'sphinx.ext.duration',
-    'sphinx.ext.autodoc'
+    'sphinx.ext.autodoc',
+    'sphinx.ext.coverage'
 ]
 
 # Add any paths that contain templates here, relative to this directory.
@@ -86,3 +87,6 @@ html_theme = 'furo'
 html_static_path = []  # Can include '_static'
 
 master_doc = "index"
+
+coverage_show_missing_items = True
+character_level_inline_markup = True

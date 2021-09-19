@@ -20,11 +20,19 @@ from typing import Callable, Union  # Typing, for cool type hints
 
 # Utilities
 from hisock import constants
-from .utils import (
-    receive_message, _removeprefix, make_header,
-    _dict_tupkey_lookup, _dict_tupkey_lookup_key,
-    _type_cast_server,
-)
+try:
+    from .utils import (
+        receive_message, _removeprefix, make_header,
+        _dict_tupkey_lookup, _dict_tupkey_lookup_key,
+        _type_cast_server,
+    )
+except ImportError:
+    # relative import doesn't work for non-pip builds
+    from utils import (
+        receive_message, _removeprefix, make_header,
+        _dict_tupkey_lookup, _dict_tupkey_lookup_key,
+        _type_cast_server,
+    )
 
 
 class HiSockServer:
@@ -60,6 +68,8 @@ class HiSockServer:
     :ivar int header_len: An integer, storing the header length of each "message"
     :ivar dict clients: A dictionary, with the socket as its key, and the client info as its value
     :ivar dict clients_rev: A dictionary, with the client info as its key, and the socket as its value
+    :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
+        **This is mainly used for under-the-hood-code**
 
     .. note::
 

@@ -1,5 +1,5 @@
-import hisock.constants as constants
-import hisock.utils as utils
+import hisock.constants as constants  # lgtm [py/unused-import]
+import hisock.utils as utils  # lgtm [py/unused-import]
 
 import hisock.client as client  # lgtm [py/unused-import]
 import hisock.server as server  # lgtm [py/unused-import]

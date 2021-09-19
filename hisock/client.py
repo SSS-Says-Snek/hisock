@@ -17,14 +17,20 @@ import errno
 import sys
 import traceback
 
-from functools import wraps
 from typing import Union, Callable, Any
 
 # Utilities
-from .utils import (
-    make_header, _removeprefix,
-    ServerNotRunning, iptup_to_str
-)
+try:
+    from .utils import (
+        make_header, _removeprefix,
+        ServerNotRunning, iptup_to_str
+    )
+except ImportError:
+    # relative import doesn't work for non-pip builds
+    from utils import (
+        make_header, _removeprefix,
+        ServerNotRunning, iptup_to_str
+    )
 
 
 class HiSockClient:
@@ -63,6 +69,16 @@ class HiSockClient:
         crash (hard to debug though).
         Default sets to 16 (maximum length of content: 10 quadrillion bytes)
     :type header_len: int, optional
+
+    :ivar tuple addr: A two-element tuple, containing the IP address and the
+        port number
+    :ivar int header_len: An integer, storing the header length of each "message"
+    :ivar str name: A string, representing the name of the client to identify by.
+        Defaults to None
+    :ivar str group: A string, representing the group of the client to identify by.
+        Defaults to None
+    :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
+        **This is mainly used for under-the-hood-code**
     """
 
     def __init__(
