@@ -887,10 +887,10 @@ class _BaseThreadServer(HiSockServer):
         HiSockServer.run(self)
 
 
-class _ThreadedHiSockServer(_BaseThreadServer):
+class ThreadedHiSockServer(_BaseThreadServer):
     """
-    Attempt to run while loop of a HiSockServer in a thread.
-    CURRENTLY STILL IN PROGRESS
+    A downside of :class:`HiSockServer` is that you need to constantly
+    :meth:`run` it
     """
 
     def __init__(self,
@@ -903,16 +903,33 @@ class _ThreadedHiSockServer(_BaseThreadServer):
         self._stop_event = threading.Event()
 
     def stop_server(self):
+        """Stops the server"""
         self._stop_event.set()
+        self.sock.close()
 
     def run(self):
+        """
+        The main while loop to run the thread
+
+        Refer to :class:`HiSockServer` for more details
+
+        .. warning::
+           This method is **NOT** recommended to be used in an actual
+           production enviroment. This is used internally for the thread, and should
+           not be interacted with the user
+        """
         while self._stop_event:
-            self._run()
+            try:
+                self._run()
+            except (OSError, ValueError):
+                break
 
     def start_server(self):
+        """Starts the main server loop"""
         self._thread.start()
 
     def join(self):
+        """Waits for the thread to be killed"""
         self._thread.join()
 
 
@@ -925,7 +942,17 @@ def start_server(addr, blocking=True, max_connections=0, header_len=16):
     return HiSockServer(addr, blocking, max_connections, header_len)
 
 
-start_threaded_server = _ThreadedHiSockServer
+def start_threaded_server(addr, blocking=True, max_connections=0, header_len=16):
+    """
+    Creates a :class:`ThreadedHiSockServer` instance. See :class:`ThreadedHiSockServer`
+    for more details
+
+    :return: A :class:`ThreadedHiSockServer` instance
+    """
+    return ThreadedHiSockServer(
+        addr, blocking, max_connections, header_len
+    )
+
 
 if __name__ == "__main__":
     print("Starting server...")

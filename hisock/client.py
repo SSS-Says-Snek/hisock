@@ -15,6 +15,7 @@ import socket
 import json
 import errno
 import sys
+import threading
 import traceback
 
 from typing import Union, Callable, Any
@@ -78,6 +79,7 @@ class HiSockClient:
     :ivar str group: A string, representing the group of the client to identify by.
         Defaults to None
     :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
+
         **This is mainly used for under-the-hood-code**
     """
 
@@ -206,7 +208,12 @@ class HiSockClient:
             try:
                 while True:
                     # Receives header - If doesn't exist, server error
-                    content_header = self.sock.recv(self.header_len)
+                    try:
+                        content_header = self.sock.recv(self.header_len)
+                    except ConnectionResetError:
+                        raise ServerNotRunning(
+                            "Server has stopped running, aborting..."
+                        ) from ConnectionResetError
 
                     if not content_header:
                         print("[SERVER] Connection forcibly closed by server, exiting...")
@@ -430,7 +437,53 @@ class HiSockClient:
         self.sock.close()
 
 
-def connect(addr, name=None, group=None):
+class ThreadedHiSockClient(HiSockClient):
+    """
+    A downside of :class:`HiSockServer` is that you need to constantly
+    :meth:`run` it
+    """
+
+    def __init__(self,
+                 addr, name=None, group=None, blocking=True, header_len=16):
+        super().__init__(
+            addr, name, group, blocking, header_len
+        )
+        self._thread = threading.Thread(target=self.run)
+
+        self._stop_event = threading.Event()
+
+    def stop_client(self):
+        """Stops the client"""
+        self._stop_event.set()
+        self.sock.close()
+
+    def run(self):
+        """
+        The main while loop to run the thread
+
+        Refer to :class:`HiSockClient` for more details
+
+        .. warning::
+           This method is **NOT** recommended to be used in an actual
+           production enviroment. This is used internally for the thread, and should
+           not be interacted with the user
+        """
+        while self._stop_event:
+            try:
+                self.update()
+            except (OSError, ValueError):
+                break
+
+    def start_client(self):
+        """Starts the main server loop"""
+        self._thread.start()
+
+    def join(self):
+        """Waits for the thread to be killed"""
+        self._thread.join()
+
+
+def connect(addr, name=None, group=None, blocking=True, header_len=16):
     """
     Creates a `HiSockClient` instance. See HiSockClient for more details
 
@@ -443,16 +496,37 @@ def connect(addr, name=None, group=None):
     :param group: A string, containing the "group" the client is in.
         Groups can be utilized to send specific messages to them only.
         This argument is optional
-    :type: str, optional
+    :type group: str, optional
+    :param blocking: A boolean, specifying if the client should block or not
+        in the socket.
+
+        Defaults to True
+    :type blocking: bool, optional
+    :param header_len: An integer, defining the header length of every message.
+
+        Defaults to True
+    :type header_len: int, optional
 
     :return: A :class:`HiSockClient` instance
     :rtype: instance
     """
-    return HiSockClient(addr, name, group)
+    return HiSockClient(addr, name, group, blocking, header_len)
+
+
+def threaded_connect(addr, name=None, group=None, blocking=True, header_len=16):
+    """
+    Creates a :class:`ThreadedHiSockServer` instance. See :class:`ThreadedHiSockServer`
+    for more details
+
+    :return: A :class:`ThreadedHiSockServer` instance
+    """
+    return ThreadedHiSockClient(
+        addr, name, group, blocking, header_len
+    )
 
 
 if __name__ == "__main__":
-    s = connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
+    s = threaded_connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
 
 
     @s.on("Joe")
@@ -485,5 +559,4 @@ if __name__ == "__main__":
         print("Group message received:", data)
 
 
-    while True:
-        s.update()
+    s.start_client()
