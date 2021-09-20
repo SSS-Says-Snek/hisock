@@ -1,14 +1,31 @@
 ![CircleCI Badge](https://img.shields.io/circleci/build/github/SSS-Says-Snek/hisock)
 [![Documentation Status](https://readthedocs.org/projects/hisock/badge/?version=latest)](https://hisock.readthedocs.io/en/latest/?badge=latest)
 
-# highsock
-A higher-level extension of the socket module, with simpler and more efficient usages
+[![Codacy Badge](https://app.codacy.com/project/badge/Grade/b071d22550484b5db3ad95434f2713dd)](https://www.codacy.com/gh/SSS-Says-Snek/hisock/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SSS-Says-Snek/hisock&amp;utm_campaign=Badge_Grade)
+[![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/SSS-Says-Snek/hisock.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/SSS-Says-Snek/hisock/context:python)
+![PyPI Downloads](https://img.shields.io/pypi/dm/hisock)
+
+![PyPI Version](https://img.shields.io/pypi/v/hisock)
+![Github Version](https://img.shields.io/github/v/release/SSS-Says-Snek/hisock)
+![Github Commits](https://img.shields.io/github/commits-since/SSS-Says-Snek/hisock/latest)
+
+# highsock (hisock)
+A ***hi***gher-level extension of the ***sock***et module, with simpler and more efficient usages
 
 ## Documentation
-Currently, the best form of documentation is available 
-by examining the docstrings of desired functions. However, there is documentation on 
-[ReadTheDocs](https://hisock.readthedocs.io), though it does not contain a lot of information.
-There will also soon be functioning examples, to show the main features of hisock.
+Documentation is located on 
+[ReadTheDocs](https://hisock.readthedocs.io), though it currently does not contain a lot of information. 
+There will also soon be functioning examples, to show the main features of hisock. `hisock` documentation 
+also is lacking a tutorial for beginners to understand how to use hisock, which is currently being worked on.
+
+## Installation
+`hisock` is available on PyPI, [Here](https://pypi.org/project/hisock). Just do the following command.
+```shell
+$ python -m pip install hisock (WINDOWS)
+  OR
+$ pip3 install hisock (MAC/LINUX)
+```
+Of course, you'd need pip for this.
 
 ## Examples
 hisock utilizes decorators as the core of receiving messages. 
@@ -118,4 +135,4 @@ while True:
     s.update()
 
 ```
-###### Readme to be added of course lel
+
