@@ -515,10 +515,10 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16):
 
 def threaded_connect(addr, name=None, group=None, blocking=True, header_len=16):
     """
-    Creates a :class:`ThreadedHiSockServer` instance. See :class:`ThreadedHiSockServer`
+    Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
     for more details
 
-    :return: A :class:`ThreadedHiSockServer` instance
+    :return: A :class:`ThreadedHiSockClient` instance
     """
     return ThreadedHiSockClient(
         addr, name, group, blocking, header_len
