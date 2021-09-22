@@ -22,13 +22,15 @@ from typing import Callable, Union  # Typing, for cool type hints
 from hisock import constants
 try:
     from .utils import (
+        NoHeaderWarning, NoMessageException,
         receive_message, _removeprefix, make_header,
         _dict_tupkey_lookup, _dict_tupkey_lookup_key,
         _type_cast_server,
-    )
+)
 except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
+        NoHeaderWarning, NoMessageException,
         receive_message, _removeprefix, make_header,
         _dict_tupkey_lookup, _dict_tupkey_lookup_key,
         _type_cast_server,
@@ -92,7 +94,12 @@ class HiSockServer:
         # Socket initialization
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.sock.setblocking(blocking)
-        self.sock.bind(addr)
+        try:
+            self.sock.bind(addr)
+        except socket.gaierror:
+            raise TypeError(
+                "Connection failed (most likely due to invalid IP)"
+            )
         self.sock.listen(max_connections)
 
         # Function related storage

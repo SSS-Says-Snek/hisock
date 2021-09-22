@@ -26,6 +26,10 @@ class ServerNotRunning(Exception):
     pass
 
 
+class NoHeaderWarning(Warning):
+    pass
+
+
 def make_header(header_msg, header_len, encode=True):
     len_msg = len(header_msg)
     constructed_header = f"{len_msg}{' ' * (header_len - len(str(len_msg)))}"
