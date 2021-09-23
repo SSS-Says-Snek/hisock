@@ -10,4 +10,5 @@ steps and some examples
 
    understanding_hisock
    installation
+   tutorial
    examples
