@@ -80,7 +80,9 @@ class HiSockClient:
         Defaults to None
     :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
 
-        **This is mainly used for under-the-hood-code**
+        .. warning::
+
+           This is mainly used for under-the-hood-code
     """
 
     def __init__(
@@ -134,7 +136,10 @@ class HiSockClient:
         self.sock.setblocking(blocking)
 
         # Send client hello
-        hello_dict = {"name": self.name, "group": self.group}
+        hello_dict = {
+            "name": self.name,
+            "group": self.group
+        }
         conn_header = make_header(f"$CLTHELLO$ {json.dumps(hello_dict)}", self.header_len)
 
         self.sock.send(
@@ -350,7 +355,9 @@ class HiSockClient:
 
         1. bytes -> int (Will raise exception if bytes is not numerical)
 
-        2. bytes -> str (Will raise exception if there's a unicode error)
+        2. bytes -> float (Will raise exception if bytes is not numerical)
+
+        3. bytes -> str (Will raise exception if there's a unicode error)
 
         Type casting for reserved commands is scheduled to be
         implemented, and is currently being worked on.
@@ -429,6 +436,46 @@ class HiSockClient:
         # Returns message
         return message
 
+    def get_client(self, client: Union[str, tuple[str, int]]):
+        """PROTOTYPE; DO NOT USE YET"""
+        if isinstance(client, tuple):
+            if len(client) == 2:
+                client = f"{client[0]}:{client[1]}"
+            else:
+                raise TypeError(
+                    "Client tuple not correctly formatted"
+                )
+        get_client_header = make_header(
+            b"$GETCLT$ " + client.encode(),
+            self.header_len
+        )
+        self.sock.send(
+            get_client_header +
+            b"$GETCLT$ " + client.encode()
+        )
+
+        client = self.recv_raw()
+
+        print(client)
+
+    def get_server_addr(self):
+        """
+        Gets the address of where the hisock client is connected
+        at.
+
+        :return: A tuple, with the format (str IP, int port)
+        """
+        return self.addr
+
+    def get_client_addr(self):
+        """
+        Gets the address of the hisock client that is connected
+        to the server.
+
+        :return: A tuple, with the format (str IP, int port)
+        """
+        return self.sock.getsockname()
+
     def close(self):
         """Closes the client; running `client.update()` won't do anything now"""
         # Changes _closed flag to True to prevent
@@ -439,8 +486,15 @@ class HiSockClient:
 
 class ThreadedHiSockClient(HiSockClient):
     """
-    A downside of :class:`HiSockServer` is that you need to constantly
-    :meth:`run` it
+    A downside of :class:`HiSockClient` is that you need to constantly
+    :meth:`run` it in a while loop, which may block the program. Fortunately,
+    in Python, you can use threads to do two different things at once. Using
+    :class:`ThreadedHiSockClient`, you would be able to run another
+    blocking program, without ever fearing about blocking and all that stuff.
+
+    .. note::
+       In some cases though, :class:`HiSockClient` offers more control than
+       :class:`ThreadedHiSockClient`, so be careful about that
     """
 
     def __init__(self,

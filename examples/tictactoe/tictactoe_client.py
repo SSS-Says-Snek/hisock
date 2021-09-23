@@ -109,7 +109,8 @@ def player_turn(move: int):
 
 @server.on("win")
 def player_win(missing_move: int):
-    data.board[missing_move] = "X" if data.letter == "O" else "O"
+    if data.board[missing_move] == " ":
+        data.board[missing_move] = "X" if data.letter == "O" else "O"
     clear()
     print("You win!")
     print(data.board_layout.format(*data.board))
@@ -119,7 +120,8 @@ def player_win(missing_move: int):
 
 @server.on("lose")
 def player_lose(missing_move: int):
-    data.board[missing_move] = "X" if data.letter == "O" else "O"
+    if data.board[missing_move] == " ":
+        data.board[missing_move] = "X" if data.letter == "O" else "O"
     clear()
     print("You lose!")
     print(data.board_layout.format(*data.board))
@@ -129,7 +131,8 @@ def player_lose(missing_move: int):
 
 @server.on("tie")
 def player_tie(missing_move: int):
-    # data.board[missing_move] = "X" if data.letter == "O" else "O"
+    if data.board[missing_move] == " ":
+        data.board[missing_move] = "X" if data.letter == "O" else "O"
     clear()
     print("You tied!")
     print(data.board_layout.format(*data.board))

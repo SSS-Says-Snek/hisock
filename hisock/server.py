@@ -20,6 +20,7 @@ from typing import Callable, Union  # Typing, for cool type hints
 
 # Utilities
 from hisock import constants
+
 try:
     from .utils import (
         NoHeaderWarning, NoMessageException,
@@ -333,7 +334,7 @@ class HiSockServer:
         :type content: bytes
         :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
-        :raise Warning: Using client name, and more than one client with
+        :raise UserWarning: Using client name, and more than one client with
             the same name is detected
         """
         content_header = make_header(command.encode() + b" " + content, self.header_len)
@@ -500,11 +501,13 @@ class HiSockServer:
             content_header = make_header(content, self.header_len)
 
             if len(client_sock) > 1:
+                # More than one client with same name
                 warnings.warn(
                     f"{len(client_sock)} clients with name \"{client}\" detected; sending data to "
                     f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
                 )
 
+            # Sends to client
             client_sock[0].send(
                 content_header + content
             )
@@ -644,6 +647,30 @@ class HiSockServer:
                                 no_tls_header + b"$NOTLS$"
                             )
                         continue
+                    elif message['data'].startswith(b"$GETCLT$"):
+                        try:
+                            result = self.get_client(
+                                _removeprefix(
+                                    message['data'],
+                                    b"$GETCLT$ "
+                                ).decode()
+                            )
+                            del result['socket']
+
+                            clt = json.dumps(
+                                result
+                            )
+                        except ValueError as e:
+                            clt = "{\"traceback\": \"" + str(e) + "\""
+                        except TypeError:
+                            clt = "{\"traceback\": \"$NOEXIST$\"}"
+
+                        clt_header = make_header(clt.encode(), self.header_len)
+
+                        print(clt)
+                        notified_sock.send(
+                            clt_header + clt.encode()
+                        )
 
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
@@ -982,11 +1009,11 @@ if __name__ == "__main__":
         print("Hmmm whomst leaved, ah it is", yum_data['name'])
 
 
-    @s.on("message")
-    def why(client_data, message: str):
-        print("Message reserved function aaa")
-        print("Client data:", client_data)
-        print("Message:", message)
+    # @s.on("message")
+    # def why(client_data, message: str):
+    #     print("Message reserved function aaa")
+    #     print("Client data:", client_data)
+    #     print("Message:", message)
 
 
     @s.on("Sussus")

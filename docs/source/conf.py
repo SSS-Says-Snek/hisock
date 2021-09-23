@@ -3,6 +3,9 @@ from unittest.mock import Mock
 import sys
 import os
 import pathlib
+import json
+
+import urllib.request
 
 path = pathlib.Path(os.path.dirname(__file__))
 
@@ -24,10 +27,17 @@ sys.modules["__future__"] = Mock()
 sys.modules["__future__.annotations"] = Mock()
 
 print("Source files live in:", os.path.abspath(
-        '../../'
-    ))
+    '../../'
+))
 
 import constants
+
+
+version_html = json.loads(
+    urllib.request.urlopen(
+        "https://api.github.com/repos/SSS-Says-Snek/hisock/releases/latest"
+    ).read()
+)
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -53,7 +63,11 @@ copyright = constants.__copyright__
 author = constants.__author__
 
 # The full version, including alpha/beta/rc tags
-release = constants.__version__
+try:
+    release = version_html['tag_name']
+except KeyError:
+    # Most likely rate limited
+    release = constants.__version__  # Fall back on latest known release
 
 # -- General configuration ---------------------------------------------------
 

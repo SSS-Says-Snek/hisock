@@ -17,17 +17,15 @@ except ImportError:
 
 class Data:
     def __init__(self):
-        self.board = [' ' for _ in range(9)]
+        self.boards = []
 
 
 ip_input = input("Enter IP of where the server should be hosted "
                  "(Leave blank for current IP): ")
-
 if ip_input == '':
     ip_input = utils.get_local_ip()
 
 port_input = input("Enter port of server: ")
-
 while port_input == '':
     port_input = input("Enter port of server: ")
 
@@ -63,6 +61,7 @@ def client_conn(client_info):
 
         s.send_client(client_info['ip'], "game_start", last_pair[0].encode())
         s.send_client(last_ip_pair[0], "game_start", client_info['name'].encode())
+
         if goes_first < 0.5:
             s.send_client_raw(client_info['ip'], b"First")
             s.send_client_raw(last_ip_pair[0], b"Last")
@@ -71,6 +70,7 @@ def client_conn(client_info):
             s.send_client_raw(last_ip_pair[0], b"First")
             s.send_client_raw(client_info['ip'], b"Last")
             x_or_o.append(["X", "O"])
+
     elif len(last_pair) == 2:  # Available client
         print("    - Currently available (no clients to pair)")
         paired_clients.append([client_info['name']])
@@ -82,6 +82,7 @@ def player_turn(clt_data, move: int):
     opponent_ip = None  # Suppressing Pycharm warnings
     opponent_letter = None
     idx = None
+
     for x, ip_pair in enumerate(paired_clients_ip):
         for y, ip in enumerate(ip_pair):
             if ip == clt_data['ip']:
@@ -89,14 +90,18 @@ def player_turn(clt_data, move: int):
                 opponent_letter = x_or_o[x][abs(y-1)]
                 idx = [x, abs(y-1)]
 
-    data.board[move] = x_or_o[idx[0]][idx[1]]
-    row1, row2, row3 = [data.board[i:i+3] for i in range(0, 9, 3)]
-    col1, col2, col3 = [data.board[i:7+i:3] for i in range(3)]
+    if len(data.boards) == idx[0]:
+        data.boards.append([" " for _ in range(9)])
+    data.boards[idx[0]][move] = x_or_o[idx[0]][idx[1]]
+
+    row1, row2, row3 = [data.boards[idx[0]][i:i+3] for i in range(0, 9, 3)]
+    col1, col2, col3 = [data.boards[idx[0]][i:7+i:3] for i in range(3)]
     diag1, diag2 = [
-        [data.board[0], data.board[4], data.board[8]],
-        [data.board[2], data.board[4], data.board[6]]
+        [data.boards[idx[0]][0], data.boards[idx[0]][4], data.boards[idx[0]][8]],
+        [data.boards[idx[0]][2], data.boards[idx[0]][4], data.boards[idx[0]][6]]
     ]
     no_winner = True
+
     for check in (row1, row2, row3, col1, col2, col3, diag1, diag2):
         if (check[0] == check[1] == check[2]) and statistics.mode(check) != ' ':  # WINNER!
             no_winner = False
@@ -110,7 +115,7 @@ def player_turn(clt_data, move: int):
                 s.send_client(clt_data['ip'], "win", str(move).encode())
                 s.send_client(opponent_ip, 'lose', str(move).encode())
 
-    spaces = [i == " " for i in data.board]
+    spaces = [i == " " for i in data.boards[idx[0]]]
 
     if not any(spaces):
         no_winner = False  # Even though it's technically true
