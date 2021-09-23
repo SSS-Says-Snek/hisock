@@ -8,8 +8,7 @@ sys.path.append(str(PATH.parent.parent))  # Not needed usually; used to run exam
 
 try:
     from hisock import (
-        connect,
-        utils
+        connect
     )
 except ImportError as e:
     print("Because I'm dumb, run the example at the root of the package. Thank you!")
