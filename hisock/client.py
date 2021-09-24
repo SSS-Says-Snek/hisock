@@ -436,13 +436,53 @@ class HiSockClient:
         # Returns message
         return message
 
-    def change_name(self, new_name):
-        new_name_header = make_header(
-            b"$CHNAME$ " + new_name.encode(),
-            self.header_len
+    def change_name(self, new_name: Union[str, None]):
+        """
+        Changes the name of the client
+
+        :param new_name: The new name for the client to be called
+        :type new_name: Union[str, None]
+        """
+        if new_name is not None:
+            new_name_header = make_header(
+                b"$CHNAME$ " + new_name.encode(),
+                self.header_len
+            )
+        else:
+            new_name_header = make_header(
+                b"$CHNAME$",
+                self.header_len
+            )
+
+        self.sock.send(
+            new_name_header +
+            (b"$CHNAME$ " + new_name.encode()) if new_name is not None else
+            b"$CHNAME$"
         )
 
-        self.sock.send(new_name_header + b"$CHNAME$ " + new_name.encode())
+    def change_group(self, new_group: Union[str, None]):
+        """
+        Changes the client's group
+
+        :param new_group: The new graup name of the client
+        :type new_group: Union[str, None]
+        """
+        if new_group is not None:
+            new_group_header = make_header(
+                b"$CHGROUP$ " + new_group.encode(),
+                self.header_len
+            )
+        else:
+            new_group_header = make_header(
+                b"$CHGROUP$",
+                self.header_len
+            )
+
+        self.sock.send(
+            new_group_header +
+            (b"$CHGROUP$ " + new_group.encode()) if new_group is not None else
+            b"$CHGROUP$"
+        )
 
     def get_client(self, client: Union[str, tuple[str, int]]):
         """PROTOTYPE; DO NOT USE YET"""

@@ -680,6 +680,10 @@ class HiSockServer:
                                 matching_reserve + b" "
                             ).decode()
 
+                            if name_or_group == message['data'].decode():
+                                # Most likely request to reset name
+                                name_or_group = None
+
                             clt_info = self.clients[notified_sock]
                             clt_tup = (
                                 clt_info['ip']
