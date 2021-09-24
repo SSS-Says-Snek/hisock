@@ -436,6 +436,14 @@ class HiSockClient:
         # Returns message
         return message
 
+    def change_name(self, new_name):
+        new_name_header = make_header(
+            b"$CHNAME$ " + new_name.encode(),
+            self.header_len
+        )
+
+        self.sock.send(new_name_header + b"$CHNAME$ " + new_name.encode())
+
     def get_client(self, client: Union[str, tuple[str, int]]):
         """PROTOTYPE; DO NOT USE YET"""
         if isinstance(client, tuple):

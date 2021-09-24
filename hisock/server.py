@@ -12,6 +12,7 @@ import inspect  # Inspect, for type-hinting detection
 import socket  # Socket module, duh
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
+import ast  # For certain type hints
 import re  # Regex, to make sure arguments are passed correctly
 import threading
 import warnings  # Warnings, for errors that aren't severe
@@ -672,6 +673,31 @@ class HiSockServer:
                             clt_header + clt.encode()
                         )
 
+                    for matching_reserve in [b"$CHNAME$", b"$CHGROUP$"]:
+                        if message['data'].startswith(matching_reserve):
+                            name_or_group = _removeprefix(
+                                message['data'],
+                                matching_reserve + b" "
+                            ).decode()
+
+                            clt_info = self.clients[notified_sock]
+                            clt_tup = (
+                                clt_info['ip']
+                            )
+
+                            if matching_reserve == b"$CHNAME$":
+                                clt_tup.append(name_or_group)
+                                clt_tup.append(clt_info['group'])
+                            elif matching_reserve == b"$CHGROUP$":
+                                clt_tup.append(clt_info['name'])
+                                clt_tup.append(name_or_group)
+
+                            del self.clients[notified_sock]
+                            self.clients[notified_sock] = clt_tup
+
+                            del self.clients_rev[clt_info]
+                            self.clients_rev[clt_tup] = notified_sock
+
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
                             parse_content = message['data'][len(matching_cmd) + 1:]
@@ -689,7 +715,10 @@ class HiSockServer:
                         inner_clt_data = self.clients[notified_sock]
                         parse_content = message['data']
 
-                        # Type hinting -> Type casting
+                        ####################################################
+                        #         Type hinting -> Type casting             #
+                        ####################################################
+
                         if self.funcs['message']['type_hint']['msg'] == str:
                             try:
                                 parse_content = message['data'].decode()
@@ -711,10 +740,43 @@ class HiSockServer:
                                 parse_content = int(message['data'])
                             except ValueError as e:
                                 raise TypeError(
-                                    f"Type casting from bytes to float failed for function "
+                                    "Type casting from bytes to float failed for function "
                                     f"\"{self.funcs['message']['name']}\":\n"
                                     f"           {e}"
                                 ) from ValueError
+
+                        for _type in [list, dict]:
+                            if self.funcs['message']['type_hint']['msg'] == _type:
+                                try:
+                                    result = ast.literal_eval(message['data'].decode())
+                                except UnicodeDecodeError:
+                                    raise TypeError(
+                                        f"Cannot decode message data during "
+                                        f"bytes->{_type.__name__} type cast"
+                                        "(current implementation requires string to "
+                                        "type cast, not bytes)"
+                                    ) from UnicodeDecodeError
+                                except ValueError:
+                                    raise TypeError(
+                                        f"Type casting from bytes to {_type.__name__} "
+                                        f"failed for function \"{self.funcs['message']['name']}\""
+                                        f":\n           Message is not a {_type.__name__}"
+                                    ) from ValueError
+                                except Exception as e:
+                                    raise TypeError(
+                                        f"Type casting from bytes to {_type.__name__} "
+                                        f"failed for function \"{self.funcs['message']['name']}\""
+                                        f":\n           {e}"
+                                    ) from type(e)
+                                else:
+                                    if not isinstance(result, _type):
+                                        raise TypeError(
+                                            "Type casting from bytes to dict failed for function "
+                                            f"\"{self.funcs['message']['name']}\":\n"
+                                            f"           Message is not a {_type.__name__}"
+                                        )
+                                    else:
+                                        parse_content = result
 
                         self.funcs['message']['func'](inner_clt_data, parse_content)
 
