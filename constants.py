@@ -23,7 +23,7 @@ DH_DEFAULT = {
     "N": DH_N
 }
 
-__version__ = "0.0.2"
+__version__ = "0.1"
 __name__ = "hisock"
 __copyright__ = "2021-present, SSS-Says-Snek"
 __author__ = "SSS-Says-Snek"
