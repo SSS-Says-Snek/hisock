@@ -13,13 +13,23 @@ setup(
     long_description_content_type="text/markdown",
     url="https://github.com/SSS-Says-Snek/hisock",
     author="SSS-Says-Snek",
-    author_email="bmcomi2018@gmail.com",
+    author_email="bmcomis2018@gmail.com",
     license="MIT",
+    classifiers=[
+        "Operating System :: Microsoft :: Windows",
+        "Operating System :: MacOS",
+        "Operating System :: POSIX :: Linux",
+        "Programming Language :: Python :: 3.6",
+        "Programming Language :: Python :: 3.7",
+        "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9"
+    ],
     install_requires=[
         "pytest>=6.2.5",
         "cryptography>=3.4.8"
     ],
     packages=[
         'hisock'
-    ]
+    ],
+    python_requires=">=3.6"
 )
