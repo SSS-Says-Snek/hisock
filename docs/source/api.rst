@@ -52,6 +52,8 @@ A module containing the main client classes and functions, including
 
 .. autoclass:: hisock.client.HiSockClient
 
+   .. automethod:: change_group
+   .. automethod:: change_name
    .. automethod:: close
    .. automethod:: on
    .. automethod:: raw_send
@@ -74,3 +76,15 @@ A module containing the main client classes and functions, including
 .. autofunction:: hisock.client.connect
 
 .. autofunction:: hisock.client.threaded_connect
+
+hisock.utils
+------------
+A module containing some utilities to either:
+
+1. Help :mod:`hisock.client` and :mod:`hisock.server` run (denoted with leading underscore)
+
+2. Provide functions to use alongside hisock
+
+.. autofunction:: hisock.utils.get_local_ip
+.. autofunction:: hisock.utils.ipstr_to_tup
+.. autofunction:: hisock.utils.iptup_to_str

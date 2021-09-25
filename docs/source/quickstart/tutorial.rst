@@ -47,7 +47,7 @@ minimize lag time. So, our final server script looks like:
        server.run()
 
 That's basically it! Of course, this server is useless, but hey, it's a step
-in the right direction!
+in the right direction! We'll add on to this later on.
 
 No category yet
 ---------------
