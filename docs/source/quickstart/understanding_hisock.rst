@@ -35,3 +35,11 @@ of worrying about headers.
    the first 16 bytes, and see that it is the number "12", followed by 14 spaces. At this point,
    I know that the "message" is 12 bytes long. So, I receive another 12 bytes, to get the message
    "Hello World!"
+
+How do you send and received data with hisock?
+-----------------------------------------------------
+
+Data sent with :mod:`hisock` usually has a *command* before the data
+(but before the header, of course). Once the command is sent,
+it can be received using decorators ``hisock.server.on`` and ``hisock.client.on``.
+An argument will be passed in those decorators, and
