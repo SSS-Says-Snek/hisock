@@ -108,7 +108,8 @@ class HiSockServer:
         self.funcs = {}
         self.reserved_functions = [
             'join', 'leave',
-            'message'
+            'message',
+            'name_change', 'group_change'
         ]
 
         # Dictionaries and Lists for client lookup
@@ -685,22 +686,42 @@ class HiSockServer:
                                 name_or_group = None
 
                             clt_info = self.clients[notified_sock]
-                            clt_tup = (
+                            clt_list = [
                                 clt_info['ip']
-                            )
+                            ]
 
                             if matching_reserve == b"$CHNAME$":
-                                clt_tup.append(name_or_group)
-                                clt_tup.append(clt_info['group'])
+                                clt_list.append(name_or_group)
+                                clt_list.append(clt_info['group'])
+
                             elif matching_reserve == b"$CHGROUP$":
-                                clt_tup.append(clt_info['name'])
-                                clt_tup.append(name_or_group)
+                                clt_list.append(clt_info['name'])
+                                clt_list.append(name_or_group)
 
                             del self.clients[notified_sock]
-                            self.clients[notified_sock] = clt_tup
+                            self.clients[notified_sock] = clt_list
 
-                            del self.clients_rev[clt_info]
-                            self.clients_rev[clt_tup] = notified_sock
+                            for key, value in dict(self.clients_rev).items():
+                                if value == notified_sock:
+                                    del self.clients_rev[key]
+                            self.clients_rev[tuple(clt_list)] = notified_sock
+
+                            if (
+                                'name_change' in self.funcs and
+                                matching_reserve == b"$CHNAME$"
+                            ):
+                                old_name = clt_info['name']
+                                new_name = name_or_group
+
+                                self.funcs['name_change']['func'](clt_list, old_name, new_name)
+                            elif (
+                                'group_change' in self.funcs and
+                                matching_reserve == b"$CHGROUP$"
+                            ):
+                                old_group = clt_info['group']
+                                new_group = name_or_group
+
+                                self.funcs['group_change']['func'](clt_list, old_group, new_group)
 
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
@@ -1057,7 +1078,7 @@ def start_threaded_server(addr, blocking=True, max_connections=0, header_len=16)
 if __name__ == "__main__":
     print("Starting server...")
     # s = HiSockServer(('192.168.1.131', 33333))
-    s = start_threaded_server(('192.168.1.131', 33333))
+    s = start_server(('192.168.1.131', 33333))
 
 
     @s.on("join")
@@ -1074,6 +1095,9 @@ if __name__ == "__main__":
     def bruh(yum_data):
         print("Hmmm whomst leaved, ah it is", yum_data['name'])
 
+    @s.on("name_change")
+    def smth(clt_info, old_name, new_name):
+        print(f"Bruh, {old_name} renamed to {new_name}!")
 
     # @s.on("message")
     # def why(client_data, message: str):
@@ -1087,6 +1111,5 @@ if __name__ == "__main__":
         s.send_all_clients("pog", msg)
 
 
-    # while True:
-    #     s.run()
-    s.start_server()
+    while True:
+        s.run()

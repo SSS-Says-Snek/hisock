@@ -629,6 +629,7 @@ def threaded_connect(addr, name=None, group=None, blocking=True, header_len=16):
 
 if __name__ == "__main__":
     s = threaded_connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
+    s.change_name("Burp")
 
 
     @s.on("Joe")
