@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import re
 import socket
 from typing import Union
+
 
 # __all__ = [
 #     'make_header', 'receive_message',
@@ -143,6 +145,63 @@ def get_local_ip():
       format "ip:port"
     """
     return socket.gethostbyname(socket.gethostname())
+
+
+def input_server_config(
+        ip_prompt: str = "Enter the IP of where to host the server: ",
+        port_prompt: str = "Enter the Port of where to host the server: "
+):
+    """
+    Provides a built-in way to obtain the IP and port of where the server
+    should be hosted, through :func:`input()`
+
+    :param ip_prompt: A string, specifying the prompt to show when
+        asking for IP.
+
+        Default is "Enter the IP of where to host the server: "
+    :type ip_prompt: str, optional
+    :param port_prompt: A string, specifying the prompt to show when
+        asking for Port
+
+        Default is "Enter the Port of where to host the server: "
+    :type port_prompt: str, optional
+    :return: A two-element tuple, consisting of IP and Port
+    :rtype: tuple[str, int]
+    """
+
+    ip_range_check = True
+
+    ip = input(ip_prompt)
+
+    if re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
+        split_ip = list(map(int, ip.split('.')))
+        split_ip = [i > 255 for i in split_ip]
+
+        if any(split_ip):
+            ip_range_check = True
+
+    while (ip == '' or not re.search(
+            "^((\d?){3}\.){3}(\d\d?\d?)[ ]*$",
+            ip
+    )) or ip_range_check:
+        ip = input(f"\033[91mE: Invalid IP\033[0m\n{ip_prompt}")
+        if re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
+            split_ip = list(map(int, ip.split('.')))
+            split_ip = [i > 255 for i in split_ip]
+
+            if not any(split_ip):
+                ip_range_check = False
+
+    port = input(port_prompt)
+
+    while (
+            (port == '' or not port.isdigit()) or
+            (port.isdigit() and int(port) > 65535)
+    ):
+        port = input(f"\033[91mE: Invalid Port\033[0m\n{port_prompt}")
+    port = int(port)
+
+    return ip, port
 
 
 def ipstr_to_tup(formatted_ip: str):
