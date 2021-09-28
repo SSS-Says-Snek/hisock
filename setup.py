@@ -3,7 +3,7 @@ from setuptools import setup
 
 ROOT = pathlib.Path(__file__).parent
 
-README = (ROOT / "README.md").read_text()
+README = (ROOT / "README.md").read_text() # Reads README
 
 setup(
     name="hisock",
@@ -16,6 +16,7 @@ setup(
     author_email="bmcomis2018@gmail.com",
     license="MIT",
     classifiers=[
+        "License :: OSI Approved :: MIT License",
         "Operating System :: Microsoft :: Windows",
         "Operating System :: MacOS",
         "Operating System :: POSIX :: Linux",

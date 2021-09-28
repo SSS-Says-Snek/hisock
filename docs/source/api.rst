@@ -86,5 +86,7 @@ A module containing some utilities to either:
 2. Provide functions to use alongside hisock
 
 .. autofunction:: hisock.utils.get_local_ip
+.. autofunction:: hisock.utils.input_client_config
+.. autofunction:: hisock.utils.input_server_config
 .. autofunction:: hisock.utils.ipstr_to_tup
 .. autofunction:: hisock.utils.iptup_to_str

@@ -3,6 +3,10 @@ This module contains the HiSockClient, used to power the client
 of HiSock, but also contains a `connect` function, to pass in
 things automatically. It is strongly advised to use `connect`
 over `HiSockClient`
+
+====================================
+Copyright SSS_Says_Snek 2021-present
+====================================
 """
 
 # Imports

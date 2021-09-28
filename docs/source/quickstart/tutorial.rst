@@ -88,6 +88,8 @@ our final boilerplate client code is:
 Like the server, this doesn't do anything at all yet, but soon, we'll
 finally add some functionality to the server and client!
 
+.. _clearstuff:
+
 Clearing some things up
 -----------------------
 
@@ -104,6 +106,7 @@ Let's start with a decorator example for the server
 
 .. code-block:: python
 
+   # Server
    server = ...
 
    @server.on("random_command")
@@ -113,7 +116,10 @@ Let's start with a decorator example for the server
 
        print(message)
 
-And an example for the client
+If any data is found with the command "random_command" attached before it, then
+it will call ``random_cmd_handler()``, filling in the parameters with the appropriate values.
+
+Finally, we have an example of the client
 
 .. code-block:: python
 
@@ -124,10 +130,13 @@ And an example for the client
        # No clt_data, as server always sends message
        print(message)
 
+This isn't much different to the server; any data that has the command "another_random_command"
+attached to it, will automatically call ``handler_thing()``, albeit with less parameters
+
 Now that we've done that, let's add functionality to our bland server and client!
 
 Adding (some) functionality to our server
----------------------------------------------
+-----------------------------------------
 
 So far, we have made a server and client, but it doesn't really *do* anything.
 So, it's time to add some functionality, starting with the server!
@@ -138,9 +147,7 @@ whenever the server connects to a client. ``hisock`` provides something I like t
 occur on very special events. For server, there are 3:
 
 1. ``join`` occurs whenever a client connects
-
 2. ``leave`` occurs whenever a client disconnects
-
 3. ``message`` occurs whever a client sends a "message"
 
 (I mean, they're pretty self-explanatory)
@@ -149,6 +156,7 @@ Anyways, we can use the ``join`` reserved function to print the client's IP, lik
 
 .. code-block:: python
 
+   # Server
    from hisock import iptup_to_str
    ...
    server = ...
@@ -164,3 +172,70 @@ Anyways, we can use the ``join`` reserved function to print the client's IP, lik
 
 *Now*, if we run the client on this updated server, we will see the IP address of
 the client!
+
+Of course, this is still not that interesting on the client side, so we'll finally
+start to send some data in the next part!
+
+Sending data to our client
+--------------------------
+
+Obviously, if we don't have a way of sending data, there isn't any use of hisock. ``hisock.server``
+provides the ``.send_client()``, ``.send_all_clients()``, and ``.send_client_raw()`` methods
+to send data to a specific client. **With the exception of** ``send_client_raw()``, the methods
+usually need the client to send to, command to associate the data, and the data itself.
+
+.. note::
+   Right, I've mentioned about *commands* a lot in this tutorial, but haven't really explained what it is.
+   To clean up code structure, hisock divides the data receiving part with decorators;
+   refer to :ref:`clearstuff` for more details.
+
+   Anyways, we got our organized data receiving, but now, how do we actually receive the data? Well,
+   ``hisock`` data **usually** have a command before them, so that hisock can know which data
+   should be sent to which function (as you will see later on, the commands on data **aren't** required)
+
+   We will be discussing more in-depth about what :meth:`send_all_clients()` and
+   :meth:`send_client_raw()` does, but we shall focus on :meth:`send_client()` for now
+
+So, about :meth:`send_client()`: This method of :class:`HiSockServer` is used to...
+send data to a specific client. It accepts 3 arguments: the client (we'll be using its IP in this case),
+the command, and the data. The client's IP can either be in the form "IP.IP.IP.IP:Port" as a string,
+**OR** as a two-element tuple, like ("IP.IP.IP.IP", Port). We'll be using the latter one in this case.
+
+Remember: **The data must be a bytes-like object (E.g b"Sussy")**
+
+Let's say that we as soon as a client joins, the server should pick a random integer from 1 to 10000, and
+send it back to the client. This is perfectly doable, and is pretty straightforward! Our server code would be:
+
+.. code-block:: python
+
+   # Server
+   import random
+   ...
+   server = ...
+
+   @server.on("join")
+   def clt_join(clt_data):  # Of course, no message on join
+       print(
+           f"Cool, {iptup_to_str(clt_data['ip'])} joined!
+       )  # the IP is stored in a tuple, with a (str IP, int Port) format
+       randnum = random.randint(1, 10000)
+       server.send_client(clt_data['ip'], "random", str(randnum).encode())
+
+   ...
+
+While we sent the data to the client, the client still has no way of interpreting this new data!
+So, we must modify our client
+
+.. code-block:: python
+
+   # Client
+   client = ...
+
+   @client.on("random")
+   def interpret_randnum(msg):
+       randnum = int(msg)
+       print(f"Random number generated by the server is a {randnum}!")
+
+   ...
+
+Now, whenever the client joins that server, it will receive the data sent by it! How cool is that?

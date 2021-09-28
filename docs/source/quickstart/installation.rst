@@ -26,7 +26,8 @@ in the terminal/command prompt:
 .. code-block:: console
 
     $ python -m pip install hisock (Windows)
-    $ pip3 install hisock (Mac/Linux, I think)
+        OR
+    $ pip3 install hisock (Mac/Linux)
 
 Then, you have hisock installed to your python version! An extremely big plus of this
 installation over the manual installation is that you are able to use it anywhere on

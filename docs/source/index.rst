@@ -33,3 +33,8 @@ Table of Contents
 
    quickstart/index
    API Reference <api>
+
+.. toctree::
+   :maxdepth: 1
+
+   Changelog <changelog>

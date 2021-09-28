@@ -3,6 +3,10 @@ This module contains the HiSockServer, used to power the server
 of HiSock, but also contains a `start_server` function, to pass in
 things automatically. It is strongly advised to use `start_server`
 over `HiSockServer`
+
+====================================
+Copyright SSS_Says_Snek 2021-present
+====================================
 """
 
 # Imports
@@ -345,7 +349,7 @@ class HiSockServer:
         if isinstance(client, tuple):
             # Formats client IP tuple, and raises Exceptions if format's wrong
             if len(client) == 2 and isinstance(client[0], str):
-                if re.search(r"(((\d?){3}\.){3}(\d?){3})", client[0]) and isinstance(client[1], int):
+                if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)$", client[0]) and isinstance(client[1], int):
                     client = f"{client[0]}:{client[1]}"
                 else:
                     raise ValueError(
@@ -358,7 +362,7 @@ class HiSockServer:
                     f"{client}"
                 )
 
-        if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
+        if re.search(r"^((\d?){3}\.){3}(\d\d?\d?):\d(\d?){4}$", client):
             # Matching: 523.152.135.231:92344   Invalid IP handled by Python
             # Try IP Address, should be unique
             split_client = client.split(':')
