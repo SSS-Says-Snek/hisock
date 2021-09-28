@@ -204,6 +204,68 @@ def input_server_config(
     return ip, port
 
 
+def input_client_config(
+        ip_prompt: str = "Enter the IP of the server: ",
+        port_prompt: str = "Enter the Port of the server: ",
+        name_prompt: Union[str, None] = "Enter name to connect as: ",
+        group_prompt: Union[str, None] = "Enter group to connect to: "
+):
+    """
+    Provides a built-in way to obtain the IP and port of the configuration
+    of the server to connect to
+
+    :param ip_prompt: A string, specifying the prompt to show when
+        asking for IP.
+
+        Default is "Enter the IP of the server: "
+    :type ip_prompt: str, optional
+    :param port_prompt: A string, specifying the prompt to show when
+        asking for Port
+
+        Default is "Enter the Port of the server: "
+    :type port_prompt: str, optional
+    :param name_prompt: A string, specifying the prompt to show when
+        asking for Client Name
+
+        Default is "Enter name to connect as: " (Pass in None for no input)
+    :type name_prompt: Union[str, None], optional
+    :param group_prompt: A string, specifying the prompt to show when
+        askign for Client Group
+
+        Default is "Enter group to connect to: " (Pass in None for no input)
+    :type group_prompt: Union[str, None], optional
+    :return: A tuple containing the config options of the server
+    :rtype: tuple[str, int, Optional[str], Optional[int]]
+    """
+    ip, port = input_server_config(
+        ip_prompt, port_prompt
+    )
+
+    name = None
+    group = None
+
+    if name_prompt is not None:
+        name = input(name_prompt)
+
+        while name == '':
+            name = input(name_prompt)
+
+    if group_prompt is not None:
+        group = input(group_prompt)
+
+        while group == '':
+            group = input(group_prompt)
+
+    ret = [ip, port]
+
+    if name is not None:
+        ret.append(name)
+    if group is not None:
+        ret.append(group)
+
+    return ret
+
+
 def ipstr_to_tup(formatted_ip: str):
     """
     Converts a string IP address into a tuple equivalent
