@@ -22,6 +22,7 @@ import threading
 import warnings  # Warnings, for errors that aren't severe
 import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
+from ipaddress import IPv4Address
 
 # Utilities
 from hisock import constants
@@ -83,6 +84,8 @@ class HiSockServer:
 
        It is advised to use :meth:`get_client` or :meth:`get_all_clients` instead of
        using :attr:`clients` and :attr:`clients_rev`
+       
+       Also, **only IPv4 is currently supported**
     """
 
     def __init__(
@@ -140,6 +143,70 @@ class HiSockServer:
     def __str__(self):
         """Example: <HiSockServer serving at 192.168.1.133:33333>"""
         return f"<HiSockServer serving at {':'.join(map(str, self.addr))}>"
+
+    def __gt__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) > '192.168.1.131'"""
+        if type(other) not in [self.__class__, str]:
+            raise TypeError(
+                "Type not supported for > comparison"
+            )
+        if isinstance(other, HiSockServer):
+            return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
+        ip = other.split(':')  # Gets rid of port, if there is port
+
+        return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
+
+    def __ge__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) >= '192.168.1.131'"""
+        if type(other) not in [self.__class__, str]:
+            raise TypeError(
+                "Type not supported for >= comparison"
+            )
+        if isinstance(other, HiSockServer):
+            return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
+        ip = other.split(':')  # Gets rid of port, if there is port
+
+        return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
+
+    def __lt__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) < '192.168.1.131'"""
+        if type(other) not in [self.__class__, str]:
+            raise TypeError(
+                "Type not supported for < comparison"
+            )
+        if isinstance(other, HiSockServer):
+            return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
+        ip = other.split(':')  # Gets rid of port, if there is port
+
+        return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
+
+    def __le__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) <= '192.168.1.131'"""
+        if type(other) not in [self.__class__, str]:
+            raise TypeError(
+                "Type not supported for <= comparison"
+            )
+        if isinstance(other, HiSockServer):
+            return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
+        ip = other.split(':')  # Gets rid of port, if there is port
+
+        return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
+
+    def __eq__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) == '192.168.1.131'"""
+        if type(other) not in [self.__class__, str]:
+            raise TypeError(
+                "Type not supported for == comparison"
+            )
+        if isinstance(other, HiSockServer):
+            return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
+        ip = other.split(':')  # Gets rid of port, if there is port
+
+        return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
+
+    def __len__(self):
+        """Example: len(HiSockServer(...)) -> Num clients """
+        return len(self.clients)
 
     class _TLS:
         """

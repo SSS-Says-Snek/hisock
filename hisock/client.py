@@ -21,6 +21,7 @@ import errno
 import sys
 import threading
 import traceback
+from ipaddress import IPv4Address
 
 from typing import Union, Callable, Any
 
@@ -86,7 +87,8 @@ class HiSockClient:
 
         .. warning::
 
-           This is mainly used for under-the-hood-code
+           This is mainly used for under-the-hood-code, so it is **NOT** recommended
+           to be used in production-ready code
     """
 
     def __init__(
@@ -154,6 +156,66 @@ class HiSockClient:
         """Example: <HiSockClient connected to 192.168.1.133:33333"""
         return f"<HiSockClient connected to {iptup_to_str(self.addr)}>"
 
+    def __gt__(self, other: Union[HiSockClient, str]):
+        """Example: HiSockClient(...) > '192.168.1.131'"""
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError(
+                "Type not supported for > comparison"
+            )
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
+        ip = other.split(":")  # Gets rid of ports
+
+        return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
+
+    def __ge__(self, other: Union[HiSockClient, str]):
+        """Example: HiSockClient(...) >= '192.168.1.131'"""
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError(
+                "Type not supported for >= comparison"
+            )
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
+        ip = other.split(":")  # Gets rid of ports
+
+        return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
+
+    def __lt__(self, other: Union[HiSockClient, str]):
+        """Example: HiSockClient(...) < '192.168.1.131'"""
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError(
+                "Type not supported for < comparison"
+            )
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
+        ip = other.split(":")  # Gets rid of ports
+
+        return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
+
+    def __le__(self, other: Union[HiSockClient, str]):
+        """Example: HiSockClient(...) <= '192.168.1.131'"""
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError(
+                "Type not supported for <= comparison"
+            )
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
+        ip = other.split(":")  # Gets rid of ports
+
+        return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
+
+    def __eq__(self, other: Union[HiSockClient, str]):
+        """Example: HiSockClient(...) == '192.168.1.131'"""
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError(
+                "Type not supported for == comparison"
+            )
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
+        ip = other.split(":")  # Gets rid of ports
+
+        return IPv4Address(self.addr[0]) == IPv4Address(ip[0])
+
     class _TLS:
         """
         Base class for establishing TLS connections,
@@ -211,7 +273,7 @@ class HiSockClient:
         In some cases, it is recommended to run this in a thread, as to not block the
         program
         """
-        self.called_update = True
+        self.called_update = True  # I forgot what this does
 
         if not self._closed:  # Checks if client hasn't been closed with `close`
             try:
@@ -239,11 +301,13 @@ class HiSockClient:
 
                     # Handle "reserved functions"
                     if content.startswith(b"$CLTCONN$") and 'client_connect' in self.funcs:
+                        # Client connected to server; parse and call function
                         clt_content = json.loads(
                             _removeprefix(content, b"$CLTCONN$ ")
                         )
                         self.funcs['client_connect']['func'](clt_content)
                     elif content.startswith(b"$CLTDISCONN$") and 'client_disconnect' in self.funcs:
+                        # Client disconnected from server; parse and call function
                         clt_content = json.loads(
                             _removeprefix(content, b"$CLTDISCONN$ ")
                         )
@@ -255,6 +319,7 @@ class HiSockClient:
                             parse_content = content[len(matching_cmd) + 1:]
 
                             # Type Hint -> Type Cast
+                            # (Exceptions need to have "From ValueError")
                             if func['type_hint'] == str:
                                 try:
                                     parse_content = parse_content.decode()
