@@ -32,9 +32,9 @@ Table of Contents
    :maxdepth: 2
 
    quickstart/index
+   tutorials/index
    API Reference <api>
 
 .. toctree::
-   :maxdepth: 1
 
    Changelog <changelog>
