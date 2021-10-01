@@ -24,7 +24,7 @@ $ python -m pip install hisock (WINDOWS)
   OR
 $ pip3 install hisock (MAC/LINUX)
 ```
-Of course, you'd need pip for this.
+Of course, you'd need pip and python for this step.
 
 ## Examples
 hisock utilizes decorators as the core of receiving messages. 
