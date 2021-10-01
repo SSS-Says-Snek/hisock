@@ -392,9 +392,9 @@ class HiSockClient:
 
             # Creates function dictionary to add to `outer.funcs`
             func_dict = {
-                "func": func,
-                "name": func.__name__,
-                "type_hint": msg_annotation
+                "func": func,  # Function
+                "name": func.__name__,  # Function name
+                "type_hint": msg_annotation  # All function type hints
             }
             self.outer.funcs[self.command] = func_dict
 

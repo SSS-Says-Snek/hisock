@@ -21,16 +21,22 @@ class Data:
 
 
 # IP and Port establishment
-ip_input = input("Enter IP of where the server should be hosted "
-                 "(Leave blank for current IP): ")
-if ip_input == '':
-    ip_input = utils.get_local_ip()
 
-port_input = input("Enter port of server: ")
-while port_input == '':
+if len(sys.argv) - 1 != 1:
+    ip_input = input("Enter IP of where the server should be hosted "
+                     "(Leave blank for current IP): ")
+    if ip_input == '':
+        ip_input = utils.get_local_ip()
+
     port_input = input("Enter port of server: ")
+    while port_input == '':
+        port_input = input("Enter port of server: ")
 
-port_input = int(port_input)
+    port_input = int(port_input)
+else:
+    ip_input = utils.get_local_ip()
+    port_input = 6969
+
 print(f"Starting server at {ip_input}:{port_input}...", end=" ")
 s = start_server((ip_input, port_input))
 print("SUCCESS!")
@@ -94,17 +100,17 @@ def player_turn(clt_data, move: int):
     for x, ip_pair in enumerate(paired_clients_ip):
         for y, ip in enumerate(ip_pair):
             if ip == clt_data['ip']:
-                opponent_ip = paired_clients_ip[x][abs(y-1)]
-                opponent_letter = x_or_o[x][abs(y-1)]
-                idx = [x, abs(y-1)]
+                opponent_ip = paired_clients_ip[x][abs(y - 1)]
+                opponent_letter = x_or_o[x][abs(y - 1)]
+                idx = [x, abs(y - 1)]
 
     if len(data.boards) == idx[0]:
         data.boards.append([" " for _ in range(9)])
     data.boards[idx[0]][move] = x_or_o[idx[0]][idx[1]]
 
     # Winning combos
-    row1, row2, row3 = [data.boards[idx[0]][i:i+3] for i in range(0, 9, 3)]
-    col1, col2, col3 = [data.boards[idx[0]][i:7+i:3] for i in range(3)]
+    row1, row2, row3 = [data.boards[idx[0]][i:i + 3] for i in range(0, 9, 3)]
+    col1, col2, col3 = [data.boards[idx[0]][i:7 + i:3] for i in range(3)]
     diag1, diag2 = [
         [data.boards[idx[0]][0], data.boards[idx[0]][4], data.boards[idx[0]][8]],
         [data.boards[idx[0]][2], data.boards[idx[0]][4], data.boards[idx[0]][6]]
