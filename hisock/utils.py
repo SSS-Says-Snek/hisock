@@ -1,3 +1,16 @@
+"""
+This module contains several function to either:
+1. Help server.py and client.py under-the-hood
+2. Help the user by providing them with some built-in functions
+
+Generally, functions starting with an underscore (_) will be
+under-the-hood, while the rest are user functions
+
+====================================
+Copyright SSS_Says_Snek 2021-present
+====================================
+"""
+
 from __future__ import annotations
 
 import re
@@ -12,6 +25,7 @@ from typing import Union
 # ]
 
 
+# Some custom exceptions
 class ClientException(Exception):
     pass
 
@@ -28,11 +42,26 @@ class ServerNotRunning(Exception):
     pass
 
 
+# Custom warnings
 class NoHeaderWarning(Warning):
     pass
 
 
-def make_header(header_msg, header_len, encode=True):
+def make_header(header_msg: Union[str, bytes],
+                header_len: int, encode=True):
+    """
+    Makes a header of ``header_msg``, with a maximum
+    header length of ``header_len``
+
+    :param header_msg: A string OR bytes-like object, representing
+        the data to make a header from
+    :type header_msg: Union[str, bytes]
+    :param header_len: An integer, specifying
+        the actual header length (will be padded)
+    :type header_len: int
+    :param encode: A boolean, specifying the
+    :return:
+    """
     len_msg = len(header_msg)
     constructed_header = f"{len_msg}{' ' * (header_len - len(str(len_msg)))}"
     if encode:
@@ -169,11 +198,13 @@ def input_server_config(
     :rtype: tuple[str, int]
     """
 
+    # Flags
     ip_range_check = True
 
     ip = input(ip_prompt)
 
     if re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
+        # IP conformity regex
         split_ip = list(map(int, ip.split('.')))
         split_ip = [i > 255 for i in split_ip]
 
@@ -184,6 +215,8 @@ def input_server_config(
             "^((\d?){3}\.){3}(\d\d?\d?)[ ]*$",
             ip
     )) or ip_range_check:
+        # If IP not conform to regex, accept input until it
+        # is compliant
         ip = input(f"\033[91mE: Invalid IP\033[0m\n{ip_prompt}")
         if re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
             split_ip = list(map(int, ip.split('.')))
@@ -198,9 +231,11 @@ def input_server_config(
             (port == '' or not port.isdigit()) or
             (port.isdigit() and int(port) > 65535)
     ):
+        # If port is > 65535, or not numerical, repeat until it is
         port = input(f"\033[91mE: Invalid Port\033[0m\n{port_prompt}")
     port = int(port)
 
+    # Returns
     return ip, port
 
 
@@ -237,25 +272,32 @@ def input_client_config(
     :return: A tuple containing the config options of the server
     :rtype: tuple[str, int, Optional[str], Optional[int]]
     """
+    # Grabs IP and Port from previously defined function
     ip, port = input_server_config(
         ip_prompt, port_prompt
     )
 
+    # Flags
     name = None
     group = None
 
+    # If names are enabled
     if name_prompt is not None:
         name = input(name_prompt)
 
+        # Repeat until name has an input
         while name == '':
             name = input(name_prompt)
 
+    # If groups are enabled
     if group_prompt is not None:
         group = input(group_prompt)
 
+        # Repeat until group has an input
         while group == '':
             group = input(group_prompt)
 
+    # Return list
     ret = [ip, port]
 
     if name is not None:
@@ -263,6 +305,7 @@ def input_client_config(
     if group is not None:
         ret.append(group)
 
+    # Return
     return ret
 
 
@@ -281,7 +324,7 @@ def ipstr_to_tup(formatted_ip: str):
     """
     ip_split = formatted_ip.split(':')
     ip_split[1] = str(ip_split[1])  # Formats the port into string
-    return tuple(ip_split)
+    return tuple(ip_split)  # Convert list to tuple
 
 
 def iptup_to_str(formatted_tuple: tuple[str, int]):

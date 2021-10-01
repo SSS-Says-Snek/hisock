@@ -1,3 +1,11 @@
+"""
+This module contains some constants that can be reused
+
+====================================
+Copyright SSS_Says_Snek 2021-present
+====================================
+"""
+
 DH_P = int('744979203543192710450044053772127504096976876866819663713965877'
            '154635147316608355777387359891950087945645228960201718656771034'
            '552169234370127511507399666250874215805743769534992008739192474'
@@ -25,5 +33,5 @@ DH_DEFAULT = {
 
 __version__ = "0.1"
 __name__ = "hisock"
-__copyright__ = "2021-present, SSS-Says-Snek"
+__copyright__ = "SSS-Says-Snek, 2021-present"
 __author__ = "SSS-Says-Snek"
