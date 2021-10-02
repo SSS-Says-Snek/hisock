@@ -60,7 +60,9 @@ def make_header(header_msg: Union[str, bytes],
         the actual header length (will be padded)
     :type header_len: int
     :param encode: A boolean, specifying the
-    :return:
+    :return: The constructed header, padded to ``header_len``
+        bytes
+    :rtype: Union[str, bytes]
     """
     len_msg = len(header_msg)
     constructed_header = f"{len_msg}{' ' * (header_len - len(str(len_msg)))}"
@@ -70,6 +72,20 @@ def make_header(header_msg: Union[str, bytes],
 
 
 def receive_message(connection, header_len):
+    """
+    Receives a message from a server or client.
+
+    :param connection: The socket to listen to for messages.
+        **MUST BE A SOCKET**
+    :type connection: socket.socket
+    :param header_len: The length of the header, so that
+        it can successfully retrieve data without loss/gain of data
+    :type header_len: int
+    :return: A dictionary, with two key-value pairs;
+        The first key-value pair refers to the header,
+        while the second one refers to the actual data
+    :rtype: dict["header": bytes, "data": bytes]
+    """
     try:
         header_msg = connection.recv(header_len)
 
@@ -169,9 +185,9 @@ def get_local_ip():
     """
     Gets the local IP of your device, with sockets
 
-    Returns:
-      A string containing the IP address, in the
-      format "ip:port"
+    :return: A string containing the IP address, in the
+        format "ip:port"
+    :rtype: str
     """
     return socket.gethostbyname(socket.gethostname())
 
@@ -313,14 +329,14 @@ def ipstr_to_tup(formatted_ip: str):
     """
     Converts a string IP address into a tuple equivalent
 
-    Args:
-      formatted_ip: str
-        A string, representing the IP address.
-        Must be in the format "ip:port"
+    :param formatted_ip: A string, representing the IP address.
 
-    Returns:
-      A tuple, with IP address as the first element, and
-      an INTEGER port as the second element
+        Must be in the format "ip:port"
+    :type formatted_ip: str
+
+    :return: A tuple, with IP address as the first element, and
+        an INTEGER port as the second element
+    :rtype: tuple[str, int]
     """
     ip_split = formatted_ip.split(':')
     ip_split[1] = str(ip_split[1])  # Formats the port into string
@@ -331,12 +347,13 @@ def iptup_to_str(formatted_tuple: tuple[str, int]):
     """
     Converts a tuple IP address into a string equivalent
 
-    Args:
-      formatted_tuple: tuple
-        A two-element tuple, containing the IP address and the port.
-        Must be in the format (ip: str, port: int)
+    This function is like the opposite of ``ipstr_to_tup``
 
-    Returns:
-      A string, with the format "ip:port"
+    :param formatted_tuple: A two-element tuple, containing the IP address and the port.
+        Must be in the format (ip: str, port: int)
+    :type formatted_tuple: tuple[str, int]
+
+    :return: A string, with the format "ip:port"
+    :rtype: str
     """
     return f"{formatted_tuple[0]}:{formatted_tuple[1]}"
