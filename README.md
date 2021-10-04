@@ -14,11 +14,10 @@ A ***hi***gher-level extension of the ***sock***et module, with simpler and more
 ## Documentation
 Documentation is located on 
 [ReadTheDocs](https://hisock.readthedocs.io), though it currently does not contain a lot of information. 
-There will also soon be functioning examples, to show the main features of hisock. `hisock` documentation 
-also is lacking a tutorial for beginners to understand how to use hisock, which is currently being worked on.
+There will also soon be functioning examples, to show the main features of hisock.
 
 ## Installation
-`hisock` is available on PyPI, [Here](https://pypi.org/project/hisock). Just do the following command.
+`hisock` is available on PyPI, [here](https://pypi.org/project/hisock). Just do the following command.
 ```shell
 $ python -m pip install hisock (WINDOWS)
   OR
