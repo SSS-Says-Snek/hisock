@@ -8,7 +8,7 @@
 ![Github Version](https://img.shields.io/github/v/release/SSS-Says-Snek/hisock)
 ![Github Commits](https://img.shields.io/github/commits-since/SSS-Says-Snek/hisock/latest)
 
-# highsock (hisock)
+# hisock (highsock)
 A ***hi***gher-level extension of the ***sock***et module, with simpler and more efficient usages
 
 ## Documentation
