@@ -21,7 +21,12 @@ we have not yet covered the other two.
 Names and groups
 ----------------
 
-Now, I'll clear up some more stuff before we move on.
+Now, I'll clear up some more stuff before we move on. Hisock provides what I like to call
+**names** and **groups**. Under-the-hood, ``hisock`` usually identifies clients and servers
+by their **IP Address**. This works most of the times, but sometimes, you want to differentiate
+between clients, *without* knowing the IP. This is where names come in; On client connection,
+you can pass a ``name`` argument into :func:`connect`, as to bind a name to the client. Now,
+using some additional functions, we could send and receive data by using the client name!
 The other ``send`` methods
 --------------------------
 

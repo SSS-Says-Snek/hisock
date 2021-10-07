@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 import socket
-from typing import Union
+from typing import Union, Optional
 
 
 # __all__ = [
@@ -48,7 +48,7 @@ class NoHeaderWarning(Warning):
 
 
 def make_header(header_msg: Union[str, bytes],
-                header_len: int, encode=True):
+                header_len: int, encode=True) -> Union[str, bytes]:
     """
     Makes a header of ``header_msg``, with a maximum
     header length of ``header_len``
@@ -71,7 +71,7 @@ def make_header(header_msg: Union[str, bytes],
     return constructed_header
 
 
-def receive_message(connection, header_len):
+def receive_message(connection, header_len) -> dict:
     """
     Receives a message from a server or client.
 
@@ -101,7 +101,10 @@ def receive_message(connection, header_len):
         pass
 
 
-def _removeprefix(string: Union[str, bytes], prefix: Union[str, bytes], /) -> Union[str, bytes]:
+def _removeprefix(
+        string: Union[str, bytes],
+        prefix: Union[str, bytes], /
+) -> Union[str, bytes]:
     """A backwards-compatible alternative of str.removeprefix"""
     if string.startswith(prefix):
         return string[len(prefix):]
@@ -137,7 +140,11 @@ def _dict_tupkey_lookup_key(multikey, _dict, idx_to_match=None):
                 yield key
 
 
-def _type_cast_server(type_cast, content_to_typecast: bytes, func_dict: dict):
+def _type_cast_server(
+        type_cast,
+        content_to_typecast: bytes,
+        func_dict: dict
+):
     """
     Basis for type casting on the server
     If testing, replace `func_dict` with a dummy one
@@ -195,7 +202,7 @@ def get_local_ip():
 def input_server_config(
         ip_prompt: str = "Enter the IP of where to host the server: ",
         port_prompt: str = "Enter the Port of where to host the server: "
-):
+) -> tuple[str, int]:
     """
     Provides a built-in way to obtain the IP and port of where the server
     should be hosted, through :func:`input()`
@@ -260,7 +267,7 @@ def input_client_config(
         port_prompt: str = "Enter the Port of the server: ",
         name_prompt: Union[str, None] = "Enter name to connect as: ",
         group_prompt: Union[str, None] = "Enter group to connect to: "
-):
+) -> tuple[str, int, Optional[str], Optional[str]]:
     """
     Provides a built-in way to obtain the IP and port of the configuration
     of the server to connect to
@@ -322,10 +329,12 @@ def input_client_config(
         ret.append(group)
 
     # Return
-    return ret
+    return tuple(ret)
 
 
-def ipstr_to_tup(formatted_ip: str):
+def ipstr_to_tup(
+        formatted_ip: str
+) -> tuple[Union[str, int], ...]:
     """
     Converts a string IP address into a tuple equivalent
 
@@ -339,11 +348,16 @@ def ipstr_to_tup(formatted_ip: str):
     :rtype: tuple[str, int]
     """
     ip_split = formatted_ip.split(':')
-    ip_split[1] = str(ip_split[1])  # Formats the port into string
-    return tuple(ip_split)  # Convert list to tuple
+    recon_ip_split = [
+        str(ip_split[0]),
+        int(ip_split[1])
+    ]
+    return tuple(recon_ip_split)  # Convert list to tuple
 
 
-def iptup_to_str(formatted_tuple: tuple[str, int]):
+def iptup_to_str(
+        formatted_tuple: tuple[str, int]
+) -> str:
     """
     Converts a tuple IP address into a string equivalent
 

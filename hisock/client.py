@@ -2,7 +2,8 @@
 This module contains the HiSockClient, used to power the client
 of HiSock, but also contains a `connect` function, to pass in
 things automatically. It is strongly advised to use `connect`
-over `HiSockClient`
+over `HiSockClient`, as `connect` passes in some key arguments
+that `HiSockClient` does not provide
 
 ====================================
 Copyright SSS_Says_Snek 2021-present
@@ -14,14 +15,14 @@ from __future__ import annotations  # Remove when 3.10 is used by majority
 
 import builtins  # Builtins, to convert string methods into builtins
 import inspect  # Inspect, for type-hinting detection
-import re
-import socket
-import json
-import errno
-import sys
-import threading
-import traceback
-from ipaddress import IPv4Address
+import re  # regex, to make sure that arguments are correct
+import socket  # socket, because.... bruh
+import json  # json, to communicate to server (without 10000 commands)
+import errno  # errno, to communicate to server
+import sys  # sys
+import threading  # threading, for ThreadedHiSockClient
+import traceback  # traceback, for... tracebacks
+from ipaddress import IPv4Address  # ipaddress, for comparisons between IPs
 
 from typing import Union, Callable, Any
 
@@ -282,11 +283,13 @@ class HiSockClient:
                     try:
                         content_header = self.sock.recv(self.header_len)
                     except ConnectionResetError:
+                        # Raise ServerNotRunning exception FROM ConnectionResetError
                         raise ServerNotRunning(
                             "Server has stopped running, aborting..."
                         ) from ConnectionResetError
 
                     if not content_header:
+                        # Most likely server error; aborts
                         print("[SERVER] Connection forcibly closed by server, exiting...")
                         raise SystemExit
                     content = self.sock.recv(int(content_header.decode()))
@@ -314,6 +317,7 @@ class HiSockClient:
                         self.funcs['client_disconnect']['func'](clt_content)
 
                     for matching_cmd, func in self.funcs.items():
+                        # Loop through functions and binded commands
                         if content.startswith(matching_cmd.encode()) and \
                                 matching_cmd not in self.reserved_functions:
                             parse_content = content[len(matching_cmd) + 1:]
@@ -321,6 +325,7 @@ class HiSockClient:
                             # Type Hint -> Type Cast
                             # (Exceptions need to have "From ValueError")
                             if func['type_hint'] == str:
+                                # bytes -> str
                                 try:
                                     parse_content = parse_content.decode()
                                 except UnicodeDecodeError as e:
@@ -329,6 +334,7 @@ class HiSockClient:
                                         f"for function \"{func['name']}\":\n           {e}"
                                     ) from ValueError
                             elif func['type_hint'] == int:
+                                # bytes -> int
                                 try:
                                     parse_content = int(parse_content)
                                 except ValueError as e:
@@ -337,6 +343,7 @@ class HiSockClient:
                                         f"failed for function \"{func['name']}\":\n           {e}"
                                     ) from ValueError
                             elif func['type_hint'] == float:
+                                # bytes -> float
                                 try:
                                     parse_content = float(parse_content)
                                 except ValueError as e:
@@ -388,6 +395,7 @@ class HiSockClient:
                 if isinstance(msg_annotation, str):
                     msg_annotation = builtins.__dict__[annots[func_args[0]]]
             except KeyError:
+                # builtins is not what we thought; I dunno why I did this
                 msg_annotation = None
 
             # Creates function dictionary to add to `outer.funcs`
@@ -482,12 +490,14 @@ class HiSockClient:
                 "Command format \"$command$\" is used for reserved functions - "
                 "consider not sending a message starting with $command$"
             )
+
+        # Send to server
         header = make_header(content, self.header_len)
         self.sock.send(
             header + content
         )
 
-    def recv_raw(self):
+    def recv_raw(self) -> bytes:
         """
         Waits (blocks) until a message is sent, and returns that message.
         This is not recommended for content with commands attached;
@@ -523,6 +533,7 @@ class HiSockClient:
                 self.header_len
             )
 
+        # Send name change to server
         self.sock.send(
             new_name_header +
             (b"$CHNAME$ " + new_name.encode()) if new_name is not None else
