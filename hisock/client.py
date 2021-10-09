@@ -6,7 +6,7 @@ over `HiSockClient`, as `connect` passes in some key arguments
 that `HiSockClient` does not provide
 
 ====================================
-Copyright SSS_Says_Snek 2021-present
+Copyright SSS_Says_Snek, 2021-present
 ====================================
 """
 

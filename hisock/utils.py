@@ -7,7 +7,7 @@ Generally, functions starting with an underscore (_) will be
 under-the-hood, while the rest are user functions
 
 ====================================
-Copyright SSS_Says_Snek 2021-present
+Copyright SSS_Says_Snek, 2021-present
 ====================================
 """
 
@@ -103,7 +103,7 @@ def receive_message(connection, header_len) -> dict:
 
 def _removeprefix(
         string: Union[str, bytes],
-        prefix: Union[str, bytes], /
+        prefix: Union[str, bytes],
 ) -> Union[str, bytes]:
     """A backwards-compatible alternative of str.removeprefix"""
     if string.startswith(prefix):
@@ -267,7 +267,7 @@ def input_client_config(
         port_prompt: str = "Enter the Port of the server: ",
         name_prompt: Union[str, None] = "Enter name to connect as: ",
         group_prompt: Union[str, None] = "Enter group to connect to: "
-) -> tuple[str, int, Optional[str], Optional[str]]:
+) -> tuple[Union[str, int], ...]:
     """
     Provides a built-in way to obtain the IP and port of the configuration
     of the server to connect to

@@ -30,7 +30,8 @@ setup(
         "cryptography>=3.4.8"
     ],
     packages=[
-        'hisock'
+        'hisock',
+        'examples',
     ],
     python_requires=">=3.6"
 )

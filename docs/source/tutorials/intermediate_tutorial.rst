@@ -27,6 +27,9 @@ by their **IP Address**. This works most of the times, but sometimes, you want t
 between clients, *without* knowing the IP. This is where names come in; On client connection,
 you can pass a ``name`` argument into :func:`connect`, as to bind a name to the client. Now,
 using some additional functions, we could send and receive data by using the client name!
+
+Now, on to groups. Like names, groups are another way of identifying a client, but instead of **one**
+client, it can identify multiple!
 The other ``send`` methods
 --------------------------
 

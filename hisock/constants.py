@@ -2,7 +2,7 @@
 This module contains some constants that can be reused
 
 ====================================
-Copyright SSS_Says_Snek 2021-present
+Copyright SSS_Says_Snek, 2021-present
 ====================================
 """
 
