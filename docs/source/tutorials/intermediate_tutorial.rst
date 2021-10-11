@@ -29,7 +29,15 @@ you can pass a ``name`` argument into :func:`connect`, as to bind a name to the 
 using some additional functions, we could send and receive data by using the client name!
 
 Now, on to groups. Like names, groups are another way of identifying a client, but instead of **one**
-client, it can identify multiple!
+client, it can identify multiple! With groups, you can organize clients by what they correspond to. For example,
+if you are making a multiplayer game, and you are making some sort of lobby for a limited number of clients,
+then a group would be a good way to identify which clients are in which lobby.
+
+.. note::
+   I've actually never used groups before, which is pretty... uh... sad. I added groups because
+   I thought of some use cases for it, but I never bothered to use it in an example, so... yeah.
+
+
 The other ``send`` methods
 --------------------------
 

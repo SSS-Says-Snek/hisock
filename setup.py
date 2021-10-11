@@ -1,13 +1,13 @@
 import pathlib
 from setuptools import setup
 
-ROOT = pathlib.Path(__file__).parent
+ROOT = pathlib.Path(__file__).parent  # pathlib.Path object of root (/hisock/)
 
-README = (ROOT / "README.md").read_text() # Reads README
+README = (ROOT / "README.md").read_text()  # Reads README
 
 setup(
     name="hisock",
-    version="0.1",
+    version="0.2",
     description="A higher-level extension of the socket module, with simpler and more efficient usages",
     long_description=README,
     long_description_content_type="text/markdown",
