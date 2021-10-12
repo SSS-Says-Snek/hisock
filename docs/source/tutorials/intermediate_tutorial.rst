@@ -37,7 +37,14 @@ then a group would be a good way to identify which clients are in which lobby.
    I've actually never used groups before, which is pretty... uh... sad. I added groups because
    I thought of some use cases for it, but I never bothered to use it in an example, so... yeah.
 
+Now, let's finally dig into the ``send`` methods!
+
 
 The other ``send`` methods
 --------------------------
 
+In the beginner tutorial, we've covered the :meth:`.send_client()` method that allows the server to
+send data to specific clients. But, what if we wanted to send data to all the clients? Well, that
+is exactly what :meth:`.send_all_clients()` does. Yes, the name is pretty self-explanatory.
+
+Now, let's move on to :meth:`.send_client_raw()`!

@@ -1,13 +1,17 @@
 import pathlib
+import os
+import re
 from setuptools import setup
 
 ROOT = pathlib.Path(__file__).parent  # pathlib.Path object of root (/hisock/)
 
 README = (ROOT / "README.md").read_text()  # Reads README
+VERSION = "0.2"
+NAME = "hisock"
 
 setup(
-    name="hisock",
-    version="0.2",
+    name=NAME,
+    version=VERSION,
     description="A higher-level extension of the socket module, with simpler and more efficient usages",
     long_description=README,
     long_description_content_type="text/markdown",
@@ -35,3 +39,11 @@ setup(
     ],
     python_requires=">=3.6"
 )
+
+for i in os.listdir("dist"):
+    if not (
+            re.match(f"{NAME}-{VERSION}\.tar\.gz", i) or
+            re.match(f"{NAME}-{VERSION}-py3-none-any\.whl", i)
+    ):
+        print(f"Removing old version {i}...")
+        os.remove(os.path.join("dist", i))
