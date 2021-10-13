@@ -36,6 +36,9 @@ client, it can identify multiple! With groups, you can organize clients by what 
 if you are making a multiplayer game, and you are making some sort of lobby for a limited number of clients,
 then a group would be a good way to identify which clients are in which lobby.
 
+.. image:: ../imgs/intermed_tut/group.png
+   :width: 400
+
 .. note::
    I've actually never used groups before, which is pretty... uh... sad. I added groups because
    I thought of some use cases for it, but I never bothered to use it in an example, so... yeah.

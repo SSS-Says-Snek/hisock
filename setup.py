@@ -6,7 +6,7 @@ from setuptools import setup
 ROOT = pathlib.Path(__file__).parent  # pathlib.Path object of root (/hisock/)
 
 README = (ROOT / "README.md").read_text()  # Reads README
-VERSION = "0.2"
+VERSION = "1.0"
 NAME = "hisock"
 
 setup(
