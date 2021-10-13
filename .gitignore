@@ -151,9 +151,5 @@ cython_debug/
 ### JetBrains IDEs
 .idea/
 
-# Cryptography stuff
-.pubkeys/
-.privkey
-
-# Other
-dump.txt
+# yED Graph Editor things
+yEd/

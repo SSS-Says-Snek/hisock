@@ -1082,7 +1082,15 @@ class _BaseThreadServer(HiSockServer):
 class ThreadedHiSockServer(_BaseThreadServer):
     """
     A downside of :class:`HiSockServer` is that you need to constantly
-    :meth:`run` it
+    :meth:`run` it in a while loop, which may block the program. Fortunately,
+    in Python, you can use threads to do two different things at once. Using
+    :class:`ThreadedHiSockServer`, you would be able to run another
+    blocking program, without ever fearing about blocking and all that stuff.
+
+    .. note::
+       In some cases though, :class:`HiSockServer` offers more control than
+       :class:`ThreadedHiSockServer`, so be careful about when to use
+       :class:`ThreadedHiSockServer` over :class:`HiSockServer`
     """
 
     def __init__(self,

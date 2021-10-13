@@ -28,6 +28,9 @@ between clients, *without* knowing the IP. This is where names come in; On clien
 you can pass a ``name`` argument into :func:`connect`, as to bind a name to the client. Now,
 using some additional functions, we could send and receive data by using the client name!
 
+.. image:: ../imgs/intermed_tut/name.png
+   :width: 400
+
 Now, on to groups. Like names, groups are another way of identifying a client, but instead of **one**
 client, it can identify multiple! With groups, you can organize clients by what they correspond to. For example,
 if you are making a multiplayer game, and you are making some sort of lobby for a limited number of clients,
@@ -47,4 +50,12 @@ In the beginner tutorial, we've covered the :meth:`.send_client()` method that a
 send data to specific clients. But, what if we wanted to send data to all the clients? Well, that
 is exactly what :meth:`.send_all_clients()` does. Yes, the name is pretty self-explanatory.
 
-Now, let's move on to :meth:`.send_client_raw()`!
+Now, let's move on to :meth:`.send_client_raw()`! Sometimes, while you do want to send data to a client,
+you don't necessarily want to send it **with a command**. For example, if a server just sent out information to
+a client, and a client sent back some more information, it would be much easier to directly send data to
+the client, instead of sending a command, and needing to make another function. So, :meth:`.send_client_raw()`
+allows you to send data *without a command*.
+
+Remember when I said that groups can be used to organize clients? Well, how do we communicate and send
+data to a group? As you may have guessed by the name, :meth:`.send_group()` sends data to a specific group,
+taking a group name and the data as parameters.

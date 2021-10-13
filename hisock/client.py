@@ -592,6 +592,7 @@ class HiSockClient:
         at.
 
         :return: A tuple, with the format (str IP, int port)
+        :rtype: tuple[str, int]
         """
         return self.addr
 
@@ -601,6 +602,7 @@ class HiSockClient:
         to the server.
 
         :return: A tuple, with the format (str IP, int port)
+        :rtype: tuple[str, int]
         """
         return self.sock.getsockname()
 
@@ -622,7 +624,8 @@ class ThreadedHiSockClient(HiSockClient):
 
     .. note::
        In some cases though, :class:`HiSockClient` offers more control than
-       :class:`ThreadedHiSockClient`, so be careful about that
+       :class:`ThreadedHiSockClient`, so be careful about when to use
+       :class:`ThreadedHiSockClient` over :class:`HiSockClient`
     """
 
     def __init__(self,
