@@ -1,3 +1,3 @@
-from . import (
-    basic, tictactoe
-)
+import examples.basic, examples.tictactoe
+
+del examples

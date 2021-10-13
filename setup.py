@@ -31,7 +31,7 @@ setup(
     ],
     install_requires=[
         "pytest>=6.2.5",
-        "cryptography>=3.4.8"
+        "pycryptodome>=3.11"
     ],
     packages=[
         'hisock',
@@ -40,10 +40,11 @@ setup(
     python_requires=">=3.6"
 )
 
-for i in os.listdir("dist"):
-    if not (
-            re.match(f"{NAME}-{VERSION}\.tar\.gz", i) or
-            re.match(f"{NAME}-{VERSION}-py3-none-any\.whl", i)
-    ):
-        print(f"Removing old version {i}...")
-        os.remove(os.path.join("dist", i))
+if os.path.exists("dist"):
+    for i in os.listdir("dist"):
+        if not (
+                re.match(f"{NAME}-{VERSION}\.tar\.gz", i) or
+                re.match(f"{NAME}-{VERSION}-py3-none-any\.whl", i)
+        ):
+            print(f"Removing old version {i}...")
+            os.remove(os.path.join("dist", i))
