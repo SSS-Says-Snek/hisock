@@ -9,8 +9,8 @@ PATH = pathlib.Path(__file__)
 # imports need to be configured first like this
 sys.path.append(str(PATH.parent.parent.parent))  # Not needed usually; used to run examples
 
-from hisock import (
-    connect
+from hisock.client import (
+    threaded_connect
 )
 
 
@@ -38,18 +38,30 @@ def run():
 
     print(f"Connecting to server at {ip_input}:{port_input}...", end=" ")
 
-    server = connect((ip_input, port_input), name)
+    server = threaded_connect((ip_input, port_input), name)
     print("SUCCESS!")
 
-    display = pygame.display.set_mode((800, 800))
+    @server.on("game_start")
+    def game_start(opponent: str):
+        pass
+
+    screen = pygame.display.set_mode((400, 400))
+
+    server.start_client()
 
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
+                server.close()
                 pygame.quit()
                 sys.exit()
 
-            display.fill((255, 255, 255))
+            screen.fill((51, 168, 12))
+            pygame.draw.line(
+                screen, (0, 0, 0),
+                (133, 20), (133, 380),
+                width=10
+            )
 
             pygame.display.update()
 
