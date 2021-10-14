@@ -89,6 +89,20 @@ def run():
             paired_clients.append([client_info['name']])
             paired_clients_ip.append([client_info['ip']])
 
+    @s.on("leave")
+    def player_leave(clt_ip):
+        print(paired_clients_ip)
+        print(f"Client \"{clt_ip['name']}\" disconnected")
+        for ip_pair in paired_clients_ip[:]:
+            for ip in ip_pair:
+                if ip == clt_ip['ip']:
+                    if len(ip_pair) == 1:
+                        paired_clients_ip.remove(ip_pair)
+                    else:
+                        # Uhh I don't know what to do RN
+                        pass
+        print(paired_clients_ip)
+
     @s.on("player_turn")
     def player_turn(clt_data, move: int):
         opponent_ip = None  # Suppressing Pycharm warnings
