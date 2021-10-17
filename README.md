@@ -25,7 +25,8 @@ $ pip3 install hisock (MAC/LINUX)
 Of course, you'd need pip and python for this step.
 
 ## Examples
-hisock utilizes decorators as the core of receiving messages. 
+hisock utilizes decorators as the core of receiving messages instead of having 
+if statements handling all of the logic. 
 Examples are located in the `examples` directory. Here is what a basic 
 server script would look like using hisock:
 
