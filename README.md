@@ -13,8 +13,7 @@ A ***hi***gher-level extension of the ***sock***et module, with simpler and more
 
 ## Documentation
 Documentation is located on 
-[ReadTheDocs](https://hisock.readthedocs.io), though it currently does not contain a lot of information. 
-There will also soon be functioning examples, to show the main features of hisock.
+[ReadTheDocs](https://hisock.readthedocs.io), though it is currently not finished.
 
 ## Installation
 `hisock` is available on PyPI, [here](https://pypi.org/project/hisock). Just do the following command.
@@ -26,7 +25,8 @@ $ pip3 install hisock (MAC/LINUX)
 Of course, you'd need pip and python for this step.
 
 ## Examples
-hisock utilizes decorators as the core of receiving messages. 
+hisock utilizes decorators as the core of receiving messages instead of having 
+if statements handling all of the logic. 
 Examples are located in the `examples` directory. Here is what a basic 
 server script would look like using hisock:
 
