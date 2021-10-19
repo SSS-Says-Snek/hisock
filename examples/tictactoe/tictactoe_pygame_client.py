@@ -2,6 +2,8 @@ import sys
 import pathlib
 import pygame
 
+from functools import lru_cache
+
 PATH = pathlib.Path(__file__)
 
 # Import stuff, as this situation's a bit wonky
@@ -20,6 +22,11 @@ class Data:
         self.tictactoe_opponent = None  # Tic Tac Toe opponent name
         self.board = [' ' for _ in range(9)]  # Tic Tac Toe board
         self.letter = ''
+
+
+@lru_cache
+def load_font(size):
+    return pygame.Font(None, size)
 
 
 def run():
@@ -41,9 +48,15 @@ def run():
     server = threaded_connect((ip_input, port_input), name)
     print("SUCCESS!")
 
+    data = Data()
+
     @server.on("game_start")
     def game_start(opponent: str):
-        pass
+        data.tictactoe_opponent = opponent
+        goes_first = server.recv_raw()
+
+        if goes_first == b"First":
+            pass
 
     screen = pygame.display.set_mode((400, 400))
 
@@ -62,7 +75,31 @@ def run():
                 (133, 20), (133, 380),
                 width=10
             )
+            pygame.draw.line(
+                screen, (0, 0, 0),
+                (266, 20), (266, 380),
+                width=10
+            )
+            pygame.draw.line(
+                screen, (0, 0, 0),
+                (20, 133), (380, 133),
+                width=10
+            )
+            pygame.draw.line(
+                screen, (0, 0, 0),
+                (20, 266), (380, 266),
+                width=10
+            )
 
+            opp_font = load_font(20)
+            
+            if data.tictactoe_opponent is None:
+                opp_txt = opp_font.render("Waiting for opponent...")
+            else:
+                opp_txt = opp_font.render(f"Opponent: {data.tictactoe_opponent}")
+            
+            screen.blit(opp_txt, (0, 0))
+            
             pygame.display.update()
 
 

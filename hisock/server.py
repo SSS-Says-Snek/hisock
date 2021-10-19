@@ -694,7 +694,7 @@ class HiSockServer:
                     if 'leave' in self.funcs:
                         # Reserved function - Leave
                         self.funcs['leave']['func'](
-                            {
+                                {
                                 "ip": client_disconnect,
                                 "name": more_client_info['name'],
                                 "group": more_client_info['group']
