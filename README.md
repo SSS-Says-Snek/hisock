@@ -13,7 +13,8 @@ A ***hi***gher-level extension of the ***sock***et module, with simpler and more
 
 ## Documentation
 Documentation is located on 
-[ReadTheDocs](https://hisock.readthedocs.io), though it is currently not finished.
+[ReadTheDocs](https://hisock.readthedocs.io), though it is currently not finished. Some documentation is also located in the code as docstrings, though most are 
+already well-documented on ReadTheDocs.
 
 ## Installation
 `hisock` is available on PyPI, [here](https://pypi.org/project/hisock). Just do the following command.
