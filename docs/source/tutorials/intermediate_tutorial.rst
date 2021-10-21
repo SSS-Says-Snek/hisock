@@ -62,3 +62,4 @@ allows you to send data *without a command*.
 Remember when I said that groups can be used to organize clients? Well, how do we communicate and send
 data to a group? As you may have guessed by the name, :meth:`.send_group()` sends data to a specific group,
 taking a group name and the data as parameters.
+

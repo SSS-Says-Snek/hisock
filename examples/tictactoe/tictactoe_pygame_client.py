@@ -22,11 +22,13 @@ class Data:
         self.tictactoe_opponent = None  # Tic Tac Toe opponent name
         self.board = [' ' for _ in range(9)]  # Tic Tac Toe board
         self.letter = ''
+        self.turn = None
+        self.game_start = False
 
 
 @lru_cache
 def load_font(size):
-    return pygame.Font(None, size)
+    return pygame.font.Font(None, size)
 
 
 def run():
@@ -52,15 +54,22 @@ def run():
 
     @server.on("game_start")
     def game_start(opponent: str):
+        data.game_start = True
         data.tictactoe_opponent = opponent
         goes_first = server.recv_raw()
 
         if goes_first == b"First":
-            pass
+            data.turn = True
+            data.letter = "X"
+        else:
+            data.turn = False
+            data.letter = "O"
 
     screen = pygame.display.set_mode((400, 400))
 
     server.start_client()
+
+    opp_font = load_font(20)
 
     while True:
         for event in pygame.event.get():
@@ -68,6 +77,16 @@ def run():
                 server.close()
                 pygame.quit()
                 sys.exit()
+            elif (
+                    event.type == pygame.MOUSEBUTTONDOWN and
+                    data.game_start and
+                    data.turn
+            ):
+                bod_idx = [
+                    xy // 133 for xy in event.pos
+                ]
+
+                print(bod_idx)
 
             screen.fill((51, 168, 12))
             pygame.draw.line(
@@ -90,16 +109,24 @@ def run():
                 (20, 266), (380, 266),
                 width=10
             )
-
-            opp_font = load_font(20)
             
             if data.tictactoe_opponent is None:
-                opp_txt = opp_font.render("Waiting for opponent...")
+                opp_txt = opp_font.render("Waiting for opponent...", True, (0, 0, 0))
             else:
-                opp_txt = opp_font.render(f"Opponent: {data.tictactoe_opponent}")
-            
+                opp_txt = opp_font.render(f"Opponent: {data.tictactoe_opponent}", True, (0, 0, 0))
+
+            if data.turn:
+                turn_txt = opp_font.render("Your turn", True, (0, 0, 0))
+            elif data.turn is not None:
+                turn_txt = opp_font.render("Opponent's Turn", True, (0, 0, 0))
+            else:
+                turn_txt = None
+
             screen.blit(opp_txt, (0, 0))
-            
+
+            if turn_txt is not None:
+                screen.blit(turn_txt, opp_txt.get_rect(topright=(380, 0)))
+
             pygame.display.update()
 
 

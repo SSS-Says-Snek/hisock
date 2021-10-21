@@ -158,6 +158,12 @@ def run():
 
         sys.exit()
 
+    @server.on("opp_disc")
+    def opponent_leave(opp_name: str):
+        clear()
+        print(f"Opponent \"{opp_name}\"disconnected; disconnecting from server...")
+        raise SystemExit
+
     while True:
         # Updates server
         server.update()

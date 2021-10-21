@@ -90,17 +90,21 @@ def run():
             paired_clients_ip.append([client_info['ip']])
 
     @s.on("leave")
-    def player_leave(clt_ip):
+    def player_leave(clt_info):
         print(paired_clients_ip)
-        print(f"Client \"{clt_ip['name']}\" disconnected")
+        print(f"Client \"{clt_info['name']}\" disconnected")
         for ip_pair in paired_clients_ip[:]:
             for ip in ip_pair:
-                if ip == clt_ip['ip']:
+                if ip == clt_info['ip']:
                     if len(ip_pair) == 1:
                         paired_clients_ip.remove(ip_pair)
                     else:
                         # Uhh I don't know what to do RN
-                        pass
+                        cp_ip_pair = ip_pair[:]
+                        cp_ip_pair.remove(ip)
+                        other_ip = cp_ip_pair[0]
+                        s.send_client(other_ip, "opp_disc", clt_info['name'].encode())
+                        paired_clients_ip.remove(ip_pair)
         print(paired_clients_ip)
 
     @s.on("player_turn")
