@@ -53,7 +53,6 @@ setup(
         "Operating System :: Microsoft :: Windows",
         "Operating System :: MacOS",
         "Operating System :: POSIX :: Linux",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9"
@@ -66,7 +65,7 @@ setup(
         'hisock',
         'examples',
     ],
-    python_requires=">=3.6"
+    python_requires=">=3.7"
 )
 
 if os.path.exists("dist"):
