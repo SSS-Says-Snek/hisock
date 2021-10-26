@@ -656,7 +656,7 @@ class ThreadedHiSockClient(HiSockClient):
         while self._stop_event:
             try:
                 self.update()
-            except (OSError, ValueError):
+            except (OSError, ValueError, ConnectionAbortedError):
                 break
 
     def start_client(self):

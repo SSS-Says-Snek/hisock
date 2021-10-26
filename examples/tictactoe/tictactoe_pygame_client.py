@@ -74,7 +74,7 @@ def run():
     while True:
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
-                server.close()
+                server.stop_client()
                 pygame.quit()
                 sys.exit()
             elif (
