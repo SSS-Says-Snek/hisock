@@ -36,7 +36,8 @@ except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
         make_header, _removeprefix,
-        ServerNotRunning, iptup_to_str
+        ServerNotRunning, ClientDisconnected,
+        iptup_to_str
     )
 
 
@@ -639,6 +640,7 @@ class ThreadedHiSockClient(HiSockClient):
 
     def stop_client(self):
         """Stops the client"""
+        self._closed = True
         self._stop_event.set()
         self.sock.close()
 
@@ -656,7 +658,7 @@ class ThreadedHiSockClient(HiSockClient):
         while self._stop_event:
             try:
                 self.update()
-            except (OSError, ValueError, ConnectionAbortedError):
+            except (OSError, ValueError):
                 break
 
     def start_client(self):

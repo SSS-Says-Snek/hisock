@@ -42,6 +42,10 @@ class ServerNotRunning(Exception):
     pass
 
 
+class ClientDisconnected(Exception):
+    pass
+
+
 # Custom warnings
 class NoHeaderWarning(Warning):
     pass

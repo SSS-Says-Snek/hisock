@@ -86,6 +86,8 @@ def run():
                     xy // 133 for xy in event.pos
                 ]
 
+                board_idx = bod_idx[0] * 3 + bod_idx[1]
+                data.board[board_idx] = data.letter
                 print(bod_idx)
 
             screen.fill((51, 168, 12))
@@ -115,6 +117,8 @@ def run():
             else:
                 opp_txt = opp_font.render(f"Opponent: {data.tictactoe_opponent}", True, (0, 0, 0))
 
+            name_txt = opp_font.render(f"You are: {name}", True, (0, 0, 0))
+
             if data.turn:
                 turn_txt = opp_font.render("Your turn", True, (0, 0, 0))
             elif data.turn is not None:
@@ -123,6 +127,7 @@ def run():
                 turn_txt = None
 
             screen.blit(opp_txt, (0, 0))
+            screen.blit(name_txt, (0, 20))
 
             if turn_txt is not None:
                 screen.blit(turn_txt, opp_txt.get_rect(topright=(380, 0)))
