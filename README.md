@@ -19,6 +19,8 @@ Documentation is located on
 already well-documented on ReadTheDocs.
 
 ## Installation
+Hisock only supports Python versions 3.7 and onwards, due to annotations.
+
 `hisock` is available on PyPI, [here](https://pypi.org/project/hisock). Just do the following command.
 ```shell
 $ python -m pip install hisock (WINDOWS)
