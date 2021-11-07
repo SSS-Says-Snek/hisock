@@ -11,7 +11,7 @@
 <img src="https://raw.githubusercontent.com/SSS-Says-Snek/SSS-Says-Snek.github.io/master/assets/logo.png" width=200 class="center">
 
 # hisock (highsock)
-A ***hi***gher-level extension of Python's ***sock***et module, with simpler and more efficient usages.
+A ***hi***gher-level extension of Python's ***sock***et module, with simpler and more efficient usages (as you can see, that's how I got the name).
 
 ## Documentation
 Documentation is located on 
