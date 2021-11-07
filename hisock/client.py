@@ -28,9 +28,11 @@ from typing import Union, Callable, Any
 
 # Utilities
 try:
+    # use relative import for pip builds (required)
     from .utils import (
         make_header, _removeprefix,
-        ServerNotRunning, iptup_to_str
+        ServerNotRunning, ClientDisconnected,
+        iptup_to_str
     )
 except ImportError:
     # relative import doesn't work for non-pip builds
@@ -39,6 +41,16 @@ except ImportError:
         ServerNotRunning, ClientDisconnected,
         iptup_to_str
     )
+
+
+# ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
+# ██╔══██╗██╔══██╗██║░░░██║╚══██╔══╝██║██╔══██╗████╗░██║██║
+# ██║░░╚═╝███████║██║░░░██║░░░██║░░░██║██║░░██║██╔██╗██║██║
+# ██║░░██╗██╔══██║██║░░░██║░░░██║░░░██║██║░░██║██║╚████║╚═╝
+# ╚█████╔╝██║░░██║╚██████╔╝░░░██║░░░██║╚█████╔╝██║░╚███║██╗
+# ░╚════╝░╚═╝░░╚═╝░╚═════╝░░░░╚═╝░░░╚═╝░╚════╝░╚═╝░░╚══╝╚═╝
+#      Change the above code IF and only IF you know
+#                  what you are doing!
 
 
 class HiSockClient:
@@ -99,10 +111,15 @@ class HiSockClient:
             name: Union[str, None],
             group: Union[str, None],
             blocking: bool = True,
-            header_len: int = 16
+            header_len: int = 16,
+            cache_size: int = -1
     ):
-        # Function storage
+        # Function and cache storage
         self.funcs = {}
+        self.cache_size = cache_size
+        if cache_size >= 0:
+            # cache_size <= -1: No cache
+            self.cache = []
 
         # TLS arguments
         self.tls_arguments = {
@@ -355,6 +372,14 @@ class HiSockClient:
 
                             # Call function
                             func['func'](parse_content)
+
+                    # Caching
+                    if self.cache_size >= 0:
+                        self.cache.append({"header": content_header, "content": content})
+
+                        if 0 < self.cache_size < len(self.cache):
+                            self.cache.pop(0)
+
             except IOError as e:
                 # Normal, means message has ended
                 if e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK and not self._closed:
@@ -565,6 +590,12 @@ class HiSockClient:
             b"$CHGROUP$"
         )
 
+    def get_cache(self, idx: Union[int, slice, None] = None):
+        if idx is None:
+            return self.cache
+        else:
+            return self.cache[idx]
+
     def get_client(self, client: Union[str, tuple[str, int]]):
         """PROTOTYPE; DO NOT USE YET"""
         if isinstance(client, tuple):
@@ -630,9 +661,11 @@ class ThreadedHiSockClient(HiSockClient):
     """
 
     def __init__(self,
-                 addr, name=None, group=None, blocking=True, header_len=16):
+                 addr, name=None, group=None, blocking=True, header_len=16,
+                 cache_size=-1
+        ):
         super().__init__(
-            addr, name, group, blocking, header_len
+            addr, name, group, blocking, header_len, cache_size
         )
         self._thread = threading.Thread(target=self.run)
 
@@ -670,7 +703,7 @@ class ThreadedHiSockClient(HiSockClient):
         self._thread.join()
 
 
-def connect(addr, name=None, group=None, blocking=True, header_len=16):
+def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1):
     """
     Creates a `HiSockClient` instance. See HiSockClient for more details
 
@@ -697,10 +730,13 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16):
     :return: A :class:`HiSockClient` instance
     :rtype: instance
     """
-    return HiSockClient(addr, name, group, blocking, header_len)
+    return HiSockClient(addr, name, group, blocking, header_len, cache_size)
 
 
-def threaded_connect(addr, name=None, group=None, blocking=True, header_len=16):
+def threaded_connect(
+        addr, name=None, group=None,
+        blocking=True, header_len=16, cache_size=-1
+):
     """
     Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
     for more details
@@ -708,12 +744,12 @@ def threaded_connect(addr, name=None, group=None, blocking=True, header_len=16):
     :return: A :class:`ThreadedHiSockClient` instance
     """
     return ThreadedHiSockClient(
-        addr, name, group, blocking, header_len
+        addr, name, group, blocking, header_len, cache_size
     )
 
 
 if __name__ == "__main__":
-    s = threaded_connect(('192.168.1.131', 33333), name="Sussus", group="Amogus")
+    s = threaded_connect(('192.168.1.131', 33333), name="Sussus", group="Amogus", cache_size=5)
     s.change_name("Burp")
 
 
@@ -745,6 +781,7 @@ if __name__ == "__main__":
     @s.on("Test")
     def test(data):
         print("Group message received:", data)
+        print(s.get_cache(slice(1, 3)))
 
 
     s.start_client()

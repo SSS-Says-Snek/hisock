@@ -757,25 +757,25 @@ class HiSockServer:
                                 name_or_group = None
 
                             clt_info = self.clients[notified_sock]
-                            clt_list = [
-                                clt_info['ip']
-                            ]
+                            clt_dict = {
+                                "ip": clt_info['ip']
+                            }
 
                             if matching_reserve == b"$CHNAME$":
-                                clt_list.append(name_or_group)
-                                clt_list.append(clt_info['group'])
+                                clt_dict["name"] = name_or_group
+                                clt_dict["group"] = clt_info['group']
 
                             elif matching_reserve == b"$CHGROUP$":
-                                clt_list.append(clt_info['name'])
-                                clt_list.append(name_or_group)
+                                clt_dict["name"] = clt_info['name']
+                                clt_dict["group"] = name_or_group
 
                             del self.clients[notified_sock]
-                            self.clients[notified_sock] = clt_list
+                            self.clients[notified_sock] = clt_dict
 
                             for key, value in dict(self.clients_rev).items():
                                 if value == notified_sock:
                                     del self.clients_rev[key]
-                            self.clients_rev[tuple(clt_list)] = notified_sock
+                            self.clients_rev[tuple(clt_dict.values())] = notified_sock
 
                             if (
                                 'name_change' in self.funcs and
@@ -784,7 +784,7 @@ class HiSockServer:
                                 old_name = clt_info['name']
                                 new_name = name_or_group
 
-                                self.funcs['name_change']['func'](clt_list, old_name, new_name)
+                                self.funcs['name_change']['func'](clt_dict, old_name, new_name)
                             elif (
                                 'group_change' in self.funcs and
                                 matching_reserve == b"$CHGROUP$"
@@ -792,7 +792,7 @@ class HiSockServer:
                                 old_group = clt_info['group']
                                 new_group = name_or_group
 
-                                self.funcs['group_change']['func'](clt_list, old_group, new_group)
+                                self.funcs['group_change']['func'](clt_dict, old_group, new_group)
 
                     for matching_cmd, func in self.funcs.items():
                         if message['data'].startswith(matching_cmd.encode()):
