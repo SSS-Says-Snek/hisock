@@ -38,6 +38,24 @@ def color_text(txt, color=None, font_changes=None):
 
 print(color_text(f"Building version {VERSION}...", "green"))
 
+raw_ex_subdirs = [
+    content.relative_to(ROOT) for content in (ROOT / "examples").iterdir()
+]
+stringified_ex_subdirs = list(
+    map(
+        str, list(filter(pathlib.Path.is_dir, raw_ex_subdirs))
+    )
+)
+ex_subdirs = [
+    subdir.replace('\\', '.').replace('/', '.') for subdir in stringified_ex_subdirs
+]
+
+print_ex_subdirs = "- " + "\n- ".join(ex_subdirs)
+print(
+    color_text("[INFO] Collected the following examples modules:\n"
+               f"{print_ex_subdirs}", "green")
+)
+
 setup(
     name=NAME,
     version=VERSION,
@@ -64,7 +82,7 @@ setup(
     packages=[
         'hisock',
         'examples',
-    ],
+    ] + ex_subdirs,
     python_requires=">=3.7"
 )
 
