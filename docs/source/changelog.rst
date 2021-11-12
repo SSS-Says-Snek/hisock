@@ -5,9 +5,9 @@ This page keeps track of all the new features that were added to, modified,
 or removed in specific versions. This may be useful for selecting which version is
 best for you, if the latest version does not work for you.
 
-.. _v1p0:
+.. _v0p1:
 
-v1.0
+v0.1
 ----
 
 This version is the first minor version of ``hisock``! It contains several major code
