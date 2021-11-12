@@ -30,7 +30,7 @@ print("Source files live in:", os.path.abspath(
     '../../'
 ))
 
-import constants
+from hisock import constants
 
 
 version_html = json.loads(
