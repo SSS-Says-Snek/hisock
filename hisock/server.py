@@ -932,7 +932,7 @@ class HiSockServer:
                             for _type in [list, dict]:
                                 if self.funcs['message']['type_hint']['msg'] == _type:
                                     try:
-                                        result = ast.literal_eval(message['data'].decode())
+                                        parse_content = json.loads(message['data'].decode())
                                     except UnicodeDecodeError:
                                         raise TypeError(
                                             f"Cannot decode message data during "
@@ -952,15 +952,6 @@ class HiSockServer:
                                             f"failed for function \"{self.funcs['message']['name']}\""
                                             f":\n           {e}"
                                         ) from type(e)
-                                    else:
-                                        if not isinstance(result, _type):
-                                            raise TypeError(
-                                                "Type casting from bytes to dict failed for function "
-                                                f"\"{self.funcs['message']['name']}\":\n"
-                                                f"           Message is not a {_type.__name__}"
-                                            )
-                                        else:
-                                            parse_content = result
 
                             self.funcs['message']['func'](inner_clt_data, parse_content)
 

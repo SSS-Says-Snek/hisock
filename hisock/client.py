@@ -323,6 +323,9 @@ class HiSockClient:
                     # Handle "reserved functions"
                     if content == b"$DISCONN$":
                         self.close()
+
+                        if 'force_disconnect' in self.funcs:
+                            self.funcs['force_disconnect']['func']()
                     if content.startswith(b"$CLTCONN$") and 'client_connect' in self.funcs:
                         # Client connected to server; parse and call function
                         clt_content = json.loads(
@@ -371,6 +374,30 @@ class HiSockClient:
                                         f"Type casting from bytes to float "
                                         f"failed for function \"{func['name']}\":\n           {e}"
                                     ) from ValueError
+
+                            for _type in [list, dict]:
+                                if func['type_hint'] == _type:
+                                    try:
+                                        parse_content = json.loads(parse_content)
+                                    except UnicodeDecodeError:
+                                        raise TypeError(
+                                            f"Cannot decode message data during "
+                                            f"bytes->{_type.__name__} type cast"
+                                            "(current implementation requires string to "
+                                            "type cast, not bytes)"
+                                        ) from UnicodeDecodeError
+                                    except ValueError:
+                                        raise TypeError(
+                                            f"Type casting from bytes to {_type.__name__} "
+                                            f"failed for function \"{self.funcs['message']['name']}\""
+                                            f":\n           Message is not a {_type.__name__}"
+                                        ) from ValueError
+                                    except Exception as e:
+                                        raise TypeError(
+                                            f"Type casting from bytes to {_type.__name__} "
+                                            f"failed for function \"{self.funcs['message']['name']}\""
+                                            f":\n           {e}"
+                                        ) from type(e)
 
                             # Call function
                             func['func'](parse_content)
@@ -424,6 +451,8 @@ class HiSockClient:
                     msg_annotation = builtins.__dict__[annots[func_args[0]]]
             except KeyError:
                 # builtins is not what we thought; I dunno why I did this
+                msg_annotation = None
+            except IndexError:
                 msg_annotation = None
 
             # Creates function dictionary to add to `outer.funcs`
@@ -784,6 +813,10 @@ if __name__ == "__main__":
     def test(data):
         print("Group message received:", data)
         print(s.get_cache(slice(1, 3)))
+
+    @s.on("force_disconnect")
+    def susmogus():
+        print("AAAAAAAAA DISCONNECTED :(((((((")
 
 
     s.start_client()
