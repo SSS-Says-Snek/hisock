@@ -33,7 +33,7 @@ try:
         receive_message, _removeprefix, make_header,
         _dict_tupkey_lookup, _dict_tupkey_lookup_key,
         _type_cast_server,
-)
+    )
 except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
@@ -139,6 +139,7 @@ class HiSockServer:
                         "diffie_hellman": constants.DH_DEFAULT
                     }
         self.called_run = False
+        self._closed = False
 
     def __str__(self):
         """Example: <HiSockServer serving at 192.168.1.133:33333>"""
@@ -338,6 +339,92 @@ class HiSockServer:
         """
         # Passes in outer to _on decorator/class
         return self._on(self, command)
+
+    def close(self):
+        self._closed = True
+        self.disconnect_all_clients()
+        self.sock.close()
+
+    def disconnect_client(self, client: str):  # TODO: WILL ADD MORE DIVERSE SUPPORT FOR ARGS
+        disconn_header = make_header(b"$DISCONN$", self.header_len)
+        if isinstance(client, tuple):
+            # Formats client IP tuple, and raises Exceptions if format's wrong
+            if len(client) == 2 and isinstance(client[0], str):
+                if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)$", client[0]) and isinstance(client[1], int):
+                    client = f"{client[0]}:{client[1]}"
+                else:
+                    raise ValueError(
+                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                        f"{client}"
+                    )
+            else:
+                raise ValueError(
+                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                    f"{client}"
+                )
+
+        if re.search(r"^((\d?){3}\.){3}(\d\d?\d?):\d(\d?){4}$", client):
+            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
+            # Try IP Address, should be unique
+            split_client = client.split(':')
+            reconstructed_client = []
+
+            # Checks IP correctness
+            try:
+                reconstructed_client.append(map(int, split_client[0].split('.')))
+            except ValueError:
+                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+            try:
+                reconstructed_client.append(int(split_client[1]))
+            except ValueError:
+                raise ValueError("Port is not numerical (only IPv4 currently supported)")
+
+            for subip in reconstructed_client[0]:
+                if not 0 <= subip < 255:
+                    raise ValueError(f"{client} is not a valid IP address")
+            if not 0 < reconstructed_client[1] < 65535:
+                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
+
+            try:
+                client_sock = next(
+                    _dict_tupkey_lookup(
+                        (client.split(':')[0], reconstructed_client[1]), self.clients_rev,
+                        idx_to_match=0
+                    )
+                )
+            except StopIteration:
+                raise TypeError(f"Client with IP {client} is not connected")
+            client_sock.send(
+                disconn_header + b"$DISCONN$"
+            )
+        else:
+            # Try name or group
+            try:
+                mod_clients_rev = {}
+                for key, value in self.clients_rev.items():
+                    mod_key = (key[0], key[1])  # Groups shouldn't count
+                    mod_clients_rev[mod_key] = value
+
+                client_sock = list(_dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1))
+            except StopIteration:
+                raise TypeError(f"Client with name \"{client}\"does not exist")
+
+            if len(client_sock) > 1:
+                warnings.warn(
+                    f"{len(client_sock)} clients with name \"{client}\" detected; sending data to "
+                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
+                )
+
+            client_sock[0].send(
+                disconn_header + b"$DISCONN$"
+            )
+
+    def disconnect_all_clients(self):
+        disconn_header = make_header(b"$DISCONN$", self.header_len)
+        for client in self.clients:
+            client.send(
+                disconn_header + b"$DISCONN$"
+            )
 
     def send_all_clients(self, command: str, content: bytes):
         """
@@ -627,254 +714,255 @@ class HiSockServer:
         """
         self.called_run = True
 
-        # gets all sockets from select.select
-        read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
+        if not self._closed:
+            # gets all sockets from select.select
+            read_sock, write_sock, exception_sock = select.select(self._sockets_list, [], self._sockets_list)
 
-        for notified_sock in read_sock:
-            # loops through all sockets
-            if notified_sock == self.sock:  # Got new connection
-                connection, address = self.sock.accept()
+            for notified_sock in read_sock:
+                # loops through all sockets
+                if notified_sock == self.sock:  # Got new connection
+                    connection, address = self.sock.accept()
 
-                # Handle client hello
-                client = receive_message(connection, self.header_len)
+                    # Handle client hello
+                    client = receive_message(connection, self.header_len)
 
-                client_hello = _removeprefix(client['data'].decode(), "$CLTHELLO$ ")
-                client_hello = json.loads(client_hello)
+                    client_hello = _removeprefix(client['data'].decode(), "$CLTHELLO$ ")
+                    client_hello = json.loads(client_hello)
 
-                # Establishes socket lists and dicts
-                self._sockets_list.append(connection)
+                    # Establishes socket lists and dicts
+                    self._sockets_list.append(connection)
 
-                clt_info = {
-                    "ip": address,
-                    "name": client_hello['name'],
-                    "group": client_hello['group']
-                }
+                    clt_info = {
+                        "ip": address,
+                        "name": client_hello['name'],
+                        "group": client_hello['group']
+                    }
 
-                self.clients[connection] = clt_info
-                self.clients_rev[(
-                    address,
-                    client_hello['name'],
-                    client_hello['group']
-                )] = connection
+                    self.clients[connection] = clt_info
+                    self.clients_rev[(
+                        address,
+                        client_hello['name'],
+                        client_hello['group']
+                    )] = connection
 
-                if 'join' in self.funcs:
-                    # Reserved function - Join
-                    self.funcs['join']['func'](
-                        clt_info
-                    )
-
-                # Send reserved functions over to existing clients
-                clt_cnt_header = make_header(f"$CLTCONN$ {json.dumps(clt_info)}", self.header_len)
-                clt_to_send = [clt for clt in self.clients if clt != connection]
-
-                for sock_client in clt_to_send:
-                    sock_client.send(
-                        clt_cnt_header + f"$CLTCONN$ {json.dumps(clt_info)}".encode()
-                    )
-
-            else:
-                # "header" - The header of the msg, mostly not needed
-                # "data" - The actual data/content of the msg
-                message = receive_message(notified_sock, self.header_len)
-
-                if not message:
-                    # Most likely client disconnect, sometimes can be client error
-                    client_disconnect = self.clients[notified_sock]['ip']
-                    more_client_info = self.clients[notified_sock]
-
-                    # Remove socket from lists and dictionaries
-                    self._sockets_list.remove(notified_sock)
-                    del self.clients[notified_sock]
-                    del self.clients_rev[
-                        next(
-                            _dict_tupkey_lookup_key(client_disconnect, self.clients_rev)
-                        )
-                    ]
-
-                    if 'leave' in self.funcs:
-                        # Reserved function - Leave
-                        self.funcs['leave']['func'](
-                                {
-                                "ip": client_disconnect,
-                                "name": more_client_info['name'],
-                                "group": more_client_info['group']
-                            }
+                    if 'join' in self.funcs:
+                        # Reserved function - Join
+                        self.funcs['join']['func'](
+                            clt_info
                         )
 
-                    # Send reserved functions to existing clients
-                    clt_dcnt_header = make_header(f"$CLTDISCONN$ {json.dumps(more_client_info)}", self.header_len)
+                    # Send reserved functions over to existing clients
+                    clt_cnt_header = make_header(f"$CLTCONN$ {json.dumps(clt_info)}", self.header_len)
+                    clt_to_send = [clt for clt in self.clients if clt != connection]
 
-                    for clt_to_send in self.clients:
-                        clt_to_send.send(
-                            clt_dcnt_header + f"$CLTDISCONN$ {json.dumps(more_client_info)}".encode()
+                    for sock_client in clt_to_send:
+                        sock_client.send(
+                            clt_cnt_header + f"$CLTCONN$ {json.dumps(clt_info)}".encode()
                         )
+
                 else:
-                    # Actual client message received
-                    clt_data = self.clients[notified_sock]
+                    # "header" - The header of the msg, mostly not needed
+                    # "data" - The actual data/content of the msg
+                    message = receive_message(notified_sock, self.header_len)
 
-                    if message['data'] == b"$DH_NUMS$":
-                        if not self.tls_arguments['tls']:
-                            # The server's not using TLS
-                            no_tls_header = make_header("$NOTLS$", self.header_len)
-                            notified_sock.send(
-                                no_tls_header + b"$NOTLS$"
+                    if not message:
+                        # Most likely client disconnect, sometimes can be client error
+                        client_disconnect = self.clients[notified_sock]['ip']
+                        more_client_info = self.clients[notified_sock]
+
+                        # Remove socket from lists and dictionaries
+                        self._sockets_list.remove(notified_sock)
+                        del self.clients[notified_sock]
+                        del self.clients_rev[
+                            next(
+                                _dict_tupkey_lookup_key(client_disconnect, self.clients_rev)
                             )
-                        continue
-                    elif message['data'].startswith(b"$GETCLT$"):
-                        try:
-                            result = self.get_client(
-                                _removeprefix(
-                                    message['data'],
-                                    b"$GETCLT$ "
-                                ).decode()
+                        ]
+
+                        if 'leave' in self.funcs:
+                            # Reserved function - Leave
+                            self.funcs['leave']['func'](
+                                {
+                                    "ip": client_disconnect,
+                                    "name": more_client_info['name'],
+                                    "group": more_client_info['group']
+                                }
                             )
-                            del result['socket']
 
-                            clt = json.dumps(
-                                result
+                        # Send reserved functions to existing clients
+                        clt_dcnt_header = make_header(f"$CLTDISCONN$ {json.dumps(more_client_info)}", self.header_len)
+
+                        for clt_to_send in self.clients:
+                            clt_to_send.send(
+                                clt_dcnt_header + f"$CLTDISCONN$ {json.dumps(more_client_info)}".encode()
                             )
-                        except ValueError as e:
-                            clt = "{\"traceback\": \"" + str(e) + "\""
-                        except TypeError:
-                            clt = "{\"traceback\": \"$NOEXIST$\"}"
+                    else:
+                        # Actual client message received
+                        clt_data = self.clients[notified_sock]
 
-                        clt_header = make_header(clt.encode(), self.header_len)
-
-                        print(clt)
-                        notified_sock.send(
-                            clt_header + clt.encode()
-                        )
-
-                    for matching_reserve in [b"$CHNAME$", b"$CHGROUP$"]:
-                        if message['data'].startswith(matching_reserve):
-                            name_or_group = _removeprefix(
-                                message['data'],
-                                matching_reserve + b" "
-                            ).decode()
-
-                            if name_or_group == message['data'].decode():
-                                # Most likely request to reset name
-                                name_or_group = None
-
-                            clt_info = self.clients[notified_sock]
-                            clt_dict = {
-                                "ip": clt_info['ip']
-                            }
-
-                            if matching_reserve == b"$CHNAME$":
-                                clt_dict["name"] = name_or_group
-                                clt_dict["group"] = clt_info['group']
-
-                            elif matching_reserve == b"$CHGROUP$":
-                                clt_dict["name"] = clt_info['name']
-                                clt_dict["group"] = name_or_group
-
-                            del self.clients[notified_sock]
-                            self.clients[notified_sock] = clt_dict
-
-                            for key, value in dict(self.clients_rev).items():
-                                if value == notified_sock:
-                                    del self.clients_rev[key]
-                            self.clients_rev[tuple(clt_dict.values())] = notified_sock
-
-                            if (
-                                'name_change' in self.funcs and
-                                matching_reserve == b"$CHNAME$"
-                            ):
-                                old_name = clt_info['name']
-                                new_name = name_or_group
-
-                                self.funcs['name_change']['func'](clt_dict, old_name, new_name)
-                            elif (
-                                'group_change' in self.funcs and
-                                matching_reserve == b"$CHGROUP$"
-                            ):
-                                old_group = clt_info['group']
-                                new_group = name_or_group
-
-                                self.funcs['group_change']['func'](clt_dict, old_group, new_group)
-
-                    for matching_cmd, func in self.funcs.items():
-                        if message['data'].startswith(matching_cmd.encode()):
-                            parse_content = message['data'][len(matching_cmd) + 1:]
-
-                            temp_parse_content = _type_cast_server(
-                                func['type_hint']['msg'], parse_content,
-                                parse_content
-                            )
-                            if temp_parse_content is not None:
-                                parse_content = temp_parse_content
-                            func['func'](clt_data, parse_content)
-
-                    if 'message' in self.funcs:
-                        # Reserved function - message
-                        inner_clt_data = self.clients[notified_sock]
-                        parse_content = message['data']
-
-                        ####################################################
-                        #         Type hinting -> Type casting             #
-                        ####################################################
-
-                        if self.funcs['message']['type_hint']['msg'] == str:
-                            try:
-                                parse_content = message['data'].decode()
-                            except UnicodeDecodeError as e:
-                                raise TypeError(
-                                    f"Type casting from bytes to string failed\n{str(e)}"
+                        if message['data'] == b"$DH_NUMS$":
+                            if not self.tls_arguments['tls']:
+                                # The server's not using TLS
+                                no_tls_header = make_header("$NOTLS$", self.header_len)
+                                notified_sock.send(
+                                    no_tls_header + b"$NOTLS$"
                                 )
-                        elif self.funcs['message']['type_hint']['msg'] == int:
+                            continue
+                        elif message['data'].startswith(b"$GETCLT$"):
                             try:
-                                parse_content = float(message['data'])
-                            except ValueError as e:
-                                raise TypeError(
-                                    f"Type casting from bytes to int failed for function "
-                                    f"\"{self.funcs['message']['name']}\":\n"
-                                    f"           {e}"
-                                ) from ValueError
-                        elif self.funcs['message']['type_hint']['msg'] == float:
-                            try:
-                                parse_content = int(message['data'])
-                            except ValueError as e:
-                                raise TypeError(
-                                    "Type casting from bytes to float failed for function "
-                                    f"\"{self.funcs['message']['name']}\":\n"
-                                    f"           {e}"
-                                ) from ValueError
+                                result = self.get_client(
+                                    _removeprefix(
+                                        message['data'],
+                                        b"$GETCLT$ "
+                                    ).decode()
+                                )
+                                del result['socket']
 
-                        for _type in [list, dict]:
-                            if self.funcs['message']['type_hint']['msg'] == _type:
+                                clt = json.dumps(
+                                    result
+                                )
+                            except ValueError as e:
+                                clt = "{\"traceback\": \"" + str(e) + "\""
+                            except TypeError:
+                                clt = "{\"traceback\": \"$NOEXIST$\"}"
+
+                            clt_header = make_header(clt.encode(), self.header_len)
+
+                            print(clt)
+                            notified_sock.send(
+                                clt_header + clt.encode()
+                            )
+
+                        for matching_reserve in [b"$CHNAME$", b"$CHGROUP$"]:
+                            if message['data'].startswith(matching_reserve):
+                                name_or_group = _removeprefix(
+                                    message['data'],
+                                    matching_reserve + b" "
+                                ).decode()
+
+                                if name_or_group == message['data'].decode():
+                                    # Most likely request to reset name
+                                    name_or_group = None
+
+                                clt_info = self.clients[notified_sock]
+                                clt_dict = {
+                                    "ip": clt_info['ip']
+                                }
+
+                                if matching_reserve == b"$CHNAME$":
+                                    clt_dict["name"] = name_or_group
+                                    clt_dict["group"] = clt_info['group']
+
+                                elif matching_reserve == b"$CHGROUP$":
+                                    clt_dict["name"] = clt_info['name']
+                                    clt_dict["group"] = name_or_group
+
+                                del self.clients[notified_sock]
+                                self.clients[notified_sock] = clt_dict
+
+                                for key, value in dict(self.clients_rev).items():
+                                    if value == notified_sock:
+                                        del self.clients_rev[key]
+                                self.clients_rev[tuple(clt_dict.values())] = notified_sock
+
+                                if (
+                                        'name_change' in self.funcs and
+                                        matching_reserve == b"$CHNAME$"
+                                ):
+                                    old_name = clt_info['name']
+                                    new_name = name_or_group
+
+                                    self.funcs['name_change']['func'](clt_dict, old_name, new_name)
+                                elif (
+                                        'group_change' in self.funcs and
+                                        matching_reserve == b"$CHGROUP$"
+                                ):
+                                    old_group = clt_info['group']
+                                    new_group = name_or_group
+
+                                    self.funcs['group_change']['func'](clt_dict, old_group, new_group)
+
+                        for matching_cmd, func in self.funcs.items():
+                            if message['data'].startswith(matching_cmd.encode()):
+                                parse_content = message['data'][len(matching_cmd) + 1:]
+
+                                temp_parse_content = _type_cast_server(
+                                    func['type_hint']['msg'], parse_content,
+                                    parse_content
+                                )
+                                if temp_parse_content is not None:
+                                    parse_content = temp_parse_content
+                                func['func'](clt_data, parse_content)
+
+                        if 'message' in self.funcs:
+                            # Reserved function - message
+                            inner_clt_data = self.clients[notified_sock]
+                            parse_content = message['data']
+
+                            ####################################################
+                            #         Type hinting -> Type casting             #
+                            ####################################################
+
+                            if self.funcs['message']['type_hint']['msg'] == str:
                                 try:
-                                    result = ast.literal_eval(message['data'].decode())
-                                except UnicodeDecodeError:
+                                    parse_content = message['data'].decode()
+                                except UnicodeDecodeError as e:
                                     raise TypeError(
-                                        f"Cannot decode message data during "
-                                        f"bytes->{_type.__name__} type cast"
-                                        "(current implementation requires string to "
-                                        "type cast, not bytes)"
-                                    ) from UnicodeDecodeError
-                                except ValueError:
+                                        f"Type casting from bytes to string failed\n{str(e)}"
+                                    )
+                            elif self.funcs['message']['type_hint']['msg'] == int:
+                                try:
+                                    parse_content = float(message['data'])
+                                except ValueError as e:
                                     raise TypeError(
-                                        f"Type casting from bytes to {_type.__name__} "
-                                        f"failed for function \"{self.funcs['message']['name']}\""
-                                        f":\n           Message is not a {_type.__name__}"
+                                        f"Type casting from bytes to int failed for function "
+                                        f"\"{self.funcs['message']['name']}\":\n"
+                                        f"           {e}"
                                     ) from ValueError
-                                except Exception as e:
+                            elif self.funcs['message']['type_hint']['msg'] == float:
+                                try:
+                                    parse_content = int(message['data'])
+                                except ValueError as e:
                                     raise TypeError(
-                                        f"Type casting from bytes to {_type.__name__} "
-                                        f"failed for function \"{self.funcs['message']['name']}\""
-                                        f":\n           {e}"
-                                    ) from type(e)
-                                else:
-                                    if not isinstance(result, _type):
-                                        raise TypeError(
-                                            "Type casting from bytes to dict failed for function "
-                                            f"\"{self.funcs['message']['name']}\":\n"
-                                            f"           Message is not a {_type.__name__}"
-                                        )
-                                    else:
-                                        parse_content = result
+                                        "Type casting from bytes to float failed for function "
+                                        f"\"{self.funcs['message']['name']}\":\n"
+                                        f"           {e}"
+                                    ) from ValueError
 
-                        self.funcs['message']['func'](inner_clt_data, parse_content)
+                            for _type in [list, dict]:
+                                if self.funcs['message']['type_hint']['msg'] == _type:
+                                    try:
+                                        result = ast.literal_eval(message['data'].decode())
+                                    except UnicodeDecodeError:
+                                        raise TypeError(
+                                            f"Cannot decode message data during "
+                                            f"bytes->{_type.__name__} type cast"
+                                            "(current implementation requires string to "
+                                            "type cast, not bytes)"
+                                        ) from UnicodeDecodeError
+                                    except ValueError:
+                                        raise TypeError(
+                                            f"Type casting from bytes to {_type.__name__} "
+                                            f"failed for function \"{self.funcs['message']['name']}\""
+                                            f":\n           Message is not a {_type.__name__}"
+                                        ) from ValueError
+                                    except Exception as e:
+                                        raise TypeError(
+                                            f"Type casting from bytes to {_type.__name__} "
+                                            f"failed for function \"{self.funcs['message']['name']}\""
+                                            f":\n           {e}"
+                                        ) from type(e)
+                                    else:
+                                        if not isinstance(result, _type):
+                                            raise TypeError(
+                                                "Type casting from bytes to dict failed for function "
+                                                f"\"{self.funcs['message']['name']}\":\n"
+                                                f"           Message is not a {_type.__name__}"
+                                            )
+                                        else:
+                                            parse_content = result
+
+                            self.funcs['message']['func'](inner_clt_data, parse_content)
 
     def get_group(self, group: str):
         """
@@ -1174,16 +1262,19 @@ if __name__ == "__main__":
     def bruh(yum_data):
         print("Hmmm whomst leaved, ah it is", yum_data['name'])
 
+
     @s.on("name_change")
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
+
+        s.disconnect_client(clt_info["ip"])
+
 
     # @s.on("message")
     # def why(client_data, message: str):
     #     print("Message reserved function aaa")
     #     print("Client data:", client_data)
     #     print("Message:", message)
-
 
     @s.on("Sussus")
     def a(_, msg):  # _ actually is clt_data

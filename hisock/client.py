@@ -321,6 +321,8 @@ class HiSockClient:
                             )
 
                     # Handle "reserved functions"
+                    if content == b"$DISCONN$":
+                        self.close()
                     if content.startswith(b"$CLTCONN$") and 'client_connect' in self.funcs:
                         # Client connected to server; parse and call function
                         clt_content = json.loads(

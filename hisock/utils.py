@@ -192,6 +192,46 @@ def _type_cast_server(
     #         )
 
 
+def _parse_client_arg(client: Union[str, tuple]):
+    if isinstance(client, tuple):
+        # Formats client IP tuple, and raises Exceptions if format's wrong
+        if len(client) == 2 and isinstance(client[0], str):
+            if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)$", client[0]) and isinstance(client[1], int):
+                client = f"{client[0]}:{client[1]}"
+            else:
+                raise ValueError(
+                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                    f"{client}"
+                )
+        else:
+            raise ValueError(
+                f"Client tuple format should be ('ip.ip.ip.ip', port), not "
+                f"{client}"
+            )
+
+    if re.search(r"^((\d?){3}\.){3}(\d\d?\d?):\d(\d?){4}$", client):
+        # Matching: 523.152.135.231:92344   Invalid IP handled by Python
+        # Try IP Address, should be unique
+        split_client = client.split(':')
+        reconstructed_client = []
+
+        # Checks IP correctness
+        try:
+            reconstructed_client.append(map(int, split_client[0].split('.')))
+        except ValueError:
+            raise ValueError("IP is not numerical (only IPv4 currently supported)")
+        try:
+            reconstructed_client.append(int(split_client[1]))
+        except ValueError:
+            raise ValueError("Port is not numerical (only IPv4 currently supported)")
+
+        for subip in reconstructed_client[0]:
+            if not 0 <= subip < 255:
+                raise ValueError(f"{client} is not a valid IP address")
+        if not 0 < reconstructed_client[1] < 65535:
+            raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
+
+
 def get_local_ip():
     """
     Gets the local IP of your device, with sockets

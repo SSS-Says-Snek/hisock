@@ -4,8 +4,12 @@ import hisock.utils as utils  # lgtm [py/unused-import] lgtm [py/import-and-impo
 import hisock.client as client  # lgtm [py/unused-import]
 import hisock.server as server  # lgtm [py/unused-import]
 
-from .server import start_server, HiSockServer  # lgtm [py/unused-import]
-from .client import connect, HiSockClient  # lgtm [py/unused-import]
+from .server import (
+    start_server, start_threaded_server, HiSockServer
+) # lgtm [py/unused-import]
+from .client import (
+    connect, threaded_connect, HiSockClient
+) # lgtm [py/unused-import]
 from .utils import (  # lgtm [py/unused-import]
     get_local_ip,  # lgtm [py/unused-import]
     input_client_config, input_server_config,  # lgtm [py/unused-import]
