@@ -2,7 +2,7 @@
 name: Bug report
 about: Found a bug in hisock? Report it here!
 title: ''
-labels: bug
+labels: ''
 assignees: ''
 
 ---
