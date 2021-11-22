@@ -674,6 +674,8 @@ class HiSockClient:
         # Changes _closed flag to True to prevent
         # `update` being crazy
         self._closed = True
+        close_header = make_header(b"$USRCLOSE$", self.header_len)
+        self.sock.send(close_header + b"$USRCLOSE$")
         self.sock.close()
 
 
@@ -796,7 +798,7 @@ if __name__ == "__main__":
         print("Follow up message sent by server\n"
               "(Also sent to every client)")
         print("Message:", msg)
-        # s.close()
+        s.close()
 
 
     @s.on("client_connect")

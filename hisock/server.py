@@ -765,7 +765,7 @@ class HiSockServer:
                     # "data" - The actual data/content of the msg
                     message = receive_message(notified_sock, self.header_len)
 
-                    if not message:
+                    if not message or message['data'] == b"$USRCLOSE$":
                         # Most likely client disconnect, sometimes can be client error
                         client_disconnect = self.clients[notified_sock]['ip']
                         more_client_info = self.clients[notified_sock]
@@ -1257,8 +1257,6 @@ if __name__ == "__main__":
     @s.on("name_change")
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
-
-        s.disconnect_client(clt_info["ip"])
 
 
     # @s.on("message")
