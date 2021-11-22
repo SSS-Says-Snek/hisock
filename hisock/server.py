@@ -341,11 +341,29 @@ class HiSockServer:
         return self._on(self, command)
 
     def close(self):
+        """
+        Closes the server; ALL clients will be disconnected, then the
+        server socket will be closed.
+
+        Running `server.run()` won't do anything now.
+        :return:
+        """
         self._closed = True
         self.disconnect_all_clients()
         self.sock.close()
 
     def disconnect_client(self, client: str):  # TODO: WILL ADD MORE DIVERSE SUPPORT FOR ARGS
+        """
+        Disconnects a specific client
+        Different formats of the client is supported. It can be:
+
+        - An IP + Port format, written as "ip:port"
+
+        - A client name, if it exists
+
+        :param client: The client to disconnect. The format could be either by IP+Port,
+            or a client name
+        """
         disconn_header = make_header(b"$DISCONN$", self.header_len)
         if isinstance(client, tuple):
             # Formats client IP tuple, and raises Exceptions if format's wrong
@@ -420,6 +438,7 @@ class HiSockServer:
             )
 
     def disconnect_all_clients(self):
+        """Disconnect all clients."""
         disconn_header = make_header(b"$DISCONN$", self.header_len)
         for client in self.clients:
             client.send(

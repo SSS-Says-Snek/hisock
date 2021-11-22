@@ -15,7 +15,9 @@ A module containing the main server classes and functions, including
    `10**x` to `2**(7x)` (where x is the header length)
 
 .. autoclass:: hisock.server.HiSockServer
-
+   .. automethod:: close
+   .. automethod:: disconnect_all_clients
+   .. automethod:: disconnect_client
    .. automethod:: get_addr
    .. automethod:: get_all_clients
    .. automethod:: get_client
