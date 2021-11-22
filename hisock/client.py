@@ -798,7 +798,6 @@ if __name__ == "__main__":
         print("Follow up message sent by server\n"
               "(Also sent to every client)")
         print("Message:", msg)
-        s.close()
 
 
     @s.on("client_connect")

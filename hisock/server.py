@@ -1276,6 +1276,7 @@ if __name__ == "__main__":
     @s.on("name_change")
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
+        s.disconnect_all_clients()
 
 
     # @s.on("message")
