@@ -43,7 +43,7 @@ jobs:
           name: Run tests
           # This assumes pytest is installed via the install-package step above
           command: python3 -m pytest
-      - discord/status:
+      - discord/status:  # Discord webhook
           fail_only: true
           failure_mentions: "914188304902139954" # Contributors Role in Hisock server
           failure_message: "Triggered by: **${CIRCLE_USERNAME}** \\n\\n :red_circle: The **$CIRCLE_JOB** job has failed!"
