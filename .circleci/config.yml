@@ -6,6 +6,7 @@ orbs:
   # so you dont have to copy and paste it everywhere.
   # See the orb documentation here: https://circleci.com/developer/orbs/orb/circleci/python
   python: circleci/python@1.2
+  discord: discord: teka23/discord@0.0.1
 
 workflows:
   sample:  # This is the name of the workflow, feel free to change it to better match your workflow.
@@ -42,3 +43,9 @@ jobs:
           name: Run tests
           # This assumes pytest is installed via the install-package step above
           command: python3 -m pytest
+      - discord/status:
+          fail_only: true
+          failure_mentions: "914188304902139954" # Contributors Role in Hisock server
+          failure_message: "Triggered by: **${CIRCLE_USERNAME}** \\n\\n :red_circle: The **$CIRCLE_JOB** job has failed!"
+          webhook: "${CIRCLECI_DISCORD_WEBHOOK_URL}"
+          
