@@ -8,7 +8,7 @@ best for you, if the latest version does not work for you.
 .. _v1p1:
 
 v1.1
-----
+-----
 
 New features
 ~~~~~~~~~~~~
@@ -42,7 +42,7 @@ Hisock also has a discord server! However, we're (I'm) still setting it up, so t
 .. _v1p0:
 
 v1.0
-----
+-----
 
 New features
 ~~~~~~~~~~~~
@@ -74,7 +74,7 @@ Bug fixes
 .. _v0p1:
 
 v0.1
-----
+-----
 
 This version is the first minor version of ``hisock``! It contains several major code
 accessibility things added, though not a lot of in-usage code has been added in this version.
@@ -93,8 +93,8 @@ Improved features
 
 .. _v0p0p1:
 
-**v0.0.1 (GRAND RELEASE)**
---------------------------
+v0.0.1 (GRAND RELEASE)
+-----------------------
 
 The first version of hisock! Contains all the basics of what hisock can do, including:
 
