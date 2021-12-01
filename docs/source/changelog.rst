@@ -5,6 +5,8 @@ This page keeps track of all the new features that were added to, modified,
 or removed in specific versions. This may be useful for selecting which version is
 best for you, if the latest version does not work for you.
 
+----
+
 .. _v1p1:
 
 v1.1
@@ -41,6 +43,8 @@ Hisock also has a discord server! However, we're (I'm) still setting it up, so t
 
 .. _v1p0:
 
+----
+
 v1.0
 -----
 
@@ -73,6 +77,8 @@ Bug fixes
 
 .. _v0p1:
 
+----
+
 v0.1
 -----
 
@@ -92,6 +98,8 @@ Improved features
 - Better traceback handling
 
 .. _v0p0p1:
+
+----
 
 v0.0.1 (GRAND RELEASE)
 -----------------------
