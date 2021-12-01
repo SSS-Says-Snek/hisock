@@ -62,6 +62,8 @@ project = constants.__name__
 copyright = constants.__copyright__
 author = constants.__author__
 
+html_favicon = "imgs/logo.ico"
+
 # The full version, including alpha/beta/rc tags
 try:
     release = version_html['tag_name']

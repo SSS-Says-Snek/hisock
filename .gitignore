@@ -151,5 +151,8 @@ cython_debug/
 ### JetBrains IDEs
 .idea/
 
+# Vim
+*.swp
+
 # yED Graph Editor things
 yEd/
