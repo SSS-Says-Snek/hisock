@@ -35,4 +35,7 @@ Table of Contents
    tutorials/index
    API Reference <api>
 
-:doc:`Changelog <changelog>` 
+.. toctree::
+   :maxdepth: 0
+   
+   changelog
