@@ -35,4 +35,4 @@ Table of Contents
    tutorials/index
    API Reference <api>
 
-:doc:`Changelog <changelog.rst>`
+:doc:`Changelog <changelog>`
