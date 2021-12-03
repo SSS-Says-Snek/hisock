@@ -35,6 +35,4 @@ Table of Contents
    tutorials/index
    API Reference <api>
 
-.. toctree::
-
-   Changelog <changelog>
+:doc:`Changelog <changelog>` 
