@@ -35,7 +35,4 @@ Table of Contents
    tutorials/index
    API Reference <api>
 
-.. toctree::
-   :maxdepth: 0
-   
-   changelog
+:doc:`Changelog <changelog.rst>`
