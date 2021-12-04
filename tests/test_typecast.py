@@ -6,7 +6,7 @@ type casting for hisock will crash. We don't want that!
 
 import pytest
 
-from hisock.utils import _type_cast_server
+from hisock.utils import _type_cast_server, InvalidTypeCast
 
 
 class TestServerTypeCast:
@@ -24,7 +24,7 @@ class TestServerTypeCast:
 
     def test_type_cast_str_raise(self):
         with pytest.raises(TypeError):
-            _str2 = _type_cast_server(
+            _type_cast_server(
                 str, b"\xff\xfea\x00",  # Encoded in utf-16, so...
                 self.__class__.dummy_func
             )
@@ -39,7 +39,7 @@ class TestServerTypeCast:
 
     def test_type_cast_int_raise(self):
         with pytest.raises(TypeError):
-            _int2 = _type_cast_server(
+            _type_cast_server(
                 int, b"This is not int, why???",
                 self.__class__.dummy_func
             )
@@ -54,9 +54,32 @@ class TestServerTypeCast:
 
     def test_type_cast_float_raise(self):
         with pytest.raises(TypeError):
-            _float2 = _type_cast_server(
+            _type_cast_server(
                 float, b"This is not float, why???",
                 self.__class__.dummy_func
+            )
+
+    def test_type_cast_dict_list(self):
+        _dict = _type_cast_server(
+            dict, b'{"I like": "cheese"}',
+            self.__class__.dummy_func
+        )
+        _list = _type_cast_server(
+            list, b'["Do", "you", "also", "like", "cheese?"]',
+            self.__class__.dummy_func
+        )
+
+        assert _dict == {"I like": "cheese"}
+        assert _list == ["Do", "you", "also", "like", "cheese?"]
+
+    def test_type_cast_dict_list_raise(self):
+        with pytest.raises(TypeError):
+            _type_cast_server(
+                dict, b"Lolololol",
+            )
+        with pytest.raises(TypeError):
+            _type_cast_server(
+                list, b"Lolololol"
             )
 
     def test_type_cast_invalid_cast(self):
@@ -64,9 +87,5 @@ class TestServerTypeCast:
             bytearray, b"haha this will not do anything",
             self.__class__.dummy_func
         )
-
-        # WARNING: This API part is scheduled to be changed;
-        # It will soon raise an exception, rather than returning None
-        # Be careful of the API change, coming in a few months
 
         assert invalid is None
