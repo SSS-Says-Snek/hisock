@@ -498,7 +498,7 @@ class HiSockClient:
         # Passes in outer to _on decorator/class
         return self._on(self, command)
 
-    def send(self, command: str, content: bytes):
+    def send(self, command: str, content: Union[bytes, dict]):
         """
         Sends a command & content to the server, where it will be interpreted
 
@@ -514,6 +514,8 @@ class HiSockClient:
                 'Command format "$command$" is used for reserved functions - '
                 "consider using a different command"
             )
+        if isinstance(content, dict):
+            content = json.dumps(content).encode()
         content_header = make_header(command.encode() + b" " + content, self.header_len)
 
         # Sends to server
@@ -776,6 +778,7 @@ if __name__ == "__main__":
     def test(data):
         print("Group message received:", data)
         print(s.get_cache(slice(1, 3)))
+        s.send("lol", {"I am": "inevitable"})
 
     @s.on("force_disconnect")
     def susmogus():

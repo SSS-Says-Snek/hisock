@@ -16,7 +16,6 @@ import inspect  # Inspect, for type-hinting detection
 import socket  # Socket module, duh
 import select  # Yes, we're using select for multiple clients
 import json  # To send multiple data without 10 billion commands
-import ast  # For certain type hints
 import re  # Regex, to make sure arguments are passed correctly
 import threading
 import warnings  # Warnings, for errors that aren't severe
@@ -38,6 +37,7 @@ try:
         _dict_tupkey_lookup_key,
         _type_cast_server,
     )
+    from . import utils
 except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
@@ -50,6 +50,7 @@ except ImportError:
         _dict_tupkey_lookup_key,
         _type_cast_server,
     )
+    import utils
 
 
 class HiSockServer:
@@ -912,6 +913,12 @@ class HiSockServer:
                                 )
                                 if temp_parse_content is not None:
                                     parse_content = temp_parse_content
+                                elif temp_parse_content is None:
+                                    raise utils.InvalidTypeCast(
+                                        f"{self.funcs['message']['type_hint']['msg']} is an invalid "
+                                        f"type cast!"
+                                    )
+
                                 func["func"](clt_data, parse_content)
 
                         if "message" in self.funcs:
@@ -923,57 +930,19 @@ class HiSockServer:
                             #         Type hinting -> Type casting             #
                             ####################################################
 
-                            if self.funcs["message"]["type_hint"]["msg"] == str:
-                                try:
-                                    parse_content = message["data"].decode()
-                                except UnicodeDecodeError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to string failed\n{str(e)}"
-                                    )
-                            elif self.funcs["message"]["type_hint"]["msg"] == int:
-                                try:
-                                    parse_content = float(message["data"])
-                                except ValueError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to int failed for function "
-                                        f"\"{self.funcs['message']['name']}\":\n"
-                                        f"           {e}"
-                                    ) from ValueError
-                            elif self.funcs["message"]["type_hint"]["msg"] == float:
-                                try:
-                                    parse_content = int(message["data"])
-                                except ValueError as e:
-                                    raise TypeError(
-                                        "Type casting from bytes to float failed for function "
-                                        f"\"{self.funcs['message']['name']}\":\n"
-                                        f"           {e}"
-                                    ) from ValueError
+                            temp_parse_content = _type_cast_server(
+                                self.funcs["message"]["type_hint"]["msg"],
+                                message["data"],
+                                self.funcs["message"]
+                            )
 
-                            for _type in [list, dict]:
-                                if self.funcs["message"]["type_hint"]["msg"] == _type:
-                                    try:
-                                        parse_content = json.loads(
-                                            message["data"].decode()
-                                        )
-                                    except UnicodeDecodeError:
-                                        raise TypeError(
-                                            f"Cannot decode message data during "
-                                            f"bytes->{_type.__name__} type cast"
-                                            "(current implementation requires string to "
-                                            "type cast, not bytes)"
-                                        ) from UnicodeDecodeError
-                                    except ValueError:
-                                        raise TypeError(
-                                            f"Type casting from bytes to {_type.__name__} "
-                                            f"failed for function \"{self.funcs['message']['name']}\""
-                                            f":\n           Message is not a {_type.__name__}"
-                                        ) from ValueError
-                                    except Exception as e:
-                                        raise TypeError(
-                                            f"Type casting from bytes to {_type.__name__} "
-                                            f"failed for function \"{self.funcs['message']['name']}\""
-                                            f":\n           {e}"
-                                        ) from type(e)
+                            if temp_parse_content is not None:
+                                parse_content = temp_parse_content
+                            elif temp_parse_content is None:
+                                raise utils.InvalidTypeCast(
+                                    f"{self.funcs['message']['type_hint']['msg']} is an invalid "
+                                    f"type cast!"
+                                )
 
                             self.funcs["message"]["func"](inner_clt_data, parse_content)
 
@@ -1266,6 +1235,10 @@ if __name__ == "__main__":
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
         s.disconnect_all_clients()
+
+    @s.on("lol")
+    def lolol(clt_info, dict_stuff: dict):
+        print(f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that' I am {dict_stuff['I am']}")
 
     # @s.on("message")
     # def why(client_data, message: str):

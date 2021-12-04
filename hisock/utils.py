@@ -13,6 +13,7 @@ Copyright SSS_Says_Snek, 2021-present
 
 from __future__ import annotations
 
+import json
 import re
 import socket
 from typing import Union, Optional
@@ -35,6 +36,10 @@ class ServerException(Exception):
 
 
 class NoMessageException(Exception):
+    pass
+
+
+class InvalidTypeCast(Exception):
     pass
 
 
@@ -176,15 +181,34 @@ def _type_cast_server(type_cast, content_to_typecast: bytes, func_dict: dict):
                 f"Type casting from bytes to float failed for function "
                 f"\"{func_dict['name']}\":\n           {e}"
             ) from ValueError
-    # elif type_cast == list:
-    #     try:
-    #         _dict = json.loads(content_to_typecast)
-    #         typecasted_content = list(_dict.values())
-    #         return typecasted_content  # Remember to change this, but I"m lazy rn
-    #     except json.decoder.JSONDecodeError as e:
-    #         raise TypeError(
-    #             f"Type casting from bytes to list"
-    #         )
+    elif type_cast is None:
+        return content_to_typecast
+    for _type in [list, dict]:
+        if type_cast == _type:
+            try:
+                typecasted_content = json.loads(
+                    content_to_typecast
+                )
+                return typecasted_content
+            except UnicodeDecodeError:
+                raise TypeError(
+                    f"Cannot decode message data during "
+                    f"bytes->{_type.__name__} type cast"
+                    "(current implementation requires string to "
+                    "type cast, not bytes)"
+                ) from UnicodeDecodeError
+            except ValueError:
+                raise TypeError(
+                    f"Type casting from bytes to {_type.__name__} "
+                    f"failed for function \"{func_dict['name']}\""
+                    f":\n           Message is not a {_type.__name__}"
+                ) from ValueError
+            except Exception as e:
+                raise TypeError(
+                    f"Type casting from bytes to {_type.__name__} "
+                    f"failed for function \"{func_dict['name']}\""
+                    f":\n           {e}"
+                ) from type(e)
 
 
 def _parse_client_arg(client: Union[str, tuple]):
