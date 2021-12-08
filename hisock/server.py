@@ -445,7 +445,7 @@ class HiSockServer:
         for client in self.clients:
             client.send(disconn_header + b"$DISCONN$")
 
-    def send_all_clients(self, command: str, content: bytes):
+    def send_all_clients(self, command: str, content: Union[bytes, dict]):
         """
         Sends the commmand and content to *ALL* clients connected
 
@@ -453,13 +453,16 @@ class HiSockServer:
         :type command: str
         :param content: A bytes-like object, containing the message/content to send
             to each client
-        :type content: bytes
+        :type content: Union[bytes, dict]
         """
+        if isinstance(content, dict):
+            content = json.dumps(content).encode()
+
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         for client in self.clients:
             client.send(content_header + command.encode() + b" " + content)
 
-    def send_group(self, group: str, command: str, content: bytes):
+    def send_group(self, group: str, command: str, content: Union[bytes, dict]):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
@@ -472,7 +475,7 @@ class HiSockServer:
         :type command: str
         :param content: A bytes-like object, with the content/message
             to send
-        :type content: bytes
+        :type content: Union[bytes, dict]
         :raise TypeError: The group does not exist
         """
         # Identifies group
@@ -482,6 +485,9 @@ class HiSockServer:
         if len(group_clients) == 0:
             raise TypeError(f"Group {group} does not exist")
         else:
+            if isinstance(content, dict):
+                content = json.dumps(content).encode()
+
             content_header = make_header(
                 command.encode() + b" " + content, self.header_len
             )
@@ -489,7 +495,7 @@ class HiSockServer:
             for clt_to_send in group_clients:
                 clt_to_send.send(content_header + command.encode() + b" " + content)
 
-    def send_client(self, client: Union[str, tuple], command: str, content: bytes):
+    def send_client(self, client: Union[str, tuple], command: str, content: Union[bytes, dict]):
         """
         Sends data to a specific client.
         Different formats of the client is supported. It can be:
@@ -505,12 +511,15 @@ class HiSockServer:
         :type command: str
         :param content: A bytes-like object, with the content/message
             to send
-        :type content: bytes
+        :type content: Union[bytes, dict]
         :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected
         """
+        if isinstance(content, dict):
+            content = json.dumps(content).encode()
+
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
 
@@ -582,6 +591,9 @@ class HiSockServer:
             except StopIteration:
                 raise TypeError(f'Client with name "{client}"does not exist')
 
+            if isinstance(content, dict):
+                content = json.dumps(content).encode()
+
             content_header = make_header(
                 command.encode() + b" " + content, self.header_len
             )
@@ -608,7 +620,7 @@ class HiSockServer:
         :type client: Union[str, tuple]
         :param content: A bytes-like object, with the content/message
             to send
-        :type content: bytes
+        :type content: Union[bytes, dict]
         :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
         :raise Warning: Using client name and more than one client with
@@ -682,6 +694,9 @@ class HiSockServer:
             except StopIteration:
                 raise TypeError(f'Client with name "{client}"does not exist')
 
+            if isinstance(content, dict):
+                content = json.dumps(content).encode()
+
             content_header = make_header(content, self.header_len)
 
             if len(client_sock) > 1:
@@ -718,6 +733,9 @@ class HiSockServer:
         if len(group_clients) == 0:
             raise TypeError(f"Group {group} does not exist")
         else:
+            if isinstance(content, dict):
+                content = json.dumps(content).encode()
+
             content_header = make_header(content, self.header_len)
             # Send content and header to all clients in group
             for clt_to_send in group_clients:
@@ -1226,6 +1244,7 @@ if __name__ == "__main__":
         s.send_client(yum_data["ip"], "e", b"E")
 
         s.send_group("Amogus", "Test", b"TTT")
+        s.send_client(yum_data['ip'], "dicttest", {"Does this": "dict also work?"})
 
     @s.on("leave")
     def bruh(yum_data):
@@ -1238,7 +1257,7 @@ if __name__ == "__main__":
 
     @s.on("lol")
     def lolol(clt_info, dict_stuff: dict):
-        print(f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that' I am {dict_stuff['I am']}")
+        print(f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}")
 
     # @s.on("message")
     # def why(client_data, message: str):

@@ -5,7 +5,7 @@ In this "tutorial", I'll talk about some more advanced topics that I *may*
 have mentioned in the quickstart, but never talked about it. These topics
 are extremely important in order to develop a complex :mod:`hisock` application.
 
-Without further adieu, let's start!
+Without further ado, let's start!
 
 Where we left off
 -----------------

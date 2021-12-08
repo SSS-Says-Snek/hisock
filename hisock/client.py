@@ -506,7 +506,7 @@ class HiSockClient:
         :type command: str
         :param content: A bytes-like object, with the content/message
             to send
-        :type content: bytes
+        :type content: Union[bytes, dict]
         """
         # Creates header and sends to server
         if re.search(r"\$.+\$", command):
@@ -783,5 +783,9 @@ if __name__ == "__main__":
     @s.on("force_disconnect")
     def susmogus():
         print("AAAAAAAAA DISCONNECTED :(((((((")
+
+    @s.on("dicttest")
+    def amogus(yes: dict):
+        print(f"OMG SO COOL I RECEIVED THIS DICT: Does this {yes['Does this']}")
 
     s.start_client()
