@@ -2,7 +2,7 @@
 [![Documentation Status](https://readthedocs.org/projects/hisock/badge/?version=latest)](https://hisock.readthedocs.io/en/latest/?badge=latest)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/b071d22550484b5db3ad95434f2713dd)](https://www.codacy.com/gh/SSS-Says-Snek/hisock/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SSS-Says-Snek/hisock&amp;utm_campaign=Badge_Grade)
 [![Language grade: Python](https://img.shields.io/lgtm/grade/python/g/SSS-Says-Snek/hisock.svg?logo=lgtm&logoWidth=18)](https://lgtm.com/projects/g/SSS-Says-Snek/hisock/context:python)
-![PyPI Downloads](https://img.shields.io/pypi/dm/hisock)
+[![Downloads](https://static.pepy.tech/personalized-badge/hisock?period=total&units=international_system&left_color=grey&right_color=green&left_text=Downloads)](https://pepy.tech/project/hisock)
 
 ![PyPI Version](https://img.shields.io/pypi/v/hisock)
 ![Github Version](https://img.shields.io/github/v/release/SSS-Says-Snek/hisock)
