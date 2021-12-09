@@ -32,7 +32,7 @@ Of course, you'd need pip and python for this step.
 ## Examples
 hisock utilizes decorators as the core of receiving messages instead of having 
 if statements handling all of the logic. 
-More examples are located in the `examples` directory. Here is what a basic 
+More in-depth examples are located in the `examples` directory. Here is what a basic 
 server script would look like using hisock:
 
 #### Server
