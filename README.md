@@ -15,7 +15,7 @@ A ***hi***gher level extension of Python's ***sock***et module, with simpler and
 
 ## Documentation
 Documentation is located on 
-[ReadTheDocs](https://hisock.readthedocs.io), though it is currently not finished. Some documentation is also located in the code as docstrings, though most are 
+[ReadTheDocs](https://hisock.readthedocs.io). Some documentation is also located in the code as docstrings, though most are 
 already well-documented on ReadTheDocs.
 
 ## Installation
