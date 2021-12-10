@@ -21,7 +21,7 @@ import threading
 import warnings  # Warnings, for errors that aren't severe
 import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
-from ipaddress import IPv4Address
+from ipaddress import IPv4Address # ipaddress, for conparisons with <, >, ==, etc
 
 # Utilities
 from hisock import constants
@@ -148,11 +148,11 @@ class HiSockServer:
         self.called_run = False
         self._closed = False
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Example: <HiSockServer serving at 192.168.1.133:33333>"""
         return f"<HiSockServer serving at {':'.join(map(str, self.addr))}>"
 
-    def __gt__(self, other: Union[HiSockServer, str]):
+    def __gt__(self, other: Union[HiSockServer, str]) -> bool:
         """Example: HiSockServer(...) > '192.168.1.131'"""
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for > comparison")
@@ -162,7 +162,7 @@ class HiSockServer:
 
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
-    def __ge__(self, other: Union[HiSockServer, str]):
+    def __ge__(self, other: Union[HiSockServer, str]) -> bool:
         """Example: HiSockServer(...) >= '192.168.1.131'"""
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for >= comparison")
@@ -172,7 +172,7 @@ class HiSockServer:
 
         return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
 
-    def __lt__(self, other: Union[HiSockServer, str]):
+    def __lt__(self, other: Union[HiSockServer, str]) -> bool:
         """Example: HiSockServer(...) < '192.168.1.131'"""
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for < comparison")
@@ -182,7 +182,7 @@ class HiSockServer:
 
         return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
 
-    def __le__(self, other: Union[HiSockServer, str]):
+    def __le__(self, other: Union[HiSockServer, str]) -> bool:
         """Example: HiSockServer(...) <= '192.168.1.131'"""
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for <= comparison")
@@ -192,7 +192,7 @@ class HiSockServer:
 
         return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
 
-    def __eq__(self, other: Union[HiSockServer, str]):
+    def __eq__(self, other: Union[HiSockServer, str]) -> bool:
         """Example: HiSockServer(...) == '192.168.1.131'"""
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for == comparison")
@@ -202,7 +202,7 @@ class HiSockServer:
 
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
-    def __len__(self):
+    def __len__(self) -> int:
         """Example: len(HiSockServer(...)) -> Num clients"""
         return len(self.clients)
 
@@ -230,13 +230,13 @@ class HiSockServer:
     class _on:
         """Decorator used to handle something when receiving command"""
 
-        def __init__(self, outer, cmd_activation):
+        def __init__(self, outer: HiSockServer, cmd_activation: str):
             # `outer` arg is for the HiSockServer instance
             # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.cmd_activation = cmd_activation
 
-        def __call__(self, func: Callable):
+        def __call__(self, func: Callable) -> Callable:
             """Adds a function that gets called when the server receives a matching command"""
 
             func_args = inspect.getfullargspec(func).args
@@ -295,7 +295,7 @@ class HiSockServer:
             # Returns inner function, like a decorator would do
             return func
 
-    def on(self, command: str):
+    def on(self, command: str) -> Callable:
         """
         A decorator that adds a function that gets called when the server
         receives a matching command
@@ -445,7 +445,15 @@ class HiSockServer:
         for client in self.clients:
             client.send(disconn_header + b"$DISCONN$")
 
-    def send_all_clients(self, command: str, content: Union[bytes, dict]):
+    def send_all_clients(
+            self, 
+            command: str, 
+            content: Union[bytes, dict[
+                Union[str, int, float, bool, None], 
+                Union[str, int, float, bool, None]
+            ]
+        ]
+    ):
         """
         Sends the commmand and content to *ALL* clients connected
 
@@ -462,7 +470,16 @@ class HiSockServer:
         for client in self.clients:
             client.send(content_header + command.encode() + b" " + content)
 
-    def send_group(self, group: str, command: str, content: Union[bytes, dict]):
+    def send_group(
+            self, 
+            group: str,
+            command: str, 
+            content: Union[bytes, dict[
+                Union[str, int, float, bool, None], 
+                Union[str, int, float, bool, None]
+            ]
+        ]   
+    ):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
@@ -495,7 +512,16 @@ class HiSockServer:
             for clt_to_send in group_clients:
                 clt_to_send.send(content_header + command.encode() + b" " + content)
 
-    def send_client(self, client: Union[str, tuple], command: str, content: Union[bytes, dict]):
+    def send_client(
+            self, 
+            client: Union[str, tuple[str, int]], 
+            command: str, 
+            content: Union[bytes, dict[
+                Union[str, int, float, bool, None],
+                Union[str, int, float, bool, None]
+            ]
+        ]
+    ):
         """
         Sends data to a specific client.
         Different formats of the client is supported. It can be:
@@ -503,6 +529,8 @@ class HiSockServer:
         - An IP + Port format, written as "ip:port"
 
         - A client name, if it exists
+
+        - A tuple with an (IP, Port) format
 
         :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
@@ -606,7 +634,11 @@ class HiSockServer:
 
             client_sock[0].send(content_header + command.encode() + b" " + content)
 
-    def send_client_raw(self, client, content: bytes):
+    def send_client_raw(
+            self, 
+            client, 
+            content: bytes
+        ): # TODO: Add dict-sending support to this method
         """
         Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
@@ -614,6 +646,8 @@ class HiSockServer:
         - An IP + Port format, written as "ip:port"
 
         - A client name, if it exists
+
+        - A tuple with an (IP, Port) format
 
         :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
@@ -709,7 +743,11 @@ class HiSockServer:
             # Sends to client
             client_sock[0].send(content_header + content)
 
-    def send_group_raw(self, group: str, content: bytes):
+    def send_group_raw(
+            self, 
+            group: str, 
+            content: bytes
+        ): # TODO: Add dict-sending support to this method
         """
         Sends data to a specific group, without commands.
         Groups are recommended for more complicated servers or multipurpose
@@ -964,7 +1002,9 @@ class HiSockServer:
 
                             self.funcs["message"]["func"](inner_clt_data, parse_content)
 
-    def get_group(self, group: str):
+    def get_group(
+            self, group: str
+        ) -> list[dict[str, Union[str, socket.socket]]]:
         """
         Gets all clients from a specific group
 
@@ -997,7 +1037,10 @@ class HiSockServer:
 
         return mod_group_clients
 
-    def get_all_clients(self, key: Union[Callable, str] = None):
+    def get_all_clients(
+            self, 
+            key: Union[Callable, str] = None
+        ) -> list[dict[str, str]]: # TODO: Add socket output as well
         """
         Get all clients currently connected to the server.
         This is recommended over the class attribute `self._clients` or
@@ -1032,7 +1075,10 @@ class HiSockServer:
             return filter_clts
         return clts
 
-    def get_client(self, client: Union[str, tuple[str, int]]):
+    def get_client(
+            self, 
+            client: Union[str, tuple[str, int]]
+        ) -> dict[str, Union[str, socket.socket]]:
         """
         Gets a specific client's information, based on either:
 
@@ -1143,7 +1189,7 @@ class HiSockServer:
 
             return client_dict
 
-    def get_addr(self):
+    def get_addr(self) -> tuple[str, int]:
         """
         Gets the address of where the hisock server is serving
         at.

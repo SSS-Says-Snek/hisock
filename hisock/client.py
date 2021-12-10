@@ -165,11 +165,11 @@ class HiSockClient:
 
         self.sock.send(conn_header + f"$CLTHELLO$ {json.dumps(hello_dict)}".encode())
 
-    def __str__(self):
+    def __str__(self) -> str:
         """Example: <HiSockClient connected to 192.168.1.133:33333"""
         return f"<HiSockClient connected to {iptup_to_str(self.addr)}>"
 
-    def __gt__(self, other: Union[HiSockClient, str]):
+    def __gt__(self, other: Union[HiSockClient, str]) -> bool:
         """Example: HiSockClient(...) > '192.168.1.131'"""
         if type(other) not in [HiSockClient, str]:
             raise TypeError("Type not supported for > comparison")
@@ -179,7 +179,7 @@ class HiSockClient:
 
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
-    def __ge__(self, other: Union[HiSockClient, str]):
+    def __ge__(self, other: Union[HiSockClient, str]) -> bool:
         """Example: HiSockClient(...) >= '192.168.1.131'"""
         if type(other) not in [HiSockClient, str]:
             raise TypeError("Type not supported for >= comparison")
@@ -189,7 +189,7 @@ class HiSockClient:
 
         return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
 
-    def __lt__(self, other: Union[HiSockClient, str]):
+    def __lt__(self, other: Union[HiSockClient, str]) -> bool:
         """Example: HiSockClient(...) < '192.168.1.131'"""
         if type(other) not in [HiSockClient, str]:
             raise TypeError("Type not supported for < comparison")
@@ -199,7 +199,7 @@ class HiSockClient:
 
         return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
 
-    def __le__(self, other: Union[HiSockClient, str]):
+    def __le__(self, other: Union[HiSockClient, str]) -> bool:
         """Example: HiSockClient(...) <= '192.168.1.131'"""
         if type(other) not in [HiSockClient, str]:
             raise TypeError("Type not supported for <= comparison")
@@ -209,7 +209,7 @@ class HiSockClient:
 
         return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
 
-    def __eq__(self, other: Union[HiSockClient, str]):
+    def __eq__(self, other: Union[HiSockClient, str]) -> bool:
         """Example: HiSockClient(...) == '192.168.1.131'"""
         if type(other) not in [HiSockClient, str]:
             raise TypeError("Type not supported for == comparison")
@@ -415,13 +415,13 @@ class HiSockClient:
     class _on:
         """Decorator used to handle something when receiving command"""
 
-        def __init__(self, outer: Any, command: str):
+        def __init__(self, outer: HiSockClient, command: str):
             # `outer` arg is for the HiSockClient instance
             # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.command = command
 
-        def __call__(self, func: Callable):
+        def __call__(self, func: Callable) -> Callable:
             """Adds a function that gets called when the client receives a matching command"""
 
             # Checks for illegal $cmd$ notation (used for reserved functions)
@@ -457,7 +457,7 @@ class HiSockClient:
             # Returns the inner function, like a decorator
             return func
 
-    def on(self, command: str):
+    def on(self, command: str) -> Callable:
         """
         A decorator that adds a function that gets called when the client
         receives a matching command
@@ -498,7 +498,15 @@ class HiSockClient:
         # Passes in outer to _on decorator/class
         return self._on(self, command)
 
-    def send(self, command: str, content: Union[bytes, dict]):
+    def send(
+            self,
+            command: str,
+            content: Union[bytes, dict[
+                Union[str, int, float, bool, None],
+                Union[str, int, float, bool, None]
+            ]
+        ]
+    ):
         """
         Sends a command & content to the server, where it will be interpreted
 
@@ -521,7 +529,10 @@ class HiSockClient:
         # Sends to server
         self.sock.send(content_header + command.encode() + b" " + content)
 
-    def raw_send(self, content: bytes):
+    def raw_send(
+            self, 
+            content: bytes
+    ): # TODO: Add dict-sending support for this method
         """
         Sends a message to the server: NO COMMAND REQUIRED.
         This is preferable in some situations, where clients need to send
@@ -601,7 +612,10 @@ class HiSockClient:
             else b"$CHGROUP$"
         )
 
-    def get_cache(self, idx: Union[int, slice, None] = None):
+    def get_cache(
+            self, 
+            idx: Union[int, slice, None] = None
+        ):
         if idx is None:
             return self.cache
         else:
@@ -620,8 +634,9 @@ class HiSockClient:
         client = self.recv_raw()
 
         print(client)
+        raise NotImplementedError("BRUH IT'S NOT IMPLEMENTED")
 
-    def get_server_addr(self):
+    def get_server_addr(self) -> tuple[str, int]:
         """
         Gets the address of where the hisock client is connected
         at.
@@ -631,7 +646,7 @@ class HiSockClient:
         """
         return self.addr
 
-    def get_client_addr(self):
+    def get_client_addr(self) -> tuple[str, int]:
         """
         Gets the address of the hisock client that is connected
         to the server.
