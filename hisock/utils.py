@@ -271,6 +271,12 @@ def get_local_ip(all_ips: bool = False) -> str:
     """
     Gets the local IP of your device, with sockets
 
+    :param all_ips: A boolean, specifying to return all the
+        local IPs or not. If set to False (the default), it will return
+        the local IP first found by ``socket.gethostbyname()``
+
+        Default: False
+    :type all_ips: bool, optional
     :return: A string containing the IP address, in the
         format "ip:port"
     :rtype: str
