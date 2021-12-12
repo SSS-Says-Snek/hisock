@@ -267,7 +267,7 @@ def _parse_client_arg(client: Union[str, tuple]):
             raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
 
 
-def get_local_ip() -> str:
+def get_local_ip(all_ips: bool = False) -> str:
     """
     Gets the local IP of your device, with sockets
 
@@ -275,7 +275,10 @@ def get_local_ip() -> str:
         format "ip:port"
     :rtype: str
     """
-    return socket.gethostbyname(socket.gethostname())
+    if not all_ips:
+        return socket.gethostbyname(socket.gethostname())
+    else:
+        return socket.gethostbyname_ex(socket.gethostname())[-1]
 
 
 def input_server_config(
@@ -305,7 +308,7 @@ def input_server_config(
 
     ip = input(ip_prompt)
 
-    if re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
+    if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
         # IP conformity regex
         split_ip = list(map(int, ip.split(".")))
         split_ip = [i > 255 for i in split_ip]
@@ -314,12 +317,12 @@ def input_server_config(
             ip_range_check = True
 
     while (
-        ip == "" or not re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip)
+        ip == "" or not re.search(r"^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip)
     ) or ip_range_check:
         # If IP not conform to regex, accept input until it
         # is compliant
         ip = input(f"\033[91mE: Invalid IP\033[0m\n{ip_prompt}")
-        if re.search("^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
+        if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip):
             split_ip = list(map(int, ip.split(".")))
             split_ip = [i > 255 for i in split_ip]
 

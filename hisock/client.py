@@ -543,7 +543,7 @@ class HiSockClient:
         :type content: bytes
         """
         # Creates header and send content to server, but no command
-        if re.search(b"^\$.+\$", content):
+        if re.search(b"^\\$.+\\$", content):
             raise TypeError(
                 'Command format "$command$" is used for reserved functions - '
                 "consider not sending a message starting with $command$"
