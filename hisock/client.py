@@ -499,13 +499,15 @@ class HiSockClient:
         return self._on(self, command)
 
     def send(
-            self,
-            command: str,
-            content: Union[bytes, dict[
+        self,
+        command: str,
+        content: Union[
+            bytes,
+            dict[
                 Union[str, int, float, bool, None],
-                Union[str, int, float, bool, None]
-            ]
-        ]
+                Union[str, int, float, bool, None],
+            ],
+        ],
     ):
         """
         Sends a command & content to the server, where it will be interpreted
@@ -530,9 +532,9 @@ class HiSockClient:
         self.sock.send(content_header + command.encode() + b" " + content)
 
     def raw_send(
-            self, 
-            content: bytes
-    ): # TODO: Add dict-sending support for this method
+        self,
+        content: bytes,
+    ):  # TODO: Add dict-sending support for this method
         """
         Sends a message to the server: NO COMMAND REQUIRED.
         This is preferable in some situations, where clients need to send
@@ -596,7 +598,7 @@ class HiSockClient:
         """
         Changes the client's group
 
-        :param new_group: The new graup name of the client
+        :param new_group: The new group name of the client
         :type new_group: Union[str, None]
         """
         if new_group is not None:
@@ -613,9 +615,9 @@ class HiSockClient:
         )
 
     def get_cache(
-            self, 
-            idx: Union[int, slice, None] = None
-        ):
+        self,
+        idx: Union[int, slice, None] = None,
+    ):
         if idx is None:
             return self.cache
         else:
@@ -656,13 +658,19 @@ class HiSockClient:
         """
         return self.sock.getsockname()
 
-    def close(self):
-        """Closes the client; running `client.update()` won't do anything now"""
+    def close(self, emit_leave: bool = True):
+        """
+        Closes the client; running `client.update()` won't do anything now
+
+        :param emit_leave: Decides if the client will emit `leave` to the server or not
+        :type emit_leave: bool
+        """
         # Changes _closed flag to True to prevent
         # `update` being crazy
         self._closed = True
-        close_header = make_header(b"$USRCLOSE$", self.header_len)
-        self.sock.send(close_header + b"$USRCLOSE$")
+        if emit_leave:
+            close_header = make_header(b"$USRCLOSE$", self.header_len)
+            self.sock.send(close_header + b"$USRCLOSE$")
         self.sock.close()
 
 
