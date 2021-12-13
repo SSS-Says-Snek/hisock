@@ -19,7 +19,7 @@ Documentation is located on
 already well-documented on ReadTheDocs.
 
 ## Installation
-Hisock only supports Python versions 3.7 and onwards, due to annotations.
+Hisock only supports Python versions 3.7 and onwards, due to annotations from the `__future__` module.
 
 `hisock` is available on PyPI, [here](https://pypi.org/project/hisock), so it is installable by `pip`. Just do the following command.
 ```shell
