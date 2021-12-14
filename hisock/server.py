@@ -981,7 +981,7 @@ class HiSockServer:
                                     parse_content = temp_parse_content
                                 elif temp_parse_content is None:
                                     raise utils.InvalidTypeCast(
-                                        f"{self.funcs['message']['type_hint']['msg']} is an invalid "
+                                        f"{func['type_hint']['msg']} is an invalid "
                                         f"type cast!"
                                     )
 

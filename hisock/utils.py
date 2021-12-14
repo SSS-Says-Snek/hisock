@@ -169,6 +169,8 @@ def _type_cast_server(
     If testing, replace `func_dict` with a dummy one
     Currently NOT guarenteed to return, please remember to change this API
     """
+    if type_cast == bytes:
+        return content_to_typecast
     if type_cast == str:
         try:
             typecasted_content = content_to_typecast.decode()
