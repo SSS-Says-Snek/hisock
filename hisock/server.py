@@ -971,11 +971,10 @@ class HiSockServer:
                         for matching_cmd, func in self.funcs.items():
                             if message["data"].startswith(matching_cmd.encode()):
                                 parse_content = message["data"][len(matching_cmd) + 1 :]
-
                                 temp_parse_content = _type_cast_server(
                                     func["type_hint"]["msg"],
                                     parse_content,
-                                    parse_content,
+                                    func,
                                 )
                                 if temp_parse_content is not None:
                                     parse_content = temp_parse_content
