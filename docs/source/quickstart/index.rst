@@ -7,5 +7,5 @@ These pages provide you with information to start your hisock journey!
 
    understanding_hisock
    installation
-   tutorial
+   Beginner Tutorial <beginner_tutorial>
    examples

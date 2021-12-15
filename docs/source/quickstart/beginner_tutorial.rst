@@ -7,10 +7,6 @@ and how to use them to create working programs.
 It is also highly encouraged that you read the :doc:`Understanding Hisock <understanding_hisock>`
 before reading the tutorial.
 
-.. error::
-   The tutorial is still in progress, so if you have an issue right now,
-   it might be fixed after the tutorial is complete!
-
 .. caution::
    I might explain some things wrong, so if you see something wrong with my
    explanation, I encourage you to try to submit a pull request on Github to
@@ -148,7 +144,7 @@ So, it's time to add some functionality, starting with the server!
 Now, let's say that we want to print the client's IP on the server side,
 whenever the server connects to a client. ``hisock`` provides something I like to call
 "reserved functions", where there are certain commands that get attached to data that
-occur on very special events. For server, there are 3:
+occur on very special events. For server, there are a few, including:
 
 1. ``join`` occurs whenever a client connects
 2. ``leave`` occurs whenever a client disconnects
@@ -168,7 +164,7 @@ Anyways, we can use the ``join`` reserved function to print the client's IP, lik
    @server.on("join")
    def clt_join(clt_data):  # Of course, no message on join
        print(
-           f"Cool, {iptup_to_str(clt_data['ip'])} joined!
+           f"Cool, {iptup_to_str(clt_data['ip'])} joined!"
        )  # the IP is stored in a tuple, with a (str IP, int Port) format
 
    while True:
@@ -205,7 +201,7 @@ send data to a specific client. It accepts 3 arguments: the client (we'll be usi
 the command, and the data. The client's IP can either be in the form "IP.IP.IP.IP:Port" as a string,
 **OR** as a two-element tuple, like ("IP.IP.IP.IP", Port). We'll be using the latter one in this case.
 
-Remember: **The data must be a bytes-like object (E.g b"Sussy")**
+Remember: **The data must either be a bytes-like object (E.g b"sussy"), or a dictionary (E.g {"sus": "amogus"})**
 
 Let's say that we as soon as a client joins, the server should pick a random integer from 1 to 10000, and
 send it back to the client. This is perfectly doable, and is pretty straightforward! Our server code would be:
@@ -220,7 +216,7 @@ send it back to the client. This is perfectly doable, and is pretty straightforw
    @server.on("join")
    def clt_join(clt_data):  # Of course, no message on join
        print(
-           f"Cool, {iptup_to_str(clt_data['ip'])} joined!
+           f"Cool, {iptup_to_str(clt_data['ip'])} joined!"
        )  # the IP is stored in a tuple, with a (str IP, int Port) format
        randnum = random.randint(1, 10000)
        server.send_client(clt_data['ip'], "random", str(randnum).encode())
@@ -252,7 +248,7 @@ By common sense, :class:`HiSockClient`s provide a way to send data to the server
 the send methods accept two arguments; the first being the command of the data,
 and the second being the data itself.
 
-Like :class:`HiSockServer`, **The data must be a bytes-like object (E.g b"Sussy")**
+Like :class:`HiSockServer`, **The data must be a bytes-like object or a dictionary**
 
 Now, let's say that after the client got its random number, we want to
 send to ther server a message saying, hey, we received it, good for you. We could edit our client like:
@@ -280,7 +276,7 @@ and our server can be
    @server.on("join")
    def clt_join(clt_data):  # Of course, no message on join
        print(
-           f"Cool, {iptup_to_str(clt_data['ip'])} joined!
+           f"Cool, {iptup_to_str(clt_data['ip'])} joined!"
        )  # the IP is stored in a tuple, with a (str IP, int Port) format
        randnum = random.randint(1, 10000)
        server.send_client(clt_data['ip'], "random", str(randnum).encode())
