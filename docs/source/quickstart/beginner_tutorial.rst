@@ -243,7 +243,7 @@ Now, whenever the client joins that server, it will receive the data sent by it!
 Sending data to our server
 --------------------------
 
-By common sense, :class:`HiSockClient`s provide a way to send data to the server, with
+By common sense, HiSockClients provide a way to send data to the server, with
 :meth:`send()` and :meth:`raw_send()`. Again, **with the exception of** :meth:`raw_send`,
 the send methods accept two arguments; the first being the command of the data,
 and the second being the data itself.
