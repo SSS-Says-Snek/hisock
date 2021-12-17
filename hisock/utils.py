@@ -106,6 +106,7 @@ def receive_message(connection: socket.socket, header_len: int) -> Union[dict[st
             return {"header": header_msg, "data": data}
         return False
     except ConnectionResetError:
+        # This is most likely where clients will disconnect
         pass
 
 
