@@ -81,7 +81,7 @@ def make_header(
     return constructed_header
 
 
-def receive_message(connection: socket.socket, header_len: int) -> dict[str, bytes]:
+def receive_message(connection: socket.socket, header_len: int) -> Union[dict[str, bytes], bool]:
     """
     Receives a message from a server or client.
 
@@ -104,7 +104,7 @@ def receive_message(connection: socket.socket, header_len: int) -> dict[str, byt
             data = connection.recv(msg_len)
 
             return {"header": header_msg, "data": data}
-        raise NoMessageException("No header received, aborting...")
+        return False
     except ConnectionResetError:
         pass
 
