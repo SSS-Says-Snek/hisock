@@ -20,7 +20,7 @@ import socket  # socket, because.... bruh
 import json  # json, to communicate to server (without 10000 commands)
 import errno  # errno, to communicate to server
 import sys  # sys
-import threading  # threading, for ThreadedHiSockClient
+import threading  # threading, for ThreadedHiSockClient and threaded decorator parameter
 import traceback  # traceback, for... tracebacks
 from ipaddress import IPv4Address  # ipaddress, for comparisons between IPs
 
@@ -219,6 +219,17 @@ class HiSockClient:
 
         return IPv4Address(self.addr[0]) == IPv4Address(ip[0])
 
+    def _call_function(self, func_name, *args, **kwargs):
+        if not self.funcs[func_name]["threaded"]:
+            self.funcs[func_name]["func"](*args, **kwargs)
+        else:
+            function_thread = threading.Thread(
+                target=self.funcs[func_name]["func"],
+                args=args, kwargs=kwargs
+            )
+            function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+            function_thread.start()
+
     class _TLS:
         """
         Base class for establishing TLS connections,
@@ -301,14 +312,14 @@ class HiSockClient:
                         self.close()
 
                         if "force_disconnect" in self.funcs:
-                            self.funcs["force_disconnect"]["func"]()
+                            self._call_function("force_disconnect")
                     if (
                         content.startswith(b"$CLTCONN$")
                         and "client_connect" in self.funcs
                     ):
                         # Client connected to server; parse and call function
                         clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
-                        self.funcs["client_connect"]["func"](clt_content)
+                        self._call_function("client_connect", clt_content)
                     elif (
                         content.startswith(b"$CLTDISCONN$")
                         and "client_disconnect" in self.funcs
@@ -317,7 +328,11 @@ class HiSockClient:
                         clt_content = json.loads(
                             _removeprefix(content, b"$CLTDISCONN$ ")
                         )
-                        self.funcs["client_disconnect"]["func"](clt_content)
+                        self._call_function("client_disconnect", clt_content)
+
+                    has_corresponding_function = False
+                    parse_content = None  # FINE pycharm
+                    command = None
 
                     for matching_cmd, func in self.funcs.items():
                         # Loop through functions and binded commands
@@ -325,6 +340,8 @@ class HiSockClient:
                             content.startswith(matching_cmd.encode())
                             and matching_cmd not in self.reserved_functions
                         ):
+                            has_corresponding_function = True
+                            command = matching_cmd
                             parse_content = content[len(matching_cmd) + 1 :]
 
                             # Type Hint -> Type Cast
@@ -382,12 +399,30 @@ class HiSockClient:
                                         ) from type(e)
 
                             # Call function
-                            func["func"](parse_content)
+                            if not func["threaded"]:
+                                func["func"](parse_content)
+                            else:
+                                function_thread = threading.Thread(
+                                    target=func["func"], args=(parse_content,)
+                                )
+                                function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+                                function_thread.start()
+
+                            continue
 
                     # Caching
                     if self.cache_size >= 0:
+                        if has_corresponding_function:
+                            cache_content = parse_content  # Bruh pycharm it DOES exist if hcf is True
+                        else:
+                            cache_content = content
                         self.cache.append(
-                            {"header": content_header, "content": content}
+                            {
+                                "header": content_header,
+                                "content": cache_content,
+                                "called": has_corresponding_function,
+                                "command": command
+                            }
                         )
 
                         if 0 < self.cache_size < len(self.cache):
@@ -415,11 +450,17 @@ class HiSockClient:
     class _on:
         """Decorator used to handle something when receiving command"""
 
-        def __init__(self, outer: HiSockClient, command: str):
+        def __init__(
+                self,
+                outer: HiSockClient,
+                command: str,
+                threaded: bool = False
+        ):
             # `outer` arg is for the HiSockClient instance
             # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.command = command
+            self.threaded = threaded
 
         def __call__(self, func: Callable) -> Callable:
             """Adds a function that gets called when the client receives a matching command"""
@@ -450,14 +491,15 @@ class HiSockClient:
             func_dict = {
                 "func": func,  # Function
                 "name": func.__name__,  # Function name
-                "type_hint": msg_annotation,  # All function type hints
+                "type_hint": msg_annotation,  # All function type hints,
+                "threaded": self.threaded
             }
             self.outer.funcs[self.command] = func_dict
 
             # Returns the inner function, like a decorator
             return func
 
-    def on(self, command: str) -> Callable:
+    def on(self, command: str, threaded: bool = False) -> Callable:
         """
         A decorator that adds a function that gets called when the client
         receives a matching command
@@ -490,13 +532,18 @@ class HiSockClient:
         :param command: A string, representing the command the function should activate
             when receiving it
         :type command: str
+        :param threaded: A boolean, representing if the function should be run in a thread
+            in order to not block the update() loop.
+
+            Defaults to False
+        :type threaded: bool, optional
 
         :return: The same function
             (The decorator just appended the function to a stack
         :rtype: function
         """
         # Passes in outer to _on decorator/class
-        return self._on(self, command)
+        return self._on(self, command, threaded)
 
     def send(
         self,
@@ -617,7 +664,18 @@ class HiSockClient:
     def get_cache(
         self,
         idx: Union[int, slice, None] = None,
-    ):
+    ) -> list[dict]:
+        """
+        Gets the message cache.
+
+        :param idx: An integer or ``slice``, specifying what specific message caches to return.
+
+            Defaults to None (Retrieves the entire cache)
+        :type idx: Union[int, slice], optional
+
+        :return: A list of dictionaries, representing the cache
+        :rtype: list[dict]
+        """
         if idx is None:
             return self.cache
         else:
@@ -789,9 +847,10 @@ if __name__ == "__main__":
         print("Follow up message sent by server\n" "(Also sent to every client)")
         print("Message:", msg)
 
-    @s.on("client_connect")
+    @s.on("client_connect", threaded=True)
     def please(data):
         print(f"Client {':'.join(map(str, data['ip']))} connected :)")
+        __import__('time').sleep(10)
 
     @s.on("client_disconnect")
     def haha_bois(disconn_data):
@@ -800,7 +859,7 @@ if __name__ == "__main__":
     @s.on("Test")
     def test(data):
         print("Group message received:", data)
-        print(s.get_cache(slice(1, 3)))
+        print(s.get_cache())
         s.send("lol", {"I am": "inevitable"})
 
     @s.on("force_disconnect")
@@ -810,5 +869,14 @@ if __name__ == "__main__":
     @s.on("dicttest")
     def amogus(yes: dict):
         print(f"OMG SO COOL I RECEIVED THIS DICT: Does this {yes['Does this']}")
+
+    @s.on("shrek", threaded=True)
+    def sticker(yum):
+        print("Sleeping zzz")
+        __import__('time').sleep(30)
+
+    @s.on('john')
+    def sus(chicken):
+        print("I'm fineeeeee, and the thread is running!")
 
     s.start_client()

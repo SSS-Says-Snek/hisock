@@ -21,7 +21,7 @@ import threading
 import warnings  # Warnings, for errors that aren't severe
 import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
-from ipaddress import IPv4Address # ipaddress, for conparisons with <, >, ==, etc
+from ipaddress import IPv4Address  # ipaddress, for conparisons with <, >, ==, etc
 
 # Utilities
 from hisock import constants
@@ -113,6 +113,7 @@ class HiSockServer:
         blocking: bool = True,
         max_connections: int = 0,
         header_len: int = 16,
+        cache_size: int = -1,
         tls: Union[dict, str] = None,
     ):
         # Binds address and header length to class attributes
@@ -137,6 +138,10 @@ class HiSockServer:
             "name_change",
             "group_change",
         ]
+        self.cache_size = cache_size
+        if cache_size >= 0:
+            # cache_size <= -1: No cache
+            self.cache = []
 
         # Dictionaries and Lists for client lookup
         self._sockets_list = [self.sock]
@@ -216,6 +221,17 @@ class HiSockServer:
         """Example: len(HiSockServer(...)) -> Num clients"""
         return len(self.clients)
 
+    def _call_function(self, func_name, *args, **kwargs):
+        if not self.funcs[func_name]["threaded"]:
+            self.funcs[func_name]["func"](*args, **kwargs)
+        else:
+            function_thread = threading.Thread(
+                target=self.funcs[func_name]["func"],
+                args=args, kwargs=kwargs
+            )
+            function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+            function_thread.start()
+
     class _TLS:
         """
         Base class for establishing TLS connections,
@@ -240,11 +256,17 @@ class HiSockServer:
     class _on:
         """Decorator used to handle something when receiving command"""
 
-        def __init__(self, outer: HiSockServer, cmd_activation: str):
+        def __init__(
+                self,
+                outer: HiSockServer,
+                cmd_activation: str,
+                threaded: bool = False
+        ):
             # `outer` arg is for the HiSockServer instance
             # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.cmd_activation = cmd_activation
+            self.threaded = threaded
 
         def __call__(self, func: Callable) -> Callable:
             """Adds a function that gets called when the server receives a matching command"""
@@ -298,6 +320,7 @@ class HiSockServer:
                 "func": func,
                 "name": func.__name__,
                 "type_hint": {"clt": clt_annotation, "msg": msg_annotation},
+                "threaded": self.threaded
             }
 
             self.outer.funcs[self.cmd_activation] = func_dict
@@ -305,7 +328,7 @@ class HiSockServer:
             # Returns inner function, like a decorator would do
             return func
 
-    def on(self, command: str) -> Callable:
+    def on(self, command: str, threaded: bool = False) -> Callable:
         """
         A decorator that adds a function that gets called when the server
         receives a matching command
@@ -340,12 +363,16 @@ class HiSockServer:
         :param command: A string, representing the command the function should activate
             when receiving it
         :type command: str
+        :param threaded: A boolean, representing if the function should be run in a thread
+            in order to not block the run() loop.
+
+            Defaults to False
 
         :return: The same function (The decorator just appended the function to a stack)
         :rtype: function
         """
         # Passes in outer to _on decorator/class
-        return self._on(self, command)
+        return self._on(self, command, threaded)
 
     def close(self):
         """
@@ -456,13 +483,14 @@ class HiSockServer:
             client.send(disconn_header + b"$DISCONN$")
 
     def send_all_clients(
-            self, 
-            command: str, 
-            content: Union[bytes, dict[
-                Union[str, int, float, bool, None], 
-                Union[str, int, float, bool, None]
-            ]
-        ]
+        self,
+        command: str,
+        content: Union[
+            bytes,
+            dict[
+                Union[str, int, float, bool, None], Union[str, int, float, bool, None]
+            ],
+        ],
     ):
         """
         Sends the commmand and content to *ALL* clients connected
@@ -481,14 +509,15 @@ class HiSockServer:
             client.send(content_header + command.encode() + b" " + content)
 
     def send_group(
-            self, 
-            group: str,
-            command: str, 
-            content: Union[bytes, dict[
-                Union[str, int, float, bool, None], 
-                Union[str, int, float, bool, None]
-            ]
-        ]   
+        self,
+        group: str,
+        command: str,
+        content: Union[
+            bytes,
+            dict[
+                Union[str, int, float, bool, None], Union[str, int, float, bool, None]
+            ],
+        ],
     ):
         """
         Sends data to a specific group.
@@ -523,14 +552,15 @@ class HiSockServer:
                 clt_to_send.send(content_header + command.encode() + b" " + content)
 
     def send_client(
-            self, 
-            client: Union[str, tuple[str, int]], 
-            command: str, 
-            content: Union[bytes, dict[
-                Union[str, int, float, bool, None],
-                Union[str, int, float, bool, None]
-            ]
-        ]
+        self,
+        client: Union[str, tuple[str, int]],
+        command: str,
+        content: Union[
+            bytes,
+            dict[
+                Union[str, int, float, bool, None], Union[str, int, float, bool, None]
+            ],
+        ],
     ):
         """
         Sends data to a specific client.
@@ -645,10 +675,8 @@ class HiSockServer:
             client_sock[0].send(content_header + command.encode() + b" " + content)
 
     def send_client_raw(
-            self, 
-            client, 
-            content: bytes
-        ): # TODO: Add dict-sending support to this method
+        self, client, content: bytes
+    ):  # TODO: Add dict-sending support to this method
         """
         Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
@@ -754,10 +782,8 @@ class HiSockServer:
             client_sock[0].send(content_header + content)
 
     def send_group_raw(
-            self, 
-            group: str, 
-            content: bytes
-        ): # TODO: Add dict-sending support to this method
+        self, group: str, content: bytes
+    ):  # TODO: Add dict-sending support to this method
         """
         Sends data to a specific group, without commands.
         Groups are recommended for more complicated servers or multipurpose
@@ -788,6 +814,26 @@ class HiSockServer:
             # Send content and header to all clients in group
             for clt_to_send in group_clients:
                 clt_to_send.send(content_header + content)
+
+    def get_cache(
+        self,
+        idx: Union[int, slice, None] = None,
+    ) -> list[dict]:
+        """
+        Gets the message cache.
+
+        :param idx: An integer or ``slice``, specifying what specific message caches to return.
+
+            Defaults to None (Retrieves the entire cache)
+        :type idx: Union[int, slice], optional
+
+        :return: A list of dictionaries, representing the cache
+        :rtype: list[dict]
+        """
+        if idx is None:
+            return self.cache
+        else:
+            return self.cache[idx]
 
     def run(self):
         """
@@ -830,7 +876,7 @@ class HiSockServer:
 
                     if "join" in self.funcs:
                         # Reserved function - Join
-                        self.funcs["join"]["func"](clt_info)
+                        self._call_function("join", clt_info)
 
                     # Send reserved functions over to existing clients
                     clt_cnt_header = make_header(
@@ -867,7 +913,8 @@ class HiSockServer:
 
                         if "leave" in self.funcs:
                             # Reserved function - Leave
-                            self.funcs["leave"]["func"](
+                            self._call_function(
+                                "leave",
                                 {
                                     "ip": client_disconnect,
                                     "name": more_client_info["name"],
@@ -954,7 +1001,8 @@ class HiSockServer:
                                     old_name = clt_info["name"]
                                     new_name = name_or_group
 
-                                    self.funcs["name_change"]["func"](
+                                    self._call_function(
+                                        "name_change",
                                         clt_dict, old_name, new_name
                                     )
                                 elif (
@@ -964,12 +1012,45 @@ class HiSockServer:
                                     old_group = clt_info["group"]
                                     new_group = name_or_group
 
-                                    self.funcs["group_change"]["func"](
+                                    self._call_function(
+                                        "group_change",
                                         clt_dict, old_group, new_group
                                     )
 
+                        if "message" in self.funcs:
+                            # Reserved function - message
+                            inner_clt_data = self.clients[notified_sock]
+                            parse_content = message["data"]
+
+                            ####################################################
+                            #         Type hinting -> Type casting             #
+                            ####################################################
+
+                            temp_parse_content = _type_cast_server(
+                                self.funcs["message"]["type_hint"]["msg"],
+                                message["data"],
+                                self.funcs["message"],
+                            )
+
+                            if temp_parse_content is not None:
+                                parse_content = temp_parse_content
+                            elif temp_parse_content is None:
+                                raise utils.InvalidTypeCast(
+                                    f"{self.funcs['message']['type_hint']['msg']} is an invalid "
+                                    f"type cast!"
+                                )
+
+                            self._call_function("message", inner_clt_data, parse_content)
+
+                        has_corresponding_function = False
+                        parse_content = None  # FINE pycharm
+                        command = None
+
                         for matching_cmd, func in self.funcs.items():
                             if message["data"].startswith(matching_cmd.encode()):
+                                has_corresponding_function = True
+                                command = matching_cmd
+
                                 parse_content = message["data"][len(matching_cmd) + 1 :]
                                 temp_parse_content = _type_cast_server(
                                     func["type_hint"]["msg"],
@@ -984,36 +1065,34 @@ class HiSockServer:
                                         f"type cast!"
                                     )
 
-                                func["func"](clt_data, parse_content)
+                                if not func["threaded"]:
+                                    func["func"](clt_data, parse_content)
+                                else:
+                                    function_thread = threading.Thread(
+                                        target=func["func"], args=(parse_content,)
+                                    )
+                                    function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+                                    function_thread.start()
 
-                        if "message" in self.funcs:
-                            # Reserved function - message
-                            inner_clt_data = self.clients[notified_sock]
-                            parse_content = message["data"]
-
-                            ####################################################
-                            #         Type hinting -> Type casting             #
-                            ####################################################
-
-                            temp_parse_content = _type_cast_server(
-                                self.funcs["message"]["type_hint"]["msg"],
-                                message["data"],
-                                self.funcs["message"]
+                        # Caching
+                        if self.cache_size >= 0:
+                            if has_corresponding_function:
+                                cache_content = parse_content  # Bruh pycharm it DOES exist if hcf is True
+                            else:
+                                cache_content = message["data"]
+                            self.cache.append(
+                                {
+                                    "header": message["header"],
+                                    "content": cache_content,
+                                    "called": has_corresponding_function,
+                                    "command": command
+                                }
                             )
 
-                            if temp_parse_content is not None:
-                                parse_content = temp_parse_content
-                            elif temp_parse_content is None:
-                                raise utils.InvalidTypeCast(
-                                    f"{self.funcs['message']['type_hint']['msg']} is an invalid "
-                                    f"type cast!"
-                                )
+                            if 0 < self.cache_size < len(self.cache):
+                                self.cache.pop(0)
 
-                            self.funcs["message"]["func"](inner_clt_data, parse_content)
-
-    def get_group(
-            self, group: str
-        ) -> list[dict[str, Union[str, socket.socket]]]:
+    def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
         Gets all clients from a specific group
 
@@ -1047,9 +1126,8 @@ class HiSockServer:
         return mod_group_clients
 
     def get_all_clients(
-            self, 
-            key: Union[Callable, str] = None
-        ) -> list[dict[str, str]]: # TODO: Add socket output as well
+        self, key: Union[Callable, str] = None
+    ) -> list[dict[str, str]]:  # TODO: Add socket output as well
         """
         Get all clients currently connected to the server.
         This is recommended over the class attribute `self._clients` or
@@ -1085,9 +1163,8 @@ class HiSockServer:
         return clts
 
     def get_client(
-            self, 
-            client: Union[str, tuple[str, int]]
-        ) -> dict[str, Union[str, socket.socket]]:
+        self, client: Union[str, tuple[str, int]]
+    ) -> dict[str, Union[str, socket.socket]]:
         """
         Gets a specific client's information, based on either:
 
@@ -1299,7 +1376,7 @@ if __name__ == "__main__":
         s.send_client(yum_data["ip"], "e", b"E")
 
         s.send_group("Amogus", "Test", b"TTT")
-        s.send_client(yum_data['ip'], "dicttest", {"Does this": "dict also work?"})
+        s.send_client(yum_data["ip"], "dicttest", {"Does this": "dict also work?"})
 
     @s.on("leave")
     def bruh(yum_data):
@@ -1308,11 +1385,15 @@ if __name__ == "__main__":
     @s.on("name_change")
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
-        s.disconnect_all_clients()
+        s.send_client(clt_info["ip"], "shrek", b"")
+        s.send_client(clt_info['ip'], 'john', b"")
+        # s.disconnect_all_clients()
 
     @s.on("lol")
     def lolol(clt_info, dict_stuff: dict):
-        print(f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}")
+        print(
+            f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}"
+        )
 
     # @s.on("message")
     # def why(client_data, message: str):

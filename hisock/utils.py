@@ -81,10 +81,7 @@ def make_header(
     return constructed_header
 
 
-def receive_message(
-        connection: socket.socket, 
-        header_len: int
-    ) -> dict[str, bytes]:
+def receive_message(connection: socket.socket, header_len: int) -> dict[str, bytes]:
     """
     Receives a message from a server or client.
 
@@ -124,10 +121,8 @@ def _removeprefix(
 
 
 def _dict_tupkey_lookup(
-        multikey: Any, 
-        _dict: dict, 
-        idx_to_match: Union[int, None] = None
-    ) -> Any:
+    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
+) -> Any:
     """
     Returns the value of the dict looked up,
     given a key that is part of a key-tuple
@@ -142,10 +137,8 @@ def _dict_tupkey_lookup(
 
 
 def _dict_tupkey_lookup_key(
-        multikey: Any, 
-        _dict: dict, 
-        idx_to_match: Union[int, None] = None
-    ) -> Any:
+    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
+) -> Any:
     """
     Returns the key of the dict looked up,
     given a key that is part of a key-tuple
@@ -160,10 +153,8 @@ def _dict_tupkey_lookup_key(
 
 
 def _type_cast_server(
-        type_cast: Any, 
-        content_to_typecast: bytes, 
-        func_dict: dict
-    ) -> Any:
+    type_cast: Any, content_to_typecast: bytes, func_dict: dict
+) -> Any:
     """
     Basis for type casting on the server
     If testing, replace `func_dict` with a dummy one
@@ -203,9 +194,7 @@ def _type_cast_server(
     for _type in [list, dict]:
         if type_cast == _type:
             try:
-                typecasted_content = json.loads(
-                    content_to_typecast
-                )
+                typecasted_content = json.loads(content_to_typecast)
                 return typecasted_content
             except UnicodeDecodeError:
                 raise TypeError(

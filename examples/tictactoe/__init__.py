@@ -1,7 +1,4 @@
-from . import (
-    tictactoe_client,
-    tictactoe_server
-)
+from . import tictactoe_client, tictactoe_server
 
 
 def run(client_or_serv="input"):
