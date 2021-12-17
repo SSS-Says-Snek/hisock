@@ -476,11 +476,18 @@ class HiSockServer:
 
             client_sock[0].send(disconn_header + b"$DISCONN$")
 
-    def disconnect_all_clients(self):
+    def disconnect_all_clients(self, force=False):
         """Disconnect all clients."""
-        disconn_header = make_header(b"$DISCONN$", self.header_len)
-        for client in self.clients:
-            client.send(disconn_header + b"$DISCONN$")
+        if not force:
+            disconn_header = make_header(b"$DISCONN$", self.header_len)
+            for client in self.clients:
+                client.send(disconn_header + b"$DISCONN$")
+        else:
+            for conn in self._sockets_list:
+                conn.close()
+            self._sockets_list.clear()
+            self.clients.clear()
+            self.clients_rev.clear()
 
     def send_all_clients(
         self,
