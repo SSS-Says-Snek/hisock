@@ -58,11 +58,22 @@ class NoHeaderWarning(Warning):
 
 
 class MessageCacheMember:
+    _available_attrs = [
+        'header', 'content', 'called', 'command'
+    ]
+
     def __init__(
             self, message_dict
     ):
         # I mean... that's it
-        self.__dict__ = message_dict
+        self.header = message_dict.get('header', None)
+        self.content = message_dict.get('content', None)
+        self.called = message_dict.get('called', None)
+        self.command = message_dict.get('command', None)
+
+        for key, values in dict(self.__dict__).items():
+            if values is None:
+                del self.__dict__[key]
 
     def __str__(self):
         return f"<MessageCacheMember: {self.__dict__['content']}>"
