@@ -35,7 +35,7 @@ try:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast_server,
+        _type_cast,
     )
     from . import utils
 except ImportError:
@@ -48,7 +48,7 @@ except ImportError:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast_server,
+        _type_cast,
     )
     import utils
 
@@ -943,6 +943,7 @@ class HiSockServer:
                     else:
                         # Actual client message received
                         clt_data = self.clients[notified_sock]
+                        usr_sent_dict = False
 
                         if message["data"] == b"$DH_NUMS$":
                             if not self.tls_arguments["tls"]:
@@ -950,6 +951,9 @@ class HiSockServer:
                                 no_tls_header = make_header("$NOTLS$", self.header_len)
                                 notified_sock.send(no_tls_header + b"$NOTLS$")
                             continue
+                        elif message["data"].startswith(b"$USRSENTDICT$"):
+                            message["data"] = _removeprefix(message["data"], b"$USRSENTDICT$")
+                            usr_sent_dict = True
                         elif message["data"].startswith(b"$GETCLT$"):
                             try:
                                 result = self.get_client(
@@ -1032,14 +1036,24 @@ class HiSockServer:
                             ####################################################
                             #         Type hinting -> Type casting             #
                             ####################################################
-
-                            temp_parse_content = _type_cast_server(
+                            if usr_sent_dict:
+                                parse_content = json.loads(
+                                    message["data"]
+                                )
+                            temp_parse_content = _type_cast(
                                 self.funcs["message"]["type_hint"]["msg"],
                                 message["data"],
                                 self.funcs["message"],
                             )
 
-                            if temp_parse_content is not None:
+                            if (
+                                    temp_parse_content == parse_content and
+                                    usr_sent_dict
+                            ):
+                                parse_content = json.loads(
+                                    message["data"]
+                                )
+                            elif temp_parse_content is not None:
                                 parse_content = temp_parse_content
                             elif temp_parse_content is None:
                                 raise utils.InvalidTypeCast(
@@ -1059,12 +1073,21 @@ class HiSockServer:
                                 command = matching_cmd
 
                                 parse_content = message["data"][len(matching_cmd) + 1 :]
-                                temp_parse_content = _type_cast_server(
+
+                                temp_parse_content = _type_cast(
                                     func["type_hint"]["msg"],
                                     parse_content,
                                     func,
                                 )
-                                if temp_parse_content is not None:
+
+                                if (
+                                    temp_parse_content == parse_content and
+                                    usr_sent_dict
+                                ):
+                                    parse_content = json.loads(
+                                        parse_content
+                                    )
+                                elif temp_parse_content is not None:
                                     parse_content = temp_parse_content
                                 elif temp_parse_content is None:
                                     raise utils.InvalidTypeCast(
@@ -1397,7 +1420,7 @@ if __name__ == "__main__":
         # s.disconnect_all_clients()
 
     @s.on("lol")
-    def lolol(clt_info, dict_stuff: dict):
+    def lolol(clt_info, dict_stuff):
         print(
             f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}"
         )

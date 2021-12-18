@@ -34,8 +34,9 @@ try:
         _removeprefix,
         ServerNotRunning,
         ClientDisconnected,
-        iptup_to_str,
+        iptup_to_str, _type_cast
     )
+    from . import utils  # Starting now, I'm too lazy to do from imports
 except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
@@ -43,8 +44,9 @@ except ImportError:
         _removeprefix,
         ServerNotRunning,
         ClientDisconnected,
-        iptup_to_str,
+        iptup_to_str, _type_cast
     )
+    import utils  # Starting now, I'm too lazy to do from imports
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -140,11 +142,6 @@ class HiSockClient:
         # Remember to update them as more rev funcs are added
         self.reserved_functions = ["client_connect", "client_disconnect"]
 
-        # TLS stuff (soon to be added)
-        self.tls = self._TLS(self)
-        self.tls_arguments = {"tls": False}
-        self.called_update = False
-
         # Socket intialization
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -230,46 +227,6 @@ class HiSockClient:
             function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
             function_thread.start()
 
-    class _TLS:
-        """
-        Base class for establishing TLS connections,
-        and getting information about it
-
-        TLS (Transport Layer Security) is a protocol, that basically is
-        used on every internet connection. It establishes
-        a secure connection between the client and the server, to prevent
-        eavesdropping.
-
-        While TLS usually allows clients and servers to pick what "suites"
-        they have available, there is currently only one predefined suite
-        to be used. Of course, as the projects gets bigger, more suites
-        would be added.
-
-        CLASS AND TLS IMPLEMENTATION NOT READY YET - DO NOT USE
-        """
-
-        def __init__(self, outer):
-            self.outer = outer
-
-        def enable(self, rsa_privkey_filepath=".privkey", suite="default"):
-            # TLS NOT ADDED CURRENTLY; NOT PRIORITY
-            if not self.outer.called_update:
-                self.outer.tls_arguments = {
-                    "tls": True,
-                    "rsa_privkey_filepath": rsa_privkey_filepath,
-                    "suite": suite,
-                }
-
-                dh_num_header = make_header("$DH_NUMS$", self.outer.header_len)
-                self.outer.sock.send(dh_num_header + b"$DH_NUMS$")
-                dh_info = self.outer.recv_raw()
-                print("E", dh_info)
-
-                if dh_info == b"$NOTLS$":
-                    raise TypeError("Server has not enabled TLS")
-            else:
-                raise TypeError("TLS attempted to enable after `update` called")
-
     def update(self):
         """
         Handles newly received messages, excluding the received messages for `wait_recv`
@@ -346,57 +303,11 @@ class HiSockClient:
 
                             # Type Hint -> Type Cast
                             # (Exceptions need to have "From ValueError")
-                            if func["type_hint"] == str:
-                                # bytes -> str
-                                try:
-                                    parse_content = parse_content.decode()
-                                except UnicodeDecodeError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to string failed "
-                                        f"for function \"{func['name']}\":\n           {e}"
-                                    ) from ValueError
-                            elif func["type_hint"] == int:
-                                # bytes -> int
-                                try:
-                                    parse_content = int(parse_content)
-                                except ValueError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to int "
-                                        f"failed for function \"{func['name']}\":\n           {e}"
-                                    ) from ValueError
-                            elif func["type_hint"] == float:
-                                # bytes -> float
-                                try:
-                                    parse_content = float(parse_content)
-                                except ValueError as e:
-                                    raise TypeError(
-                                        f"Type casting from bytes to float "
-                                        f"failed for function \"{func['name']}\":\n           {e}"
-                                    ) from ValueError
-
-                            for _type in [list, dict]:
-                                if func["type_hint"] == _type:
-                                    try:
-                                        parse_content = json.loads(parse_content)
-                                    except UnicodeDecodeError:
-                                        raise TypeError(
-                                            f"Cannot decode message data during "
-                                            f"bytes->{_type.__name__} type cast"
-                                            "(current implementation requires string to "
-                                            "type cast, not bytes)"
-                                        ) from UnicodeDecodeError
-                                    except ValueError:
-                                        raise TypeError(
-                                            f"Type casting from bytes to {_type.__name__} "
-                                            f"failed for function \"{self.funcs['message']['name']}\""
-                                            f":\n           Message is not a {_type.__name__}"
-                                        ) from ValueError
-                                    except Exception as e:
-                                        raise TypeError(
-                                            f"Type casting from bytes to {_type.__name__} "
-                                            f"failed for function \"{self.funcs['message']['name']}\""
-                                            f":\n           {e}"
-                                        ) from type(e)
+                            parse_content = _type_cast(
+                                func["type_hint"],
+                                parse_content,
+                                func
+                            )
 
                             # Call function
                             if not func["threaded"]:
@@ -573,10 +484,16 @@ class HiSockClient:
             )
         if isinstance(content, dict):
             content = json.dumps(content).encode()
-        content_header = make_header(command.encode() + b" " + content, self.header_len)
-
-        # Sends to server
-        self.sock.send(content_header + command.encode() + b" " + content)
+            content_header = make_header(
+                b"$USRSENTDICT$" +
+                command.encode() + b" " + content, self.header_len
+            )
+            self.sock.send(content_header + b"$USRSENTDICT$" + command.encode() + b" " + content)
+        else:
+            content_header = make_header(
+                command.encode() + b" " + content, self.header_len
+            )
+            self.sock.send(content_header + command.encode() + b" " + content)
 
     def raw_send(
         self,
@@ -874,6 +791,7 @@ if __name__ == "__main__":
     def sticker(yum):
         print("Sleeping zzz")
         __import__('time').sleep(30)
+        print("HEHE BOIS THREADED")
 
     @s.on('john')
     def sus(chicken):

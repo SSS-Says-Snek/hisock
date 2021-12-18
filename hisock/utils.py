@@ -14,6 +14,7 @@ Copyright SSS_Says_Snek, 2021-present
 from __future__ import annotations
 
 import json
+import pathlib
 import re
 import socket
 from typing import Union, Optional, Any
@@ -56,8 +57,22 @@ class NoHeaderWarning(Warning):
     pass
 
 
+class _MessageCacheMember:
+    def __init__(
+        self, message_dict
+    ):
+        # I mean... that's it
+        self.__dict__ = message_dict
+
+
+class File:
+    def __init__(self, file: Union[str, pathlib.Path]):
+        if isinstance(file, str):
+            pass
+
+
 def make_header(
-    header_msg: Union[str, bytes], header_len: int, encode=True
+        header_msg: Union[str, bytes], header_len: int, encode=True
 ) -> Union[str, bytes]:
     """
     Makes a header of ``header_msg``, with a maximum
@@ -111,18 +126,18 @@ def receive_message(connection: socket.socket, header_len: int) -> Union[dict[st
 
 
 def _removeprefix(
-    string: Union[str, bytes],
-    prefix: Union[str, bytes],
+        string: Union[str, bytes],
+        prefix: Union[str, bytes],
 ) -> Union[str, bytes]:
     """A backwards-compatible alternative of str.removeprefix"""
     if string.startswith(prefix):
-        return string[len(prefix) :]
+        return string[len(prefix):]
     else:
         return string[:]
 
 
 def _dict_tupkey_lookup(
-    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
+        multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
 ) -> Any:
     """
     Returns the value of the dict looked up,
@@ -138,7 +153,7 @@ def _dict_tupkey_lookup(
 
 
 def _dict_tupkey_lookup_key(
-    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
+        multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
 ) -> Any:
     """
     Returns the key of the dict looked up,
@@ -153,8 +168,8 @@ def _dict_tupkey_lookup_key(
                 yield key
 
 
-def _type_cast_server(
-    type_cast: Any, content_to_typecast: bytes, func_dict: dict
+def _type_cast(
+        type_cast: Any, content_to_typecast: bytes, func_dict: dict
 ) -> Any:
     """
     Basis for type casting on the server
@@ -223,7 +238,7 @@ def _parse_client_arg(client: Union[str, tuple]):
         # Formats client IP tuple, and raises Exceptions if format's wrong
         if len(client) == 2 and isinstance(client[0], str):
             if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)$", client[0]) and isinstance(
-                client[1], int
+                    client[1], int
             ):
                 client = f"{client[0]}:{client[1]}"
             else:
@@ -280,8 +295,8 @@ def get_local_ip(all_ips: bool = False) -> str:
 
 
 def input_server_config(
-    ip_prompt: str = "Enter the IP of where to host the server: ",
-    port_prompt: str = "Enter the Port of where to host the server: ",
+        ip_prompt: str = "Enter the IP of where to host the server: ",
+        port_prompt: str = "Enter the Port of where to host the server: ",
 ) -> tuple[str, int]:
     """
     Provides a built-in way to obtain the IP and port of where the server
@@ -315,7 +330,7 @@ def input_server_config(
             ip_range_check = True
 
     while (
-        ip == "" or not re.search(r"^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip)
+            ip == "" or not re.search(r"^((\d?){3}\.){3}(\d\d?\d?)[ ]*$", ip)
     ) or ip_range_check:
         # If IP not conform to regex, accept input until it
         # is compliant
@@ -339,10 +354,10 @@ def input_server_config(
 
 
 def input_client_config(
-    ip_prompt: str = "Enter the IP of the server: ",
-    port_prompt: str = "Enter the Port of the server: ",
-    name_prompt: Union[str, None] = "Enter name to connect as: ",
-    group_prompt: Union[str, None] = "Enter group to connect to: ",
+        ip_prompt: str = "Enter the IP of the server: ",
+        port_prompt: str = "Enter the Port of the server: ",
+        name_prompt: Union[str, None] = "Enter name to connect as: ",
+        group_prompt: Union[str, None] = "Enter group to connect to: ",
 ) -> tuple[Union[str, int], ...]:
     """
     Provides a built-in way to obtain the IP and port of the configuration
