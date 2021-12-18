@@ -57,12 +57,15 @@ class NoHeaderWarning(Warning):
     pass
 
 
-class _MessageCacheMember:
+class MessageCacheMember:
     def __init__(
-        self, message_dict
+            self, message_dict
     ):
         # I mean... that's it
         self.__dict__ = message_dict
+
+    def __str__(self):
+        return f"<MessageCacheMember: {self.__dict__['content']}>"
 
 
 class File:

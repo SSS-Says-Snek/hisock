@@ -35,7 +35,7 @@ try:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast,
+        _type_cast, MessageCacheMember
     )
     from . import utils
 except ImportError:
@@ -48,7 +48,7 @@ except ImportError:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast,
+        _type_cast, MessageCacheMember
     )
     import utils
 
@@ -825,7 +825,7 @@ class HiSockServer:
     def get_cache(
         self,
         idx: Union[int, slice, None] = None,
-    ) -> list[dict]:
+    ) -> list[MessageCacheMember]:
         """
         Gets the message cache.
 
@@ -1111,12 +1111,14 @@ class HiSockServer:
                             else:
                                 cache_content = message["data"]
                             self.cache.append(
-                                {
-                                    "header": message["header"],
-                                    "content": cache_content,
-                                    "called": has_corresponding_function,
-                                    "command": command
-                                }
+                                MessageCacheMember(
+                                    {
+                                        "header": message["header"],
+                                        "content": cache_content,
+                                        "called": has_corresponding_function,
+                                        "command": command
+                                    }
+                                )
                             )
 
                             if 0 < self.cache_size < len(self.cache):

@@ -34,7 +34,8 @@ try:
         _removeprefix,
         ServerNotRunning,
         ClientDisconnected,
-        iptup_to_str, _type_cast
+        iptup_to_str, _type_cast,
+        MessageCacheMember
     )
     from . import utils  # Starting now, I'm too lazy to do from imports
 except ImportError:
@@ -44,7 +45,8 @@ except ImportError:
         _removeprefix,
         ServerNotRunning,
         ClientDisconnected,
-        iptup_to_str, _type_cast
+        iptup_to_str, _type_cast,
+        MessageCacheMember
     )
     import utils  # Starting now, I'm too lazy to do from imports
 
@@ -112,13 +114,13 @@ class HiSockClient:
     """
 
     def __init__(
-        self,
-        addr: tuple[str, int],
-        name: Union[str, None],
-        group: Union[str, None],
-        blocking: bool = True,
-        header_len: int = 16,
-        cache_size: int = -1,
+            self,
+            addr: tuple[str, int],
+            name: Union[str, None],
+            group: Union[str, None],
+            blocking: bool = True,
+            header_len: int = 16,
+            cache_size: int = -1,
     ):
         # Function and cache storage
         self.funcs = {}
@@ -271,15 +273,15 @@ class HiSockClient:
                         if "force_disconnect" in self.funcs:
                             self._call_function("force_disconnect")
                     if (
-                        content.startswith(b"$CLTCONN$")
-                        and "client_connect" in self.funcs
+                            content.startswith(b"$CLTCONN$")
+                            and "client_connect" in self.funcs
                     ):
                         # Client connected to server; parse and call function
                         clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
                         self._call_function("client_connect", clt_content)
                     elif (
-                        content.startswith(b"$CLTDISCONN$")
-                        and "client_disconnect" in self.funcs
+                            content.startswith(b"$CLTDISCONN$")
+                            and "client_disconnect" in self.funcs
                     ):
                         # Client disconnected from server; parse and call function
                         clt_content = json.loads(
@@ -294,12 +296,12 @@ class HiSockClient:
                     for matching_cmd, func in self.funcs.items():
                         # Loop through functions and binded commands
                         if (
-                            content.startswith(matching_cmd.encode())
-                            and matching_cmd not in self.reserved_functions
+                                content.startswith(matching_cmd.encode())
+                                and matching_cmd not in self.reserved_functions
                         ):
                             has_corresponding_function = True
                             command = matching_cmd
-                            parse_content = content[len(matching_cmd) + 1 :]
+                            parse_content = content[len(matching_cmd) + 1:]
 
                             # Type Hint -> Type Cast
                             # (Exceptions need to have "From ValueError")
@@ -328,12 +330,14 @@ class HiSockClient:
                         else:
                             cache_content = content
                         self.cache.append(
-                            {
-                                "header": content_header,
-                                "content": cache_content,
-                                "called": has_corresponding_function,
-                                "command": command
-                            }
+                            MessageCacheMember(
+                                {
+                                    "header": content_header,
+                                    "content": cache_content,
+                                    "called": has_corresponding_function,
+                                    "command": command,
+                                }
+                            )
                         )
 
                         if 0 < self.cache_size < len(self.cache):
@@ -342,9 +346,9 @@ class HiSockClient:
             except IOError as e:
                 # Normal, means message has ended
                 if (
-                    e.errno != errno.EAGAIN
-                    and e.errno != errno.EWOULDBLOCK
-                    and not self._closed
+                        e.errno != errno.EAGAIN
+                        and e.errno != errno.EWOULDBLOCK
+                        and not self._closed
                 ):
                     # Fatal Error, abort client (print exception, print log, exit python)
                     traceback.print_exception(
@@ -457,15 +461,15 @@ class HiSockClient:
         return self._on(self, command, threaded)
 
     def send(
-        self,
-        command: str,
-        content: Union[
-            bytes,
-            dict[
-                Union[str, int, float, bool, None],
-                Union[str, int, float, bool, None],
+            self,
+            command: str,
+            content: Union[
+                bytes,
+                dict[
+                    Union[str, int, float, bool, None],
+                    Union[str, int, float, bool, None],
+                ],
             ],
-        ],
     ):
         """
         Sends a command & content to the server, where it will be interpreted
@@ -496,8 +500,8 @@ class HiSockClient:
             self.sock.send(content_header + command.encode() + b" " + content)
 
     def raw_send(
-        self,
-        content: bytes,
+            self,
+            content: bytes,
     ):  # TODO: Add dict-sending support for this method
         """
         Sends a message to the server: NO COMMAND REQUIRED.
@@ -579,9 +583,9 @@ class HiSockClient:
         )
 
     def get_cache(
-        self,
-        idx: Union[int, slice, None] = None,
-    ) -> list[dict]:
+            self,
+            idx: Union[int, slice, None] = None,
+    ) -> list[MessageCacheMember]:
         """
         Gets the message cache.
 
@@ -664,7 +668,7 @@ class ThreadedHiSockClient(HiSockClient):
     """
 
     def __init__(
-        self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+            self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
     ):
         super().__init__(addr, name, group, blocking, header_len, cache_size)
         self._thread = threading.Thread(target=self.run)
@@ -734,7 +738,7 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_siz
 
 
 def threaded_connect(
-    addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+        addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
 ):
     """
     Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
@@ -751,6 +755,7 @@ if __name__ == "__main__":
     )
     s.change_name("Burp")
 
+
     @s.on("Joe")
     def hehe(_):
         print(
@@ -759,33 +764,40 @@ if __name__ == "__main__":
         )
         s.send("Sussus", b"Some random msg I guess")
 
+
     @s.on("pog")
     def eee(msg):
         print("Follow up message sent by server\n" "(Also sent to every client)")
         print("Message:", msg)
+
 
     @s.on("client_connect", threaded=True)
     def please(data):
         print(f"Client {':'.join(map(str, data['ip']))} connected :)")
         __import__('time').sleep(10)
 
+
     @s.on("client_disconnect")
     def haha_bois(disconn_data):
         print(f"Aww man, {':'.join(map(str, disconn_data['ip']))} disconnected :(")
 
+
     @s.on("Test")
     def test(data):
         print("Group message received:", data)
-        print(s.get_cache())
+        print(s.get_cache()[0].content)
         s.send("lol", {"I am": "inevitable"})
+
 
     @s.on("force_disconnect")
     def susmogus():
         print("AAAAAAAAA DISCONNECTED :(((((((")
 
+
     @s.on("dicttest")
     def amogus(yes: dict):
         print(f"OMG SO COOL I RECEIVED THIS DICT: Does this {yes['Does this']}")
+
 
     @s.on("shrek", threaded=True)
     def sticker(yum):
@@ -793,8 +805,10 @@ if __name__ == "__main__":
         __import__('time').sleep(30)
         print("HEHE BOIS THREADED")
 
+
     @s.on('john')
     def sus(chicken):
         print("I'm fineeeeee, and the thread is running!")
+
 
     s.start_client()
