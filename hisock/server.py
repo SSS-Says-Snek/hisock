@@ -1361,7 +1361,7 @@ class ThreadedHiSockServer(_BaseThreadServer):
            production enviroment. This is used internally for the thread, and should
            not be interacted with the user
         """
-        while self._stop_event:
+        while not self._stop_event.is_set():
             try:
                 self._run()
             except (OSError, ValueError):
