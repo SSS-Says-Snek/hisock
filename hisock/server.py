@@ -1099,7 +1099,7 @@ class HiSockServer:
                                     func["func"](clt_data, parse_content)
                                 else:
                                     function_thread = threading.Thread(
-                                        target=func["func"], args=(parse_content,)
+                                        target=func["func"], args=(clt_data, parse_content,)
                                     )
                                     function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
                                     function_thread.start()
