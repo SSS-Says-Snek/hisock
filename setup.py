@@ -86,7 +86,11 @@ print(
 #########################
 
 dist_subdir = (ROOT / "dist")
-dist_subdir_items = list(dist_subdir.iterdir())
+try:
+    dist_subdir_items = list(dist_subdir.iterdir())
+except FileNotFoundError:
+    dist_subdir_items = []
+    print(color_text("[INFO] dist doesn't exist!\n", "green"))
 
 if dist_subdir.exists():
     if not dist_subdir_items:
