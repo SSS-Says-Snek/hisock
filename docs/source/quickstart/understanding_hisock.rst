@@ -1,45 +1,30 @@
-Understanding hisock
-====================
+Understanding :mod:`HiSock`
+===========================
 
-First of all, what... **IS** hisock? Well, it's
-a higher-level extension of the :mod:`socket` module, with simpler and more efficient usages, sure,
-but for beginners, it may be a bit confusing.
+What is :mod:`HiSock`? What is it not?
+--------------------------------------
 
-What is the socket module?
---------------------------
+The TL;DR of this all is:
 
-I've mentioned a lot about a :mod:`socket` module in Python a lot, but some of y'all may not know
-*what* socket is. Basically, it's a pretty low-level networking interface that
-uses "sockets" to communicate between computers over a network. The problem is,
-it's a bit overwhelming when you start learning sockets.
+:mod:`HiSock` is a higher-level extension of the socket Python module with simpler and more efficient uses.
 
-So, I developed :mod:`hisock`, which basically simplifies :mod:`socket` down, and provides additional features.
+:mod:`HiSock` is not a replacement for sockets nor a new network protocol. It doesn't work through a "request/response" method.
 
-What are the advantages of using hisock over socket?
+Now, if you're new to this, most likely you will have no idea what any of this means. But, that's okay! The goal of this section is to help you understand.
+
+What is the :mod:`socket` module? How does it relate to :mod:`HiSock`?
+----------------------------------------------------------------------
+
+Let's focus on what :mod:`HiSock` is built on, :mod:`socket`.
+
+:mod:`socket` is a low-level networking interface that uses "sockets" to communicate between computers over a network. In sockets, when you send data, you need to send a "header" first. Before you even send your data, you need to send some other data telling how long that data is. Along with that, :mod:`socket` is pretty barebone.
+So, I developed :mod:`HiSock`, which simplifies :mod:`socket` down and provides additional features.
+
+:mod:`HiSock` focuses on abstracting the complex parts of sockets so you can focus on what you actually want to do. It does this through managing headers on its own, "type-casting" everything so you don't have to convert data to bytes and back, event-driven architecture with decorators, threading, data streams, and more. Basically, it's everything :mod:`socket` can do, minus the boilerplate code you have to write every time.
+
+How do you send and receive data with :mod:`HiSock`?
 ----------------------------------------------------
 
-That's a good question. While :mod:`hisock` is still under development, it aims
-to simplify or eliminate some complex parts of the standard :mod:`socket`. For example,
-hisock uses decorators to simplify code structure, and eliminates the hassle
-of worrying about headers.
+Data sent with :mod:`HiSock` usually has a *command* before the data. Once the command is sent, it can be received using decorators ``HiSock.server.on`` and ``HiSock.client.on``. An argument will be passed in those decorators, which will be the data.
 
-.. note::
-   Again, some of you may not know what a header is. When you send data, it is not interpreted
-   as a "message"; instead of messages, there is a "stream" of data, and the client/server decides
-   how many bytes to read from the stream. This creates a problem; how do we know how much of a message
-   to read? This is where headers come in. They are basically data the specifies the length of a "message".
-   In order for this to work, headers **MUST** be fixed-length, so it is usually padded with spaces.
-
-   Let's say that I decided that my header length would be 16 bytes long. When a client sends me
-   some data, it will have that header in front, then the actual content. I would first receive
-   the first 16 bytes, and see that it is the number "12", followed by 14 spaces. At this point,
-   I know that the "message" is 12 bytes long. So, I receive another 12 bytes, to get the message
-   "Hello World!"
-
-How do you send and received data with hisock?
------------------------------------------------------
-
-Data sent with :mod:`hisock` usually has a *command* before the data
-(but before the header, of course). Once the command is sent,
-it can be received using decorators ``hisock.server.on`` and ``hisock.client.on``.
-An argument will be passed in those decorators, and
+But what data can be sent? Sockets work with bytes, but most times, you don't just want bytes. As touched on earlier, :mod:`HiSock` comes with a type-cast system
