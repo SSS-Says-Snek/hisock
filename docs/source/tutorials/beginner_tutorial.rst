@@ -63,7 +63,7 @@ Like :class:`HiSockServer`, :class:`HiSockClient` needs to be run constantly to 
 
    client = hisock.connect(
        (hisock.utils.get_local_ip(), 6969), 
-       name=input("What is your name? >"),b e 
+       name=input("What is your name? >"),
     )
 
    while True:
