@@ -5,10 +5,7 @@ To install :mod:`HiSock`, you will need to make sure you have PIP and Python3.7 
 There are two main ways to install :mod:`HiSock`. You can install it through `PyPi <https://pypi.org/project/hisock/>`_ (recommended) or you can install it from the GitHub.
 
 .. warning::
-    :mod:`HiSock` is the first project I ever published to PyPI, so there might be some
-    quirks on PyPI here and there, like the sudden burst of version post-releases.
-    However, I will try to keep this at the bare minimum, and hopefully figure out
-    PyPI good enough.
+    :mod:`HiSock` is the first project I ever published to PyPI, so there might be some quirks on PyPI here and there, like the sudden burst of version post-releases. However, I will try to keep this at the bare minimum, and hopefully figure out PyPI good enough.
 
 Installing via PyPI
 -------------------

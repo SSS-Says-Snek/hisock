@@ -33,6 +33,7 @@ Table of Contents
 
    quickstart/index
    tutorials/index
+   examples/index
    API Reference <api>
 
 .. toctree::
