@@ -19,8 +19,7 @@ import json  # Handle sending dictionaries
 import re  # Make sure arguments are passed correctly
 import threading  # Threaded server and decorators
 import warnings  # Non-severe errors
-import builtins  # Convert string methods into builtins
-from typing import Callable, Union, Any  # Type hints
+from typing import Callable, Union, optional, Any  # Type hints
 from ipaddress import IPv4Address  # Comparisons
 from hisock import constants
 
@@ -29,6 +28,7 @@ try:
     from .utils import (
         NoHeaderWarning,
         NoMessageException,
+        InvalidTypeCast,
         receive_message,
         _removeprefix,
         make_header,
@@ -38,12 +38,12 @@ try:
         validate_ipv4,
         MessageCacheMember,
     )
-    from . import utils
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
         NoHeaderWarning,
         NoMessageException,
+        InvalidTypeCast,
         receive_message,
         _removeprefix,
         make_header,
@@ -53,7 +53,6 @@ except ImportError:
         validate_ipv4,
         MessageCacheMember,
     )
-    import utils
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -68,7 +67,7 @@ except ImportError:
 
 class HiSockServer:
     """
-    The server class for HiSock.
+    The server class for :mod:`HiSock`.
 
     :param addr: A two-element tuple, containing the IP address and the
         port number of where the server should be hosted.
@@ -115,9 +114,8 @@ class HiSockServer:
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
-        tls: Union[dict, str] = None,
+        tls: optional[Union[dict, str]] = None,
     ):
-        # Binds address and header length to class attributes
         self.addr = addr
         self.header_len = header_len
 
@@ -159,8 +157,8 @@ class HiSockServer:
 
         # Dictionaries and lists for client lookup
         self._sockets_list = [self.sock]  # Our socket will always be the first
-        self.clients = {}  # socket: ((ip, port), name, group)
-        self.clients_rev = {}  # Reverse lookup for clients
+        self.clients = {}  # socket: {"addr": (ip, port), "name": str, "group": str}
+        self.clients_rev = {}  # ((ip, port), name, group): socket
 
         # Flags
         self.called_run = False
@@ -244,6 +242,31 @@ class HiSockServer:
         ip = other.split(":")
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
+    # Internal methods
+    def _update_clients_rev_dict(self, idx: optional[int] = None):
+        """
+        Updates the reversed clients dictionary to the normal dictionary
+
+        :param idx: Index of the client to update if known. If not known,
+            the whole dictionary will be updated.
+        :raises IndexError: If the client idx doesn't exist.
+        :raises TypeError: If the client idx is not an integer.
+        :raises KeyError: If the client doesn't exist in :ivar:`self.clients`
+        :raises KeyError: If the client isn't a valid client.
+        """
+
+        if idx is not None:
+            clients = (self.clients[self._sockets_list[idx]],)
+        else:
+            clients = self.clients
+
+        for client in clients:
+            self.clients_rev[
+                (client["address"], client["name"], client["group"])
+            ] = client
+
+    # On decorator
+
     def _call_function(self, func_name, *args, **kwargs) -> Any:
         """
         Calls a function with the given arguments and returns the result.
@@ -254,7 +277,13 @@ class HiSockServer:
         :param kwargs: The keyword arguments to pass to the function.
         :return: The result of the function call.
         :rtype: Any
+
+        :raises TypeError: If the function is not found.
         """
+
+        # Check if the function exists
+        if func_name not in self.funcs:
+            raise TypeError(f"Function {func_name} not found")
 
         # Normal
         if not self.funcs[func_name]["threaded"]:
@@ -280,18 +309,18 @@ class HiSockServer:
             self.threaded = threaded
 
         def __call__(self, func: Callable) -> Callable:
-            """Adds a function that gets called when the server receives a matching command"""
+            """
+            Adds a function that gets called when the server receives a matching command.
+
+            :raises TypeError: If the number of function arguments is invalid.
+            """
 
             func_args = inspect.getfullargspec(func).args
             self._assert_num_func_args_valid(len(func_args))
 
             # Store annotations of function
             annotations = inspect.getfullargspec(func).annotations  # {"param": type}
-            parameter_annotations = {
-                "clt_data": None,
-                # Command is always a string, no need to check type
-                "msg": None,
-            }
+            parameter_annotations = {"clt_data": None, "msg": None}
 
             # Process unreserved commands and reserved `message` (only reserved
             # command to have 2 arguments)
@@ -316,7 +345,11 @@ class HiSockServer:
             return func
 
         def _assert_num_func_args_valid(self, actual_num_func_args: int):
-            """Asserts the number of function arguments is valid"""
+            """
+            Asserts the number of function arguments is valid.
+
+            :raises TypeError: If the number of function arguments is invalid.
+            """
 
             number_of_func_args = 2  # Normal commands
 
@@ -386,17 +419,7 @@ class HiSockServer:
         # Passes in outer to _on decorator/class
         return self._on(self, command, threaded)
 
-    def close(self):
-        """
-        Closes the server; ALL clients will be disconnected, then the
-        server socket will be closed.
-
-        Running `server.run()` won't do anything now.
-        """
-
-        self._closed = True
-        self.disconnect_all_clients()
-        self.sock.close()
+    # Getters
 
     def _get_client_from_name_or_ip_port(
         self, client: Union[str, tuple]
@@ -408,6 +431,10 @@ class HiSockServer:
         :raise TypeError: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected
+
+        .. warning::
+            This is the same as :meth:`get_client`... should this be removed?
+            IDK because the other naming style for getting clients is like this...
         """
 
         ret_client_socket = None
@@ -415,7 +442,7 @@ class HiSockServer:
         # Search by IPv4
         if isinstance(client, tuple):
             try:
-                validate_ipv4(client)
+                validate_ipv4(client)  # Raises ValueError if invalid
                 client_socket: socket.socket = next(
                     _dict_tupkey_lookup(
                         (client.split(":")[0], client.split(":")[0][1]),
@@ -471,52 +498,119 @@ class HiSockServer:
            If the group does not exist, an empty iterable is returned.
         """
 
-        return _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
+        return _dict_tupkey_lookup_key(group, self.clients_rev, idx_to_match=2)
 
-    def disconnect_client(self, client: str):
+    def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
-        Disconnects a specific client.
+        Gets all clients from a specific group
 
-        :param client: The client to send data to. The format could be either by IP+port,
-            or a client name.
-        :type client: Union[str, tuple]
-        :param command: A string, containing the command to send.
-        :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send.
-        :type content: bytes
-        :raise ValueError: Client format is wrong.
-        :raise TypeError: Client does not exist.
+        :param group: A string, representing the group to look up
+        :type group: str
+        :raise TypeError: Group does not exist
+
+        :return: A list of dictionaries of clients in that group, containing
+          the address, name, group, and socket
+        :rtype: list
+
+        .. note::
+            If you want to get them from :ivar:`clients_rev` directly, use
+            :meth:`_get_all_client_sockets_in_group` instead.
+        """
+
+        mod_group_clients = []  # Will be a list of dicts
+
+        for client in self._get_all_client_sockets_in_group(group):
+            socket = self.clients_rev[client]
+            mod_dict = {
+                "ip": client[0],
+                "name": client[1],
+                "group": client[2],
+                "socket": socket,
+            }
+            mod_group_clients.append(mod_dict)
+
+        if len(mod_group_clients) == 0:
+            raise TypeError(f"Group {group} does not exist")
+
+
+        return mod_group_clients
+
+    def get_all_clients(
+        self, key: optional[Union[Callable, str]] = None
+    ) -> list[dict[str, str]]:  # TODO: Add socket output as well
+        """
+        Get all clients currently connected to the server.
+        This is recommended over the class attribute :ivar:`self._clients` or
+        :ivar:`self.clients_rev`, as it is in a dictionary-like format.
+
+        :param key: If specified, there are two outcomes: If it is a string,
+            it will search for the dictionary for the key, and output it to a list
+            (currently supports "ip", "name", "group").
+            If it is a callable, it will try to integrate the callable
+            into the output with the :meth:`filter` function.
+        :type key: Union[Callable, str], optional
+        :return: A list of dictionaries, with the clients
+        :rtype: list[dict, ...]
+        """
+
+        clients = []
+        for client in self.clients_rev:
+            client_dict = {
+                dict_key: client[value]
+                for value, dict_key in enumerate(("ip", "name", "group"))
+            }
+            clients.append(client_dict)
+
+        if key is None:
+            return clients
+
+        filter_clients = []
+        if isinstance(key, str):
+            if key in ["ip", "name", "group"]:
+                for filter_client in clients:
+                    filter_clients.append(filter_client[key])
+        elif isinstance(key, Callable):
+            filter_clients = list(filter(key, clients))
+
+        return filter_clients
+
+    def get_client(
+        self, client: Union[str, tuple[str, int]]
+    ) -> dict[str, Union[str, socket.socket]]:
+        """
+        Gets a client socket from a name or tuple in the form of (ip, port).
+
+        :return: The client socket
+        :rtype: socket.socket
+
+        :raise ValueError: Client format is wrong
+        :raise TypeError: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
-            the same name is detected.
+            the same name is detected
         """
 
-        disconn_header = make_header(b"$DISCONN$", self.header_len)
-        client_socket = self._get_client_from_name_or_ip_port(client)
-        client_socket.send(disconn_header)
+        return self._get_client_from_name_or_ip_port(client)
 
-    def disconnect_all_clients(self, force=False):
-        """Disconnect all clients."""
+    def get_addr(self) -> tuple[str, int]:
+        """
+        Gets the address of where the hisock server is serving at.
 
-        if not force:
-            disconn_header = make_header(b"$DISCONN$", self.header_len)
-            for client in self.clients:
-                client.send(disconn_header + b"$DISCONN$")
-        else:
-            for conn in self._sockets_list:
-                conn.close()
-            self._sockets_list.clear()
-            self.clients.clear()
-            self.clients_rev.clear()
+        :return: A tuple of the address in the form of (ip, port)
+        :rtype: tuple[str, int]
+        """
+
+        return self.addr
+
+    # Send
 
     def send_all_clients(self, command: str, content: bytes):
         """
-        Sends the command and content to *ALL* clients connected
+        Sends the command and content to *ALL* clients connected.
 
-        :param command: A string, representing the command to send to every client
+        :param command: A string, representing the command to send to every client.
         :type command: str
         :param content: A bytes-like object, containing the message/content to send
-            to each client
+            to each client.
         :type content: bytes
         """
 
@@ -556,8 +650,8 @@ class HiSockServer:
         :type client: Union[str, tuple]
         :param command: A string, containing the command to send.
         :type command: str
-        :param content: A bytes-like object, with the content/message.
-            to send
+        :param content: A bytes-like object, with the content/message
+            to send.
         :type content: bytes
         :raise ValueError: Client format is wrong.
         :raise TypeError: Client does not exist.
@@ -582,6 +676,7 @@ class HiSockServer:
         :param content: A bytes-like object, with the content/message
             to send
         :type content: bytes
+
         :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
@@ -617,12 +712,58 @@ class HiSockServer:
         for client in self._get_all_client_sockets_in_group(group):
             client.send(content_header + data_to_send)
 
+    # Disconnect
+
+    def disconnect_client(self, client: Union[str, tuple], force: bool = False):
+        """
+        Disconnects a specific client.
+
+        :param client: The client to send data to. The format could be either by IP+port,
+            or a client name.
+        :type client: Union[str, tuple]
+        :param command: A string, containing the command to send.
+        :type command: str
+        :param content: A bytes-like object, with the content/message
+            to send.
+        :type content: bytes
+        :raise ValueError: Client format is wrong.
+        :raise TypeError: Client does not exist.
+        :raise UserWarning: Using client name, and more than one client with
+            the same name is detected.
+        """
+
+        client_socket = self._get_client_from_name_or_ip_port(client)
+
+        if not force:
+            disconn_header = make_header(b"$DISCONN$", self.header_len)
+            client_socket.send(disconn_header)
+            return
+
+        client_socket.close()
+        del self.clients[client_socket]
+        self._update_clients_rev_dict()
+
+    def disconnect_all_clients(self, force=False):
+        """Disconnect all clients."""
+
+        if not force:
+            disconn_header = make_header(b"$DISCONN$", self.header_len)
+            for client in self.clients:
+                client.send(disconn_header + b"$DISCONN$")
+            return
+
+        (conn.close() for conn in self._sockets_list)
+        self._sockets_list.clear()
+        self.clients.clear()
+        self.clients_rev.clear()
+
     def run(self):
         """
         Runs the server. This method handles the sending and receiving of data,
         so it should be run once every iteration of a while loop, as to not
         lose valuable information
         """
+        # FIXME: refactor
 
         self.called_run = True
 
@@ -825,7 +966,7 @@ class HiSockServer:
                             elif temp_parse_content is not None:
                                 parse_content = temp_parse_content
                             elif temp_parse_content is None:
-                                raise utils.InvalidTypeCast(
+                                raise InvalidTypeCast(
                                     f"{self.funcs['message']['type_hint']['msg']} is an invalid "
                                     f"type cast!"
                                 )
@@ -859,7 +1000,7 @@ class HiSockServer:
                                 elif temp_parse_content is not None:
                                     parse_content = temp_parse_content
                                 elif temp_parse_content is None:
-                                    raise utils.InvalidTypeCast(
+                                    raise InvalidTypeCast(
                                         f"{func['type_hint']['msg']} is an invalid "
                                         f"type cast!"
                                     )
@@ -899,148 +1040,17 @@ class HiSockServer:
                             if 0 < self.cache_size < len(self.cache):
                                 self.cache.pop(0)
 
-    def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
+    def close(self):
         """
-        Gets all clients from a specific group
+        Closes the server; ALL clients will be disconnected, then the
+        server socket will be closed.
 
-        :param group: A string, representing the group to look up
-        :type group: str
-        :raise TypeError: Group does not exist
-
-        :return: A list of dictionaries of clients in that group, containing
-          the address, name, group, and socket
-        :rtype: list
+        Running `server.run()` won't do anything now.
         """
 
-        group_clients = list(
-            _dict_tupkey_lookup_key(group, self.clients_rev, idx_to_match=2)
-        )
-        mod_group_clients = []
-
-        if len(group_clients) == 0:
-            raise TypeError(f"Group {group} does not exist")
-
-        for clt in group_clients:
-            # Loops through group clients and append to list
-            clt_conn = self.clients_rev[clt]
-            mod_dict = {
-                "ip": clt[0],
-                "name": clt[1],
-                "group": clt[2],
-                "socket": clt_conn,
-            }
-            mod_group_clients.append(mod_dict)
-
-        return mod_group_clients
-
-    def get_all_clients(
-        self, key: Union[Callable, str] = None
-    ) -> list[dict[str, str]]:  # TODO: Add socket output as well
-        """
-        Get all clients currently connected to the server.
-        This is recommended over the class attribute `self._clients` or
-        `self.clients_rev`, as it is in a dictionary-like format
-
-        :param key: If specified, there are two outcomes: If it is a string,
-            it will search for the dictionary for the key,
-            and output it to a list (currently support "ip", "name", "group").
-            Finally, if it is a callable, it will try to integrate the callable
-            into the output (CURRENTLY NOT SUPPORTED YET)
-        :type key: Union[Callable, str], optional
-        :return: A list of dictionaries, with the clients
-        :rtype: list[dict, ...]
-        """
-
-        clts = []
-        for clt in self.clients_rev:
-            clt_dict = {
-                dict_key: clt[value]
-                for value, dict_key in enumerate(["ip", "name", "group"])
-            }
-            clts.append(clt_dict)
-
-        filter_clts = []
-        if isinstance(key, str):
-            if key in ["ip", "name", "group"]:
-                for filter_clt in clts:
-                    filter_clts.append(filter_clt[key])
-        elif isinstance(key, Callable):
-            filter_clts = list(filter(key, clts))
-
-        if filter_clts:
-            return filter_clts
-        return clts
-
-    def get_client(
-        self, client: Union[str, tuple[str, int]]
-    ) -> dict[str, Union[str, socket.socket]]:
-        """
-        Gets a client socket from a name or tuple in the form of (ip, port)
-
-        :raise ValueError: Client format is wrong
-        :raise TypeError: Client does not exist
-        :raise UserWarning: Using client name, and more than one client with
-            the same name is detected
-        """
-
-        ret_client_sock = None
-
-        # Search by IPv4
-        if isinstance(client, tuple):
-            try:
-                validate_ipv4(client)
-                client_sock: socket.socket = next(
-                    _dict_tupkey_lookup(
-                        (client.split(":")[0], client.split(":")[0][1]),
-                        self.clients_rev,
-                        idx_to_match=0,
-                    )
-                )
-            except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
-            # ValueError will be raised by validate_ipv4 already
-
-            ret_client_sock = client_sock
-
-        # Search by name
-        elif isinstance(client, str):
-            try:
-                # Modify dictionary so only names and IPs are included
-                mod_clients_rev = {}
-                for key, value in self.clients_rev.items():
-                    mod_key = (key[0], key[1])
-                    mod_clients_rev[mod_key] = value
-
-                client_sock: socket.socket = list(
-                    _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
-                )
-            except StopIteration:
-                raise TypeError(f'Client with name "{client}" doesn\'t exist')
-
-            if len(client_sock) > 1:
-                warnings.warn(
-                    f'{len(client_sock)} clients with name "{client}" detected; sending data to '
-                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
-                )
-                ret_client_sock = client_sock[0]
-
-        else:
-            raise ValueError("Client format is wrong (must be of type tuple or str)")
-
-        if ret_client_sock is None:
-            raise ValueError("Client socket does not exist")
-
-        return ret_client_sock
-
-    def get_addr(self) -> tuple[str, int]:
-        """
-        Gets the address of where the hisock server is serving
-        at.
-
-        :return: A tuple, with the format (str IP, int port)
-        """
-
-        return self.addr
+        self._closed = True
+        self.disconnect_all_clients()
+        self.sock.close()
 
 
 class ThreadedHiSockServer(HiSockServer):
