@@ -12,21 +12,20 @@ Copyright SSS_Says_Snek 2021-present
 # Imports
 from __future__ import annotations  # Remove when 3.10 is used by majority
 
-import inspect  # Inspect, for type-hinting detection
-import socket  # Socket module, duh
-import select  # Yes, we're using select for multiple clients
-import json  # To send multiple data without 10 billion commands
-import re  # Regex, to make sure arguments are passed correctly
-import threading
-import warnings  # Warnings, for errors that aren't severe
-import builtins  # Builtins, to convert string methods into builtins
-from typing import Callable, Union  # Typing, for cool type hints
-from ipaddress import IPv4Address  # ipaddress, for conparisons with <, >, ==, etc
-
-# Utilities
+import socket
+import inspect  # Type-hinting detection for type casting
+import select  # Handle multiple clients at once
+import json  # Handle sending dictionaries
+import re  # Make sure arguments are passed correctly
+import threading  # Threaded server and decorators
+import warnings  # Non-severe errors
+import builtins  # Convert string methods into builtins
+from typing import Callable, Union, Any  # Type hints
+from ipaddress import IPv4Address  # Comparisons
 from hisock import constants
 
 try:
+    # Pip builds require relative import
     from .utils import (
         NoHeaderWarning,
         NoMessageException,
@@ -35,11 +34,13 @@ try:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast, MessageCacheMember
+        _type_cast,
+        validate_ipv4,
+        MessageCacheMember,
     )
     from . import utils
 except ImportError:
-    # relative import doesn't work for non-pip builds
+    # Relative import doesn't work for non-pip builds
     from utils import (
         NoHeaderWarning,
         NoMessageException,
@@ -48,7 +49,9 @@ except ImportError:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast, MessageCacheMember
+        _type_cast,
+        validate_ipv4,
+        MessageCacheMember,
     )
     import utils
 
@@ -59,52 +62,50 @@ except ImportError:
 # ██║░░██╗██╔══██║██║░░░██║░░░██║░░░██║██║░░██║██║╚████║╚═╝
 # ╚█████╔╝██║░░██║╚██████╔╝░░░██║░░░██║╚█████╔╝██║░╚███║██╗
 # ░╚════╝░╚═╝░░╚═╝░╚═════╝░░░░╚═╝░░░╚═╝░╚════╝░╚═╝░░╚══╝╚═╝
-#      Change the above code IF and only IF you know
-#                  what you are doing!
+#   Change this code only if you know what you are doing!
+# If this code is changed, the server may not work properly
 
 
 class HiSockServer:
     """
-    The server class for hisock
-    HiSockServer offers a neater way to send and receive data than
-    sockets. You don't need to worry about headers now, yay!
+    The server class for HiSock.
 
     :param addr: A two-element tuple, containing the IP address and the
         port number of where the server should be hosted.
         Due to the nature of reserved ports, it is recommended to host the
-        server with a port number that's higher than 1023.
-        Only IPv4 currently supported
+        server with a port number that's greater than or equal to 1024.
+        **Only IPv4 is currently supported.**
     :type addr: tuple
     :param blocking: A boolean, set to whether the server should block the loop
         while waiting for message or not.
-        Default passed in by :meth:`start_server` is True
+        Default passed in by :meth:`start_server` is True.
     :type blocking: bool, optional
-    :param max_connections: The number of maximum connections :class:`HiSockServer` should accept, before
-        refusing clients' connections. Pass in 0 for unlimited connections.
-        Default passed in  by :meth:`start_server` is 0
+    :param max_connections: The number of maximum connections the server
+        should accept before refusing client connections. Pass in 0 for
+        unlimited connections.
+        Default passed in  by :meth:`start_server` is 0.
     :type max_connections: int, optional
     :param header_len: An integer, defining the header length of every message.
-        A smaller header length would mean a smaller maximum message
-        length (about 10**header_len).
-        Any client connecting MUST have the same header length as the server,
+        A larger header length would mean a larger maximum message length
+        (about 10**header_len).
+        Any client connecting **MUST** have the same header length as the server,
         or else it will crash.
-        Default passed in by :meth:`start_server` is 16 (maximum length: 10 quadrillion bytes)
+        Default passed in by :meth:`start_server` is 16 (maximum length: 10
+        quadrillion bytes).
     :type header_len: int, optional
+    :param cache_size: The number of messages to cache.
+        Default passed in by :meth:`start_server` is -1.
+    :type cache_size: int, optional
 
-    :ivar tuple addr: A two-element tuple, containing the IP address and the
-        port number
-    :ivar int header_len: An integer, storing the header length of each "message"
-    :ivar dict clients: A dictionary, with the socket as its key, and the client info as its value
-    :ivar dict clients_rev: A dictionary, with the client info as its key, and the socket as its value
+    :ivar tuple addr: A two-element tuple containing the IP address and the port.
+    :ivar int header_len: An integer storing the header length of each "message".
+    :ivar dict clients: A dictionary with the socket as its key and the
+        client info as its value.
+    :ivar dict clients_rev: A dictionary with the client info as its key
+        and the socket as its value (for reverse lookup, up-to-date with
+        :attr:`clients`).
     :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
-        **This is mainly used for under-the-hood-code**
-
-    .. note::
-
-       It is advised to use :meth:`get_client` or :meth:`get_all_clients` instead of
-       using :attr:`clients` and :attr:`clients_rev`
-
-       Also, **only IPv4 is currently supported**
+        **This is mainly used for under-the-hood-code.**
     """
 
     def __init__(
@@ -125,145 +126,155 @@ class HiSockServer:
         self.sock.setblocking(blocking)
         try:
             self.sock.bind(addr)
-        except socket.gaierror:
-            raise TypeError("Connection failed (most likely due to invalid IP)")
+        except socket.gaierror:  # getaddrinfo error
+            raise TypeError("The IP address and/or port are invalid!")
         self.sock.listen(max_connections)
 
         # Function related storage
         self.funcs = {}
-        self.reserved_functions = [
+        # Stores the names of the reserved functions
+        # Used for the `on` decorator
+        self._reserved_functions = (
             "join",
             "leave",
             "message",
             "name_change",
             "group_change",
-        ]
+        )
+        # Stores the number of parameters each reserved function takes
+        # Used for the `on` decorator
+        self._reserved_functions_parameters_num = (
+            2,  # join
+            2,  # leave
+            2,  # message
+            3,  # name_change
+            3,  # group_change
+        )
+
+        # Cache
         self.cache_size = cache_size
-        if cache_size >= 0:
-            # cache_size <= -1: No cache
+        # cache_size <= 0: No cache
+        if cache_size > 0:
             self.cache = []
 
-        # Dictionaries and Lists for client lookup
-        self._sockets_list = [self.sock]
-        self.clients = {}
-        self.clients_rev = {}
+        # Dictionaries and lists for client lookup
+        self._sockets_list = [self.sock]  # Our socket will always be the first
+        self.clients = {}  # socket: ((ip, port), name, group)
+        self.clients_rev = {}  # Reverse lookup for clients
 
-        if tls is None:
-            self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
-        else:
-            if isinstance(tls, dict):
-                self.tls_arguments = tls
-            elif isinstance(tls, str):
-                if tls == "default":
-                    self.tls_arguments = {
-                        "rsa_authentication_dir": ".pubkeys",
-                        "suite": "default",
-                        "diffie_hellman": constants.DH_DEFAULT,
-                    }
+        # Flags
         self.called_run = False
         self._closed = False
 
-    def __str__(self) -> str:
-        """Example: <HiSockServer serving at 192.168.1.133:33333>"""
+        # TLS
+        if tls is None:
+            self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
+            return
+        if isinstance(tls, dict):
+            self.tls_arguments = tls
+            return
+        if isinstance(tls, str) and tls == "default":
+            self.tls_arguments = {
+                "rsa_authentication_dir": ".pubkeys",
+                "suite": "default",
+                "diffie_hellman": constants.DH_DEFAULT,
+            }
+
+    def __str__(self):
+        """Example: <HiSockServer serving at 192.168.1.133:5000>"""
+
         return f"<HiSockServer serving at {':'.join(map(str, self.addr))}>"
 
-    def __gt__(self, other: Union[HiSockServer, str]) -> bool:
-        """Example: HiSockServer(...) > '192.168.1.131'"""
+    def __repr__(self):
+        return self.__str__()
+
+    def __len__(self):
+        """Returns how many clients are connected"""
+
+        return len(self.clients)
+
+    # Comparisons
+    def __gt__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) > "192.168.1.133:5000" """
+
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for > comparison")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of port, if there is port
-
+        ip = other.split(":")
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
-    def __ge__(self, other: Union[HiSockServer, str]) -> bool:
-        """Example: HiSockServer(...) >= '192.168.1.131'"""
+    def __ge__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) >= "192.168.1.133:5000" """
+
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for >= comparison")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of port, if there is port
-
+        ip = other.split(":")
         return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
 
-    def __lt__(self, other: Union[HiSockServer, str]) -> bool:
-        """Example: HiSockServer(...) < '192.168.1.131'"""
+    def __lt__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) < "192.168.1.133:5000" """
+
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for < comparison")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of port, if there is port
-
+        ip = other.split(":")
         return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
 
-    def __le__(self, other: Union[HiSockServer, str]) -> bool:
-        """Example: HiSockServer(...) <= '192.168.1.131'"""
+    def __le__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) <= "192.168.1.133:5000" """
+
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for <= comparison")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of port, if there is port
-
+        ip = other.split(":")
         return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
 
-    def __eq__(self, other: Union[HiSockServer, str]) -> bool:
-        """Example: HiSockServer(...) == '192.168.1.131'"""
+    def __eq__(self, other: Union[HiSockServer, str]):
+        """Example: HiSockServer(...) == "192.168.1.133:5000" """
+
         if type(other) not in [self.__class__, str]:
             raise TypeError("Type not supported for == comparison")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of port, if there is port
-
+        ip = other.split(":")
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
-    def __len__(self) -> int:
-        """Example: len(HiSockServer(...)) -> Num clients"""
-        return len(self.clients)
+    def _call_function(self, func_name, *args, **kwargs) -> Any:
+        """
+        Calls a function with the given arguments and returns the result.
 
-    def _call_function(self, func_name, *args, **kwargs):
+        :param func_name: The name of the function to call.
+        :type func_name: str
+        :param args: The arguments to pass to the function.
+        :param kwargs: The keyword arguments to pass to the function.
+        :return: The result of the function call.
+        :rtype: Any
+        """
+
+        # Normal
         if not self.funcs[func_name]["threaded"]:
-            self.funcs[func_name]["func"](*args, **kwargs)
-        else:
-            function_thread = threading.Thread(
-                target=self.funcs[func_name]["func"],
-                args=args, kwargs=kwargs
-            )
-            function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
-            function_thread.start()
+            return self.funcs[func_name]["func"](*args, **kwargs)
 
-    class _TLS:
-        """
-        Base class for establishing TLS connections,
-        and getting information about it
-
-        TLS (Transport Layer Security) is a protocol, that basically is
-        used on every internet connection. It establishes
-        a secure connection between the client and the server, to prevent
-        eavesdropping.
-
-        While TLS usually allows clients and servers to pick what "suites"
-        they have available, there is currently only one predefined suite
-        to be used. Of course, as the projects gets bigger, more suites
-        would be added.
-
-        CLASS AND TLS IMPLEMENTATION NOT READY YET - DO NOT USE
-        """
-
-        def __init__(self, outer):
-            self.outer = outer
+        # Threaded
+        function_thread = threading.Thread(
+            target=self.funcs[func_name]["func"],
+            args=args,
+            kwargs=kwargs,
+            daemon=True,
+        )
+        function_thread.start()
 
     class _on:
         """Decorator used to handle something when receiving command"""
 
         def __init__(
-                self,
-                outer: HiSockServer,
-                cmd_activation: str,
-                threaded: bool = False
+            self, outer: HiSockServer, cmd_activation: str, threaded: bool = False
         ):
-            # `outer` arg is for the HiSockServer instance
-            # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.cmd_activation = cmd_activation
             self.threaded = threaded
@@ -272,61 +283,63 @@ class HiSockServer:
             """Adds a function that gets called when the server receives a matching command"""
 
             func_args = inspect.getfullargspec(func).args
+            self._assert_num_func_args_valid(len(func_args))
 
-            if len(func_args) != 2 and (
-                self.cmd_activation not in self.outer.reserved_functions
-                or self.cmd_activation == "message"
-            ):
-                raise ValueError(
-                    f"Incorrect number of arguments: {len(func_args)} != 2"
-                )
-
-            annots = inspect.getfullargspec(func).annotations
-
-            if (
-                self.cmd_activation not in self.outer.reserved_functions
-                or self.cmd_activation == "message"
-            ):
-                # Processes nonreserved commands and reserved `message `
-
-                # `func_args` looks like ['clt_data', 'msg']
-                # `annots` look like {'msg': str}
-                try:
-                    # Try to map first arg (client data)
-                    # Into type hint compliant one
-                    clt_annotation = annots[func_args[0]]
-                    if isinstance(clt_annotation, str):
-                        clt_annotation = builtins.__dict__[annots[func_args[0]]]
-                except KeyError:
-                    # KeyError means there is no type hint
-                    clt_annotation = None
-                try:
-                    # Try to map second arg (content)
-                    # Into type hint compliant one
-                    msg_annotation = annots[func_args[1]]
-                    if isinstance(msg_annotation, str):
-                        msg_annotation = builtins.__dict__[annots[func_args[1]]]
-                except KeyError:
-                    # KeyError means there is no type hint
-                    msg_annotation = None
-            else:
-                # None for now, will add support for reserved functions
-                # soon tm
-                clt_annotation = None
-                msg_annotation = None
-
-            # Creates function dictionary to add to `outer.funcs`
-            func_dict = {
-                "func": func,
-                "name": func.__name__,
-                "type_hint": {"clt": clt_annotation, "msg": msg_annotation},
-                "threaded": self.threaded
+            # Store annotations of function
+            annotations = inspect.getfullargspec(func).annotations  # {"param": type}
+            parameter_annotations = {
+                "clt_data": None,
+                # Command is always a string, no need to check type
+                "msg": None,
             }
 
-            self.outer.funcs[self.cmd_activation] = func_dict
+            # Process unreserved commands and reserved `message` (only reserved
+            # command to have 2 arguments)
+            if (
+                self.cmd_activation not in self.outer._reserved_functions
+                or self.cmd_activation == "message"
+            ):
+                # Map function arguments into type hint compliant ones
+                for func_argument, argument_name in zip(func_args, ("clt_data", "msg")):
+                    if func_argument not in annotations:
+                        continue
+                    parameter_annotations[argument_name] = annotations[func_argument]
 
-            # Returns inner function, like a decorator would do
+            # Creates function dictionary to add to `outer.funcs`
+            self.outer.funcs[self.cmd_activation] = {
+                "func": func,
+                "name": func.__name__,
+                "type_hint": parameter_annotations,
+            }
+
+            # Decorator stuff
             return func
+
+        def _assert_num_func_args_valid(self, actual_num_func_args: int):
+            """Asserts the number of function arguments is valid"""
+
+            number_of_func_args = 2  # Normal commands
+
+            # Reserved commands
+            try:
+                index_of_reserved_cmd = self.outer._reserved_functions.index(
+                    self.cmd_activation
+                )
+                # Get the number of parameters for the reserved command
+                number_of_func_args = self.outer._reserved_functions_parameters_num[
+                    index_of_reserved_cmd
+                ]
+
+            except ValueError:
+                # Not a reserved command
+                pass
+
+            # Check if the number of function arguments is valid
+            if actual_num_func_args != number_of_func_args:
+                raise TypeError(
+                    f"{self.cmd_activation} command must have {number_of_func_args} "
+                    f"arguments, not {actual_num_func_args}"
+                )
 
     def on(self, command: str, threaded: bool = False) -> Callable:
         """
@@ -334,43 +347,42 @@ class HiSockServer:
         receives a matching command
 
         Reserved functions are functions that get activated on
-        specific events. Currently, there are 3 for HiSockServer:
+        specific events, and they are:
 
-        1. join - Activated when a client connects to the server
-
-        2. leave - Activated when a client disconnects from the server
-
-        3. message - Activated when a client messages to the server
+        1. ``join`` - Activated when a client connects to the server
+        2. ``leave`` - Activated when a client disconnects from the server
+        3. ``message`` - Activated when a client messages to the server
+        4. ``name_change`` - Activated when a client changes its name
+        5. ``group_change`` - Activated when a client changes its group
 
         The parameters of the function depend on the command to listen.
-        For example, reserved commands `join` and `leave` have only one
-        client parameter passed, while reserved command `message` has two:
-        Client Data, and Message.
-        Other nonreserved functions will also be passed in the same
-        parameters as `message`
+        For example, reserved commands ``join`` and ``leave`` have only one
+        client parameter passed, while reserved command ``message`` has two:
+        client data and message.
+        Other unreserved functions will also be passed in the same
+        parameters as ``message``.
 
-        In addition, certain type casting is available to nonreserved functions.
+        In addition, certain type casting is available to unreserved functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
 
-        1. bytes -> int (Will raise exception if bytes is not numerical)
-
-        2. bytes -> str (Will raise exception if there's a unicode error)
-
-        Type casting for reserved commands is scheduled to be
-        implemented, and is currently being worked on.
+        - ``bytes`` -> ``bytes``
+        - ``bytes`` -> ``str``
+        - ``bytes`` -> ``int``
+        - ``bytes`` -> ``dict``
+        - ``dict`` -> ``dict``
+        - ``dict`` -> ``bytes``
 
         :param command: A string, representing the command the function should activate
-            when receiving it
+            when receiving it.
         :type command: str
         :param threaded: A boolean, representing if the function should be run in a thread
             in order to not block the run() loop.
-
-            Defaults to False
-
-        :return: The same function (The decorator just appended the function to a stack)
+            Default is False.
+        :return: The same function (the decorator just appended the function to a stack).
         :rtype: function
         """
+
         # Passes in outer to _on decorator/class
         return self._on(self, command, threaded)
 
@@ -380,104 +392,112 @@ class HiSockServer:
         server socket will be closed.
 
         Running `server.run()` won't do anything now.
-        :return:
         """
+
         self._closed = True
         self.disconnect_all_clients()
         self.sock.close()
 
-    def disconnect_client(
-        self, client: str
-    ):  # TODO: WILL ADD MORE DIVERSE SUPPORT FOR ARGS
+    def _get_client_from_name_or_ip_port(
+        self, client: Union[str, tuple]
+    ) -> socket.socket:
         """
-        Disconnects a specific client
-        Different formats of the client is supported. It can be:
+        Gets a client socket from a name or tuple in the form of (ip, port).
 
-        - An IP + Port format, written as "ip:port"
-
-        - A client name, if it exists
-
-        :param client: The client to disconnect. The format could be either by IP+Port,
-            or a client name
+        :raise ValueError: Client format is wrong
+        :raise TypeError: Client does not exist
+        :raise UserWarning: Using client name, and more than one client with
+            the same name is detected
         """
-        disconn_header = make_header(b"$DISCONN$", self.header_len)
+
+        ret_client_socket = None
+
+        # Search by IPv4
         if isinstance(client, tuple):
-            # Formats client IP tuple, and raises Exceptions if format's wrong
-            if len(client) == 2 and isinstance(client[0], str):
-                if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)$", client[0]) and isinstance(
-                    client[1], int
-                ):
-                    client = f"{client[0]}:{client[1]}"
-                else:
-                    raise ValueError(
-                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                        f"{client}"
-                    )
-            else:
-                raise ValueError(
-                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                    f"{client}"
-                )
-
-        if re.search(r"^((\d?){3}\.){3}(\d\d?\d?):\d(\d?){4}$", client):
-            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
-            # Try IP Address, should be unique
-            split_client = client.split(":")
-            reconstructed_client = []
-
-            # Checks IP correctness
             try:
-                reconstructed_client.append(map(int, split_client[0].split(".")))
-            except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
-            try:
-                reconstructed_client.append(int(split_client[1]))
-            except ValueError:
-                raise ValueError(
-                    "Port is not numerical (only IPv4 currently supported)"
-                )
-
-            for subip in reconstructed_client[0]:
-                if not 0 <= subip < 255:
-                    raise ValueError(f"{client} is not a valid IP address")
-            if not 0 < reconstructed_client[1] < 65535:
-                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
-
-            try:
-                client_sock = next(
+                validate_ipv4(client)
+                client_socket: socket.socket = next(
                     _dict_tupkey_lookup(
-                        (client.split(":")[0], reconstructed_client[1]),
+                        (client.split(":")[0], client.split(":")[0][1]),
                         self.clients_rev,
                         idx_to_match=0,
                     )
                 )
             except StopIteration:
                 raise TypeError(f"Client with IP {client} is not connected")
-            client_sock.send(disconn_header + b"$DISCONN$")
-        else:
-            # Try name or group
+
+            ret_client_socket = client_socket
+
+        # Search by name
+        elif isinstance(client, str):
             try:
+                # Modify dictionary so only names and IPs are included
                 mod_clients_rev = {}
                 for key, value in self.clients_rev.items():
-                    mod_key = (key[0], key[1])  # Groups shouldn't count
+                    mod_key = (key[0], key[1])
                     mod_clients_rev[mod_key] = value
 
-                client_sock = list(
+                client_socket: socket.socket = list(
                     _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
                 )
             except StopIteration:
-                raise TypeError(f'Client with name "{client}"does not exist')
+                raise TypeError(f'Client with name "{client}" doesn\'t exist')
 
-            if len(client_sock) > 1:
+            if len(client_socket) > 1:
                 warnings.warn(
-                    f'{len(client_sock)} clients with name "{client}" detected; sending data to '
-                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
+                    f'{len(client_socket)} clients with name "{client}" detected; sending data to '
+                    f"Client with IP {':'.join(map(str, client_socket[0].getpeername()))}"
                 )
+                ret_client_socket = client_socket[0]
 
-            client_sock[0].send(disconn_header + b"$DISCONN$")
+        else:
+            raise ValueError("Client format is wrong (must be of type tuple or str).")
+
+        if ret_client_socket is None:
+            raise ValueError("Client socket does not exist.")
+
+        return ret_client_socket
+
+    def _get_all_client_sockets_in_group(self, group: str) -> iter[socket.socket]:
+        """
+        An iterable that returns all client sockets in a group
+
+        :param group: The group to get the sockets from.
+        :type group: str
+        :return: An iterable of client sockets in the group.
+        :rtype: iter[socket.socket]
+
+        .. note::
+           If the group does not exist, an empty iterable is returned.
+        """
+
+        return _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
+
+    def disconnect_client(self, client: str):
+        """
+        Disconnects a specific client.
+
+        :param client: The client to send data to. The format could be either by IP+port,
+            or a client name.
+        :type client: Union[str, tuple]
+        :param command: A string, containing the command to send.
+        :type command: str
+        :param content: A bytes-like object, with the content/message
+            to send.
+        :type content: bytes
+        :raise ValueError: Client format is wrong.
+        :raise TypeError: Client does not exist.
+        :raise UserWarning: Using client name, and more than one client with
+            the same name is detected.
+        """
+
+        disconn_header = make_header(b"$DISCONN$", self.header_len)
+        client_socket = self._get_client_from_name_or_ip_port(client)
+        client_socket.send(disconn_header)
 
     def disconnect_all_clients(self, force=False):
         """Disconnect all clients."""
+
         if not force:
             disconn_header = make_header(b"$DISCONN$", self.header_len)
             for client in self.clients:
@@ -489,308 +509,92 @@ class HiSockServer:
             self.clients.clear()
             self.clients_rev.clear()
 
-    def send_all_clients(
-        self,
-        command: str,
-        content: Union[
-            bytes,
-            dict[
-                Union[str, int, float, bool, None], Union[str, int, float, bool, None]
-            ],
-        ],
-    ):
+    def send_all_clients(self, command: str, content: bytes):
         """
-        Sends the commmand and content to *ALL* clients connected
+        Sends the command and content to *ALL* clients connected
 
         :param command: A string, representing the command to send to every client
         :type command: str
         :param content: A bytes-like object, containing the message/content to send
             to each client
-        :type content: Union[bytes, dict]
+        :type content: bytes
         """
-        if isinstance(content, dict):
-            content = json.dumps(content).encode()
 
-        content_header = make_header(command.encode() + b" " + content, self.header_len)
+        data_to_send = command.encode() + b" " + content
+        content_header = make_header(data_to_send, self.header_len)
         for client in self.clients:
-            client.send(content_header + command.encode() + b" " + content)
+            client.send(content_header + data_to_send)
 
-    def send_group(
-        self,
-        group: str,
-        command: str,
-        content: Union[
-            bytes,
-            dict[
-                Union[str, int, float, bool, None], Union[str, int, float, bool, None]
-            ],
-        ],
-    ):
+    def send_group(self, group: str, command: str, content: bytes):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
 
-        :param group: A string, representing the group to send data to
+        :param group: A string, representing the group to send data to.
         :type group: str
-        :param command: A string, containing the command to send
+        :param command: A string, containing the command to send.
         :type command: str
         :param content: A bytes-like object, with the content/message
-            to send
-        :type content: Union[bytes, dict]
-        :raise TypeError: The group does not exist
+            to send.
+        :type content: bytes
+        :raise TypeError: The group does not exist.
         """
-        # Identifies group
-        group_clients = _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
-        group_clients = list(group_clients)
 
-        if len(group_clients) == 0:
-            raise TypeError(f"Group {group} does not exist")
-        else:
-            if isinstance(content, dict):
-                content = json.dumps(content).encode()
+        data_to_send = command.encode() + b" " + content
+        content_header = make_header(data_to_send, self.header_len)
+        for client in self._get_all_client_sockets_in_group(group):
+            client.send(content_header + data_to_send)
 
-            content_header = make_header(
-                command.encode() + b" " + content, self.header_len
-            )
-            # Send content and header to all clients in group
-            for clt_to_send in group_clients:
-                clt_to_send.send(content_header + command.encode() + b" " + content)
-
-    def send_client(
-        self,
-        client: Union[str, tuple[str, int]],
-        command: str,
-        content: Union[
-            bytes,
-            dict[
-                Union[str, int, float, bool, None], Union[str, int, float, bool, None]
-            ],
-        ],
-    ):
+    def send_client(self, client: Union[str, tuple], command: str, content: bytes):
         """
         Sends data to a specific client.
+
+        :param client: The client to send data to. The format could be either by IP+port,
+            or a client name.
+        :type client: Union[str, tuple]
+        :param command: A string, containing the command to send.
+        :type command: str
+        :param content: A bytes-like object, with the content/message.
+            to send
+        :type content: bytes
+        :raise ValueError: Client format is wrong.
+        :raise TypeError: Client does not exist.
+        :raise UserWarning: Using client name, and more than one client with
+            the same name is detected.
+        """
+
+        data_to_send = command.encode() + b" " + content
+        content_header = make_header(data_to_send, self.header_len)
+        self._get_client_from_name_or_ip_port(client).send(
+            content_header + data_to_send
+        )
+
+    def send_client_raw(self, client, content: bytes):
+        """
+        Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
 
-        - An IP + Port format, written as "ip:port"
-
-        - A client name, if it exists
-
-        - A tuple with an (IP, Port) format
-
-        :param client: The client to send data to. The format could be either by IP+Port,
+        :param client: The client to send data to. The format could be either by IP+port,
             or a client name
         :type client: Union[str, tuple]
-        :param command: A string, containing the command to send
-        :type command: str
         :param content: A bytes-like object, with the content/message
             to send
-        :type content: Union[bytes, dict]
+        :type content: bytes
         :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected
         """
-        if isinstance(content, dict):
-            content = json.dumps(content).encode()
 
-        content_header = make_header(command.encode() + b" " + content, self.header_len)
-        # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
+        data_to_send = content
+        content_header = make_header(data_to_send, self.header_len)
+        self._get_client_from_name_or_ip_port(client).send(
+            content_header + data_to_send
+        )
 
-        if isinstance(client, tuple):
-            # Formats client IP tuple, and raises Exceptions if format's wrong
-            if len(client) == 2 and isinstance(client[0], str):
-                if re.search(r"^((\d?){3}\.){3}(\d\d?\d?)$", client[0]) and isinstance(
-                    client[1], int
-                ):
-                    client = f"{client[0]}:{client[1]}"
-                else:
-                    raise ValueError(
-                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                        f"{client}"
-                    )
-            else:
-                raise ValueError(
-                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                    f"{client}"
-                )
-
-        if re.search(r"^((\d?){3}\.){3}(\d\d?\d?):\d(\d?){4}$", client):
-            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
-            # Try IP Address, should be unique
-            split_client = client.split(":")
-            reconstructed_client = []
-
-            # Checks IP correctness
-            try:
-                reconstructed_client.append(map(int, split_client[0].split(".")))
-            except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
-            try:
-                reconstructed_client.append(int(split_client[1]))
-            except ValueError:
-                raise ValueError(
-                    "Port is not numerical (only IPv4 currently supported)"
-                )
-
-            for subip in reconstructed_client[0]:
-                if not 0 <= subip < 255:
-                    raise ValueError(f"{client} is not a valid IP address")
-            if not 0 < reconstructed_client[1] < 65535:
-                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
-
-            try:
-                client_sock = next(
-                    _dict_tupkey_lookup(
-                        (client.split(":")[0], reconstructed_client[1]),
-                        self.clients_rev,
-                        idx_to_match=0,
-                    )
-                )
-            except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
-
-            client_sock.send(content_header + command.encode() + b" " + content)
-        else:
-            # Try name or group
-            try:
-                mod_clients_rev = {}
-                for key, value in self.clients_rev.items():
-                    mod_key = (key[0], key[1])  # Groups shouldn't count
-                    mod_clients_rev[mod_key] = value
-
-                client_sock = list(
-                    _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
-                )
-            except StopIteration:
-                raise TypeError(f'Client with name "{client}"does not exist')
-
-            if isinstance(content, dict):
-                content = json.dumps(content).encode()
-
-            content_header = make_header(
-                command.encode() + b" " + content, self.header_len
-            )
-
-            if len(client_sock) > 1:
-                warnings.warn(
-                    f'{len(client_sock)} clients with name "{client}" detected; sending data to '
-                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
-                )
-
-            client_sock[0].send(content_header + command.encode() + b" " + content)
-
-    def send_client_raw(
-        self, client, content: bytes
-    ):  # TODO: Add dict-sending support to this method
-        """
-        Sends data to a specific client, *without a command*
-        Different formats of the client is supported. It can be:
-
-        - An IP + Port format, written as "ip:port"
-
-        - A client name, if it exists
-
-        - A tuple with an (IP, Port) format
-
-        :param client: The client to send data to. The format could be either by IP+Port,
-            or a client name
-        :type client: Union[str, tuple]
-        :param content: A bytes-like object, with the content/message
-            to send
-        :type content: Union[bytes, dict]
-        :raise ValueError: Client format is wrong
-        :raise TypeError: Client does not exist
-        :raise Warning: Using client name and more than one client with
-            the same name is detected
-        """
-        content_header = make_header(content, self.header_len)
-        # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
-
-        if isinstance(client, tuple):
-            if len(client) == 2 and isinstance(client[0], str):
-                if re.search(r"(((\d?){3}\.){3}(\d?){3})", client[0]) and isinstance(
-                    client[1], int
-                ):
-                    client = f"{client[0]}:{client[1]}"
-                else:
-                    raise ValueError(
-                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                        f"{client}"
-                    )
-            else:
-                raise ValueError(
-                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                    f"{client}"
-                )
-
-        if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
-            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
-            # Try IP Address, should be unique
-            split_client = client.split(":")
-            reconstructed_client = []
-            try:
-                reconstructed_client.append(map(int, split_client[0].split(".")))
-            except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
-            try:
-                reconstructed_client.append(int(split_client[1]))
-            except ValueError:
-                raise ValueError(
-                    "Port is not numerical (only IPv4 currently supported)"
-                )
-
-            for subip in reconstructed_client[0]:
-                if not 0 <= subip < 255:
-                    raise ValueError(f"{client} is not a valid IP address")
-            if not 0 < reconstructed_client[1] < 65535:
-                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
-
-            try:
-                client_sock = next(
-                    _dict_tupkey_lookup(
-                        (client.split(":")[0], reconstructed_client[1]),
-                        self.clients_rev,
-                        idx_to_match=0,
-                    )
-                )
-            except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
-
-            client_sock.send(content_header + content)
-        else:
-            # Try name or group
-            try:
-                mod_clients_rev = {}
-                for key, value in self.clients_rev.items():
-                    mod_key = (key[0], key[1])  # Groups shouldn't count
-                    mod_clients_rev[mod_key] = value
-
-                client_sock = list(
-                    _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
-                )
-            except StopIteration:
-                raise TypeError(f'Client with name "{client}"does not exist')
-
-            if isinstance(content, dict):
-                content = json.dumps(content).encode()
-
-            content_header = make_header(content, self.header_len)
-
-            if len(client_sock) > 1:
-                # More than one client with same name
-                warnings.warn(
-                    f'{len(client_sock)} clients with name "{client}" detected; sending data to '
-                    f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
-                )
-
-            # Sends to client
-            client_sock[0].send(content_header + content)
-
-    def send_group_raw(
-        self, group: str, content: bytes
-    ):  # TODO: Add dict-sending support to this method
+    def send_group_raw(self, group: str, content: bytes):
         """
         Sends data to a specific group, without commands.
         Groups are recommended for more complicated servers or multipurpose
@@ -798,49 +602,20 @@ class HiSockServer:
         be sent different data for different purposes.
 
         Non-command-attached content is recommended to be used alongside with
-        :meth:`HiSockClient.recv_raw`
+        :meth:`HiSockClient.recv_raw`.
 
-        :param group: A string, representing the group to send data to
+        :param group: A string, representing the group to send data to.
         :type group: str
         :param content: A bytes-like object, with the content/message
-            to send
+            to send.
         :type content: bytes
-        :raise TypeError: The group does not exist
+        :raise TypeError: The group does not exist.
         """
-        # Identifies group
-        group_clients = _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
-        group_clients = list(group_clients)
 
-        if len(group_clients) == 0:
-            raise TypeError(f"Group {group} does not exist")
-        else:
-            if isinstance(content, dict):
-                content = json.dumps(content).encode()
-
-            content_header = make_header(content, self.header_len)
-            # Send content and header to all clients in group
-            for clt_to_send in group_clients:
-                clt_to_send.send(content_header + content)
-
-    def get_cache(
-        self,
-        idx: Union[int, slice, None] = None,
-    ) -> list[MessageCacheMember]:
-        """
-        Gets the message cache.
-
-        :param idx: An integer or ``slice``, specifying what specific message caches to return.
-
-            Defaults to None (Retrieves the entire cache)
-        :type idx: Union[int, slice], optional
-
-        :return: A list of dictionaries, representing the cache
-        :rtype: list[dict]
-        """
-        if idx is None:
-            return self.cache
-        else:
-            return self.cache[idx]
+        data_to_send = content
+        content_header = make_header(data_to_send, self.header_len)
+        for client in self._get_all_client_sockets_in_group(group):
+            client.send(content_header + data_to_send)
 
     def run(self):
         """
@@ -848,6 +623,7 @@ class HiSockServer:
         so it should be run once every iteration of a while loop, as to not
         lose valuable information
         """
+
         self.called_run = True
 
         if not self._closed:
@@ -926,7 +702,7 @@ class HiSockServer:
                                     "ip": client_disconnect,
                                     "name": more_client_info["name"],
                                     "group": more_client_info["group"],
-                                }
+                                },
                             )
 
                         # Send reserved functions to existing clients
@@ -952,7 +728,9 @@ class HiSockServer:
                                 notified_sock.send(no_tls_header + b"$NOTLS$")
                             continue
                         elif message["data"].startswith(b"$USRSENTDICT$"):
-                            message["data"] = _removeprefix(message["data"], b"$USRSENTDICT$")
+                            message["data"] = _removeprefix(
+                                message["data"], b"$USRSENTDICT$"
+                            )
                             usr_sent_dict = True
                         elif message["data"].startswith(b"$GETCLT$"):
                             try:
@@ -1013,8 +791,7 @@ class HiSockServer:
                                     new_name = name_or_group
 
                                     self._call_function(
-                                        "name_change",
-                                        clt_dict, old_name, new_name
+                                        "name_change", clt_dict, old_name, new_name
                                     )
                                 elif (
                                     "group_change" in self.funcs
@@ -1024,8 +801,7 @@ class HiSockServer:
                                     new_group = name_or_group
 
                                     self._call_function(
-                                        "group_change",
-                                        clt_dict, old_group, new_group
+                                        "group_change", clt_dict, old_group, new_group
                                     )
 
                         if "message" in self.funcs:
@@ -1033,26 +809,19 @@ class HiSockServer:
                             inner_clt_data = self.clients[notified_sock]
                             parse_content = message["data"]
 
-                            ####################################################
-                            #         Type hinting -> Type casting             #
-                            ####################################################
+                            ####################################
+                            ### Type hinting -> Type casting ###
+                            ####################################
                             if usr_sent_dict:
-                                parse_content = json.loads(
-                                    message["data"]
-                                )
+                                parse_content = json.loads(message["data"].decode())
                             temp_parse_content = _type_cast(
                                 self.funcs["message"]["type_hint"]["msg"],
                                 message["data"],
                                 self.funcs["message"],
                             )
 
-                            if (
-                                    temp_parse_content == parse_content and
-                                    usr_sent_dict
-                            ):
-                                parse_content = json.loads(
-                                    message["data"]
-                                )
+                            if temp_parse_content == parse_content and usr_sent_dict:
+                                parse_content = json.loads(message["data"])
                             elif temp_parse_content is not None:
                                 parse_content = temp_parse_content
                             elif temp_parse_content is None:
@@ -1061,7 +830,9 @@ class HiSockServer:
                                     f"type cast!"
                                 )
 
-                            self._call_function("message", inner_clt_data, parse_content)
+                            self._call_function(
+                                "message", inner_clt_data, parse_content
+                            )
 
                         has_corresponding_function = False
                         parse_content = None  # FINE pycharm
@@ -1081,12 +852,10 @@ class HiSockServer:
                                 )
 
                                 if (
-                                    temp_parse_content == parse_content and
-                                    usr_sent_dict
+                                    temp_parse_content == parse_content
+                                    and usr_sent_dict
                                 ):
-                                    parse_content = json.loads(
-                                        parse_content
-                                    )
+                                    parse_content = json.loads(parse_content)
                                 elif temp_parse_content is not None:
                                     parse_content = temp_parse_content
                                 elif temp_parse_content is None:
@@ -1099,15 +868,21 @@ class HiSockServer:
                                     func["func"](clt_data, parse_content)
                                 else:
                                     function_thread = threading.Thread(
-                                        target=func["func"], args=(clt_data, parse_content,)
+                                        target=func["func"],
+                                        args=(
+                                            clt_data,
+                                            parse_content,
+                                        ),
                                     )
-                                    function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+                                    function_thread.setDaemon(
+                                        True
+                                    )  # FORGIVE ME PEP 8 FOR I HAVE SINNED
                                     function_thread.start()
 
                         # Caching
                         if self.cache_size >= 0:
                             if has_corresponding_function:
-                                cache_content = parse_content  # Bruh pycharm it DOES exist if hcf is True
+                                cache_content = parse_content
                             else:
                                 cache_content = message["data"]
                             self.cache.append(
@@ -1116,7 +891,7 @@ class HiSockServer:
                                         "header": message["header"],
                                         "content": cache_content,
                                         "called": has_corresponding_function,
-                                        "command": command
+                                        "command": command,
                                     }
                                 )
                             )
@@ -1136,6 +911,7 @@ class HiSockServer:
           the address, name, group, and socket
         :rtype: list
         """
+
         group_clients = list(
             _dict_tupkey_lookup_key(group, self.clients_rev, idx_to_match=2)
         )
@@ -1174,6 +950,7 @@ class HiSockServer:
         :return: A list of dictionaries, with the clients
         :rtype: list[dict, ...]
         """
+
         clts = []
         for clt in self.clients_rev:
             clt_dict = {
@@ -1198,114 +975,62 @@ class HiSockServer:
         self, client: Union[str, tuple[str, int]]
     ) -> dict[str, Union[str, socket.socket]]:
         """
-        Gets a specific client's information, based on either:
+        Gets a client socket from a name or tuple in the form of (ip, port)
 
-        1. The client name
-
-        2. The client IP+Port
-
-        3. The client IP+Port, in a 2-element tuple
-
-        :param client: A parameter, representing the specific client to look up.
-            As shown above, it can either be represented
-            as a string, or as a tuple.
-        :type client: Union[str, tuple]
-        :raise ValueError: Client argument is invalid
+        :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
-
-        :return: A dictionary of the client's info, including
-          IP+Port, Name, Group, and Socket
-        :rtype: dict
+        :raise UserWarning: Using client name, and more than one client with
+            the same name is detected
         """
+
+        ret_client_sock = None
+
+        # Search by IPv4
         if isinstance(client, tuple):
-            if len(client) == 2 and isinstance(client[0], str):
-                if re.search(r"(((\d?){3}\.){3}(\d?){3})", client[0]) and isinstance(
-                    client[1], int
-                ):
-                    client = f"{client[0]}:{client[1]}"
-                else:
-                    raise ValueError(
-                        f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                        f"{client}"
-                    )
-            else:
-                raise ValueError(
-                    f"Client tuple format should be ('ip.ip.ip.ip', port), not "
-                    f"{client}"
-                )
-
-        if re.search(r"(((\d?){3}\.){3}(\d?){3}):(\d?){5}", client):
-            # Matching: 523.152.135.231:92344   Invalid IP handled by Python
-            # Try IP Address, should be unique
-            split_client = client.split(":")
-            reconstructed_client = []
             try:
-                reconstructed_client.append(map(int, split_client[0].split(".")))
-            except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
-            try:
-                reconstructed_client.append(int(split_client[1]))
-            except ValueError:
-                raise ValueError(
-                    "Port is not numerical (only IPv4 currently supported)"
-                )
-
-            for subip in reconstructed_client[0]:
-                if not 0 <= subip < 255:
-                    raise ValueError(f"{client} is not a valid IP address")
-            if not 0 < reconstructed_client[1] < 65535:
-                raise ValueError(f"{split_client[1]} is not a valid port (1-65535)")
-
-            try:
-                client_tup = (client.split(":")[0], reconstructed_client[1])
-                client_sock = next(
-                    _dict_tupkey_lookup(client_tup, self.clients_rev, idx_to_match=0)
-                )
-                client_info = next(
-                    _dict_tupkey_lookup_key(
-                        client_tup, self.clients_rev, idx_to_match=0
+                validate_ipv4(client)
+                client_sock: socket.socket = next(
+                    _dict_tupkey_lookup(
+                        (client.split(":")[0], client.split(":")[0][1]),
+                        self.clients_rev,
+                        idx_to_match=0,
                     )
                 )
-                client_dict = {
-                    "ip": client_info[0],
-                    "name": client_info[1],
-                    "group": client_info[2],
-                    "socket": client_sock,
-                }
-
-                return client_dict
             except StopIteration:
                 raise TypeError(f"Client with IP {client} is not connected")
-        else:
-            mod_clients_rev = {}
-            for key, value in self.clients_rev.items():
-                mod_key = (key[0], key[1])  # Groups shouldn't count
-                mod_clients_rev[mod_key] = value
+            # ValueError will be raised by validate_ipv4 already
 
-            client_sock = list(
-                _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
-            )
+            ret_client_sock = client_sock
 
-            if len(client_sock) == 0:
-                raise TypeError(f'Client with name "{client}"does not exist')
-            elif len(client_sock) > 1:
+        # Search by name
+        elif isinstance(client, str):
+            try:
+                # Modify dictionary so only names and IPs are included
+                mod_clients_rev = {}
+                for key, value in self.clients_rev.items():
+                    mod_key = (key[0], key[1])
+                    mod_clients_rev[mod_key] = value
+
+                client_sock: socket.socket = list(
+                    _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
+                )
+            except StopIteration:
+                raise TypeError(f'Client with name "{client}" doesn\'t exist')
+
+            if len(client_sock) > 1:
                 warnings.warn(
-                    f'{len(client_sock)} clients with name "{client}" detected; getting info from '
+                    f'{len(client_sock)} clients with name "{client}" detected; sending data to '
                     f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"
                 )
+                ret_client_sock = client_sock[0]
 
-            client_info = next(
-                _dict_tupkey_lookup_key(client, self.clients_rev, idx_to_match=1)
-            )
+        else:
+            raise ValueError("Client format is wrong (must be of type tuple or str)")
 
-            client_dict = {
-                "ip": client_info[0],
-                "name": client_info[1],
-                "group": client_info[2],
-                "socket": client_sock[0],
-            }
+        if ret_client_sock is None:
+            raise ValueError("Client socket does not exist")
 
-            return client_dict
+        return ret_client_sock
 
     def get_addr(self) -> tuple[str, int]:
         """
@@ -1314,18 +1039,11 @@ class HiSockServer:
 
         :return: A tuple, with the format (str IP, int port)
         """
+
         return self.addr
 
 
-class _BaseThreadServer(HiSockServer):
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-
-    def _run(self):
-        HiSockServer.run(self)
-
-
-class ThreadedHiSockServer(_BaseThreadServer):
+class ThreadedHiSockServer(HiSockServer):
     """
     A downside of :class:`HiSockServer` is that you need to constantly
     :meth:`run` it in a while loop, which may block the program. Fortunately,
@@ -1337,20 +1055,36 @@ class ThreadedHiSockServer(_BaseThreadServer):
        In some cases though, :class:`HiSockServer` offers more control than
        :class:`ThreadedHiSockServer`, so be careful about when to use
        :class:`ThreadedHiSockServer` over :class:`HiSockServer`
+
+    .. note::
+        For documentation, see :class:`HiSockServer`.
     """
 
-    def __init__(self, addr, blocking=True, max_connections=0, header_len=16):
-        super().__init__(addr, blocking, max_connections, header_len)
-        self._thread = threading.Thread(target=self.run)
+    def __init__(
+        self, addr, *args, blocking=True, max_connections=0, header_len=16, **kwargs
+    ):
+        super().__init__(addr, blocking, max_connections, header_len, *args, **kwargs)
+        self._thread = threading.Thread(target=self._run)
 
         self._stop_event = threading.Event()
 
+        # This class shouldn't be able to be called through :meth:`HiSockServer.run`,
+        # so we will kindly exterminate it
+        # If you want to run it manually, you need to call :meth:`_run`
+        del self.run
+
+    def start_server(self):
+        """Starts the main server loop"""
+
+        self._thread.start()
+
     def stop_server(self):
         """Stops the server"""
+
         self._stop_event.set()
         self.sock.close()
 
-    def run(self):
+    def _run(self):
         """
         The main while loop to run the thread
 
@@ -1358,84 +1092,43 @@ class ThreadedHiSockServer(_BaseThreadServer):
 
         .. warning::
            This method is **NOT** recommended to be used in an actual
-           production enviroment. This is used internally for the thread, and should
-           not be interacted with the user
+           production environment. This is used internally for the thread, and should
+           not be interacted with the user.
         """
+
         while not self._stop_event.is_set():
             try:
-                self._run()
+                HiSockServer.run(self)  # We deleted :meth:`self.run`
             except (OSError, ValueError):
                 break
 
-    def start_server(self):
-        """Starts the main server loop"""
-        self._thread.start()
-
-    def join(self):
+    def _join(self):
         """Waits for the thread to be killed"""
+
         self._thread.join()
 
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
-    Creates a :class:`HiSockServer` instance. See :class:`HiSockServer` for more details
+    Creates a :class:`HiSockServer` instance. See :class:`HiSockServer` for
+    more details and documentation.
 
-    :return: A :class:`HiSockServer` instance
+    :return: A :class:`HiSockServer` instance.
     """
+
     return HiSockServer(addr, blocking, max_connections, header_len)
 
 
 def start_threaded_server(addr, blocking=True, max_connections=0, header_len=16):
     """
-    Creates a :class:`ThreadedHiSockServer` instance. See :class:`ThreadedHiSockServer`
-    for more details
+    Creates a :class:`ThreadedHiSockServer` instance. See :class:`HiSockServer`
+    for more details and documentation.
 
-    :return: A :class:`ThreadedHiSockServer` instance
+    :return: A :class:`ThreadedHiSockServer` instance.
     """
+
     return ThreadedHiSockServer(addr, blocking, max_connections, header_len)
 
 
 if __name__ == "__main__":
-    print("Starting server...")
-    # s = HiSockServer(('192.168.1.131', 33333))
-    s = start_server(("192.168.1.131", 33333))
-
-    @s.on("join")
-    def test_sussus(yum_data):
-        print("Whomst join, ahh it is", yum_data["name"])
-        s.send_all_clients("Joe", b"Bidome")
-        s.send_client(f"{yum_data['ip'][0]}:{yum_data['ip'][1]}", "Bruh", b"E")
-        s.send_client(yum_data["ip"], "e", b"E")
-
-        s.send_group("Amogus", "Test", b"TTT")
-        s.send_client(yum_data["ip"], "dicttest", {"Does this": "dict also work?"})
-
-    @s.on("leave")
-    def bruh(yum_data):
-        print("Hmmm whomst leaved, ah it is", yum_data["name"])
-
-    @s.on("name_change")
-    def smth(clt_info, old_name, new_name):
-        print(f"Bruh, {old_name} renamed to {new_name}!")
-        s.send_client(clt_info["ip"], "shrek", b"")
-        s.send_client(clt_info['ip'], 'john', b"")
-        # s.disconnect_all_clients()
-
-    @s.on("lol")
-    def lolol(clt_info, dict_stuff):
-        print(
-            f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}"
-        )
-
-    # @s.on("message")
-    # def why(client_data, message: str):
-    #     print("Message reserved function aaa")
-    #     print("Client data:", client_data)
-    #     print("Message:", message)
-
-    @s.on("Sussus")
-    def a(_, msg):  # _ actually is clt_data
-        s.send_all_clients("pog", msg)
-
-    while True:
-        s.run()
+    print("Why are you running this file? You're weird...")

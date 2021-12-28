@@ -99,8 +99,9 @@ def make_header(
         bytes
     :rtype: Union[str, bytes]
     """
-    len_msg = len(header_msg)
-    constructed_header = f"{len_msg}{' ' * (header_len - len(str(len_msg)))}"
+
+    msg_len = len(header_msg)
+    constructed_header = f"{msg_len}{' ' * (header_len - len(str(msg_len)))}"
     if encode:
         return constructed_header.encode()
     return constructed_header
