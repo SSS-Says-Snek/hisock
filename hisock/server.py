@@ -19,7 +19,7 @@ import json  # Handle sending dictionaries
 import re  # Make sure arguments are passed correctly
 import threading  # Threaded server and decorators
 import warnings  # Non-severe errors
-from typing import Callable, Union, optional, Any  # Type hints
+from typing import Callable, Union, Any  # Type hints
 from ipaddress import IPv4Address  # Comparisons
 from hisock import constants
 
@@ -29,6 +29,7 @@ try:
         NoHeaderWarning,
         NoMessageException,
         InvalidTypeCast,
+        ServerException,
         receive_message,
         _removeprefix,
         make_header,
@@ -44,6 +45,7 @@ except ImportError:
         NoHeaderWarning,
         NoMessageException,
         InvalidTypeCast,
+        ServerException,
         receive_message,
         _removeprefix,
         make_header,
@@ -114,7 +116,7 @@ class HiSockServer:
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
-        tls: optional[Union[dict, str]] = None,
+        tls: Union[dict, str] = None,
     ):
         self.addr = addr
         self.header_len = header_len
@@ -129,6 +131,7 @@ class HiSockServer:
         self.sock.listen(max_connections)
 
         # Function related storage
+        # {"func_name": {"func": Callable, "name": str, "type_hint": Any}}
         self.funcs = {}
         # Stores the names of the reserved functions
         # Used for the `on` decorator
@@ -157,11 +160,12 @@ class HiSockServer:
 
         # Dictionaries and lists for client lookup
         self._sockets_list = [self.sock]  # Our socket will always be the first
-        self.clients = {}  # socket: {"addr": (ip, port), "name": str, "group": str}
-        self.clients_rev = {}  # ((ip, port), name, group): socket
+        # socket: {"ip": (ip, port), "name": str, "group": str}
+        self.clients = {}
+        # ((ip, port), name, group): socket
+        self.clients_rev = {}
 
         # Flags
-        self.called_run = False
         self._closed = False
 
         # TLS
@@ -243,12 +247,82 @@ class HiSockServer:
         return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
 
     # Internal methods
-    def _update_clients_rev_dict(self, idx: optional[int] = None):
+
+    def _new_client_connection(
+        self, connection: socket.socket, address: tuple[str, int]
+    ):
+        """
+        Handle the client hello handshake
+
+        :param connection: The client socket
+        :type connection: socket.socket
+        :param address: The client address
+        :type address: tuple[str, int]
+
+        :raise ServerException: If the client is already connected
+        """
+
+        if connection in self._sockets_list:
+            raise ServerException("Client already connected")
+
+        self._sockets_list.append(connection)
+
+        # Receive the client hello
+        client_hello = receive_message(connection, self.header_len)
+
+        client_hello = _removeprefix(client_hello["data"].decode(), "$CLTHELLO$ ")
+        client_hello = json.loads(client_hello)
+
+        client_info = {
+            "ip": address,
+            "name": client_hello["name"],
+            "group": client_hello["group"],
+        }
+        self.clients[connection] = client_info
+
+        self.clients_rev[
+            (address, client_hello["name"], client_hello["group"])
+        ] = connection
+
+        if "join" in self.funcs:
+            self._call_function("join", client_info)
+
+        # Send reserved command to existing clients
+        self.send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_info)}".encode())
+
+    def _client_disconnection(self, client: socket.socket):
+        """
+        Handle a client disconnecting
+
+        :param client: The client socket
+        :type client: socket.socket
+
+        :raise ServerException: The client wasn't connected to the server
+        """
+
+        if client in self._sockets_list:
+            raise ServerException("Client already connected")
+
+        client_info = self.clients[client]
+
+        # Remove socket from lists and dictionaries
+        self._sockets_list.remove(client)
+        del self.clients[client]
+        self._update_clients_rev_dict()
+
+        if "leave" in self.funcs:
+            self._call_function("leave")
+
+        # Send reserved command to existing clients
+        self.send_all_clients_raw(f"$CLTDISCONN$ {json.dumps(client_info)}".encode())
+
+    def _update_clients_rev_dict(self, idx: int = None):
         """
         Updates the reversed clients dictionary to the normal dictionary
 
         :param idx: Index of the client to update if known. If not known,
             the whole dictionary will be updated.
+
         :raises IndexError: If the client idx doesn't exist.
         :raises TypeError: If the client idx is not an integer.
         :raises KeyError: If the client doesn't exist in :ivar:`self.clients`
@@ -261,9 +335,37 @@ class HiSockServer:
             clients = self.clients
 
         for client in clients:
-            self.clients_rev[
-                (client["address"], client["name"], client["group"])
-            ] = client
+            self.clients_rev[(client["ip"], client["name"], client["group"])] = client
+
+    def _type_cast_received_data(
+        self, content: bytes, func: dict, dict_was_sent: bool
+    ) -> str:
+        """
+        Type cast the received data
+
+        :param data: The received data
+        :type data: bytes
+
+        :return: The received data type casted
+        :rtype: str
+        """
+
+        if not dict_was_sent:
+            type_casted_content = _type_cast(
+                type_cast=func["type_hint"]["message"],
+                content_to_typecast=content,
+                func_dict=func,
+            )
+        else:
+            # FIXME type casting dict -> bytes results in dict type
+            type_casted_content = json.loads(content)
+
+        if type_casted_content is None:
+            raise InvalidTypeCast(
+                f"{func['type_hint']['message']} is an invalid type cast!"
+            )
+
+        return type_casted_content
 
     # On decorator
 
@@ -302,10 +404,10 @@ class HiSockServer:
         """Decorator used to handle something when receiving command"""
 
         def __init__(
-            self, outer: HiSockServer, cmd_activation: str, threaded: bool = False
+            self, outer: HiSockServer, command_activation: str, threaded: bool = False
         ):
             self.outer = outer
-            self.cmd_activation = cmd_activation
+            self.command_activation = command_activation
             self.threaded = threaded
 
         def __call__(self, func: Callable) -> Callable:
@@ -320,22 +422,24 @@ class HiSockServer:
 
             # Store annotations of function
             annotations = inspect.getfullargspec(func).annotations  # {"param": type}
-            parameter_annotations = {"clt_data": None, "msg": None}
+            parameter_annotations = {"client_data": None, "message": None}
 
             # Process unreserved commands and reserved `message` (only reserved
             # command to have 2 arguments)
             if (
-                self.cmd_activation not in self.outer._reserved_functions
-                or self.cmd_activation == "message"
+                self.command_activation not in self.outer._reserved_functions
+                or self.command_activation == "message"
             ):
                 # Map function arguments into type hint compliant ones
-                for func_argument, argument_name in zip(func_args, ("clt_data", "msg")):
+                for func_argument, argument_name in zip(
+                    func_args, ("client_data", "message")
+                ):
                     if func_argument not in annotations:
                         continue
                     parameter_annotations[argument_name] = annotations[func_argument]
 
             # Creates function dictionary to add to `outer.funcs`
-            self.outer.funcs[self.cmd_activation] = {
+            self.outer.funcs[self.command_activation] = {
                 "func": func,
                 "name": func.__name__,
                 "type_hint": parameter_annotations,
@@ -355,12 +459,12 @@ class HiSockServer:
 
             # Reserved commands
             try:
-                index_of_reserved_cmd = self.outer._reserved_functions.index(
-                    self.cmd_activation
+                index_of_reserved_command = self.outer._reserved_functions.index(
+                    self.command_activation
                 )
                 # Get the number of parameters for the reserved command
                 number_of_func_args = self.outer._reserved_functions_parameters_num[
-                    index_of_reserved_cmd
+                    index_of_reserved_command
                 ]
 
             except ValueError:
@@ -370,7 +474,7 @@ class HiSockServer:
             # Check if the number of function arguments is valid
             if actual_num_func_args != number_of_func_args:
                 raise TypeError(
-                    f"{self.cmd_activation} command must have {number_of_func_args} "
+                    f"{self.command_activation} command must have {number_of_func_args} "
                     f"arguments, not {actual_num_func_args}"
                 )
 
@@ -532,11 +636,10 @@ class HiSockServer:
         if len(mod_group_clients) == 0:
             raise TypeError(f"Group {group} does not exist")
 
-
         return mod_group_clients
 
     def get_all_clients(
-        self, key: optional[Union[Callable, str]] = None
+        self, key: Union[Callable, str] = None
     ) -> list[dict[str, str]]:  # TODO: Add socket output as well
         """
         Get all clients currently connected to the server.
@@ -618,6 +721,19 @@ class HiSockServer:
         content_header = make_header(data_to_send, self.header_len)
         for client in self.clients:
             client.send(content_header + data_to_send)
+
+    def send_all_clients_raw(self, content: bytes):
+        """
+        Sends the command and content to *ALL* clients connected *without a command*.
+
+        :param content: A bytes-like object, containing the message/content to send
+            to each client.
+        :type content: bytes
+        """
+
+        content_header = make_header(content, self.header_len)
+        for client in self.clients:
+            client.send(content_header + content)
 
     def send_group(self, group: str, command: str, content: bytes):
         """
@@ -761,284 +877,178 @@ class HiSockServer:
         """
         Runs the server. This method handles the sending and receiving of data,
         so it should be run once every iteration of a while loop, as to not
-        lose valuable information
+        lose valuable information.
         """
-        # FIXME: refactor
 
-        self.called_run = True
+        if self._closed:
+            return
 
-        if not self._closed:
-            # gets all sockets from select.select
-            read_sock, write_sock, exception_sock = select.select(
-                self._sockets_list, [], self._sockets_list
-            )
+        # gets all sockets from select.select
+        read_sock, write_sock, exception_sock = select.select(
+            self._sockets_list, [], self._sockets_list
+        )
 
-            for notified_sock in read_sock:
-                # loops through all sockets
-                if notified_sock == self.sock:  # Got new connection
-                    connection, address = self.sock.accept()
+        for client_socket in read_sock:
+            ### Reserved ###
 
-                    # Handle client hello
-                    client = receive_message(connection, self.header_len)
+            # Handle new connection
+            if client_socket == self.sock:
+                self._new_client_connection(*self.sock.accept())
+                continue
 
-                    client_hello = _removeprefix(client["data"].decode(), "$CLTHELLO$ ")
-                    client_hello = json.loads(client_hello)
+            # Receiving data
+            # "header" - The header of the message, mostly unneeded
+            # "data" - The actual data/content of the message
+            message = receive_message(client_socket, self.header_len)
 
-                    # Establishes socket lists and dicts
-                    self._sockets_list.append(connection)
+            # Handle client disconnection
+            if (
+                not message  # Most likely client disconnect, could be client error
+                or message["data"] == b"$USRCLOSE$"
+            ):
+                self._client_disconnected(client_socket)
+                continue
 
-                    clt_info = {
-                        "ip": address,
-                        "name": client_hello["name"],
-                        "group": client_hello["group"],
-                    }
+            # Actual client message received
+            client_data = self.clients[client_socket]
+            dict_was_sent = False
 
-                    self.clients[connection] = clt_info
-                    self.clients_rev[
-                        (address, client_hello["name"], client_hello["group"])
-                    ] = connection
+            # TLS
+            if message["data"] == b"$DH_NUMS$":
+                if not self.tls_arguments["tls"]:
+                    # The server's not using TLS
+                    no_tls_header = make_header("$NOTLS$", self.header_len)
+                    client_socket.send(no_tls_header + b"$NOTLS$")
+                continue  # There is no code to deal with TLS currently... (TODO)
 
-                    if "join" in self.funcs:
-                        # Reserved function - Join
-                        self._call_function("join", clt_info)
-
-                    # Send reserved functions over to existing clients
-                    clt_cnt_header = make_header(
-                        f"$CLTCONN$ {json.dumps(clt_info)}", self.header_len
+            # Get client
+            if message["data"].startswith(b"$GETCLT$"):
+                try:
+                    result = self.get_client(
+                        _removeprefix(message["data"], b"$GETCLT$ ").decode()
                     )
-                    clt_to_send = [clt for clt in self.clients if clt != connection]
+                    del result["socket"]
 
-                    for sock_client in clt_to_send:
-                        sock_client.send(
-                            clt_cnt_header
-                            + f"$CLTCONN$ {json.dumps(clt_info)}".encode()
-                        )
+                    client = json.dumps(result)
+                except ValueError as e:
+                    client = '{"traceback": "%s"}' % e
+                except TypeError:
+                    client = '{"traceback": "$NOEXIST$"}'
 
+                client_header = make_header(client.encode(), self.header_len)
+                client_socket.send(client_header + client.encode())
+
+                self.send_client_raw(self.clients[client_socket]["ip"], client.encode())
+
+            # Change name or group
+            for matching_reserve, key in zip(
+                (b"$CHNAME$", b"$CHGROUP$"), ("name", "group")
+            ):
+                if not message["data"].startswith(matching_reserve):
+                    continue
+
+                change_to = _removeprefix(
+                    message["data"], matching_reserve + b" "
+                ).decode()
+
+                # Resetting
+                if change_to == message["data"].decode():
+                    change_to = None
+
+                client_info = self.clients[client_socket]
+
+                # Change it
+                changed_client_info = client_info.copy()
+                changed_client_info[key] = change_to
+                self.clients[client_socket] = changed_client_info
+                self._update_clients_rev_dict()
+
+                # Call reserved function
+                reserved_func_name = f"{key}_changed"
+
+                if reserved_func_name in self.reserved_functions:
+                    old_value = client_info[key]
+                    new_value = changed_client_info[key]
+
+                    self._call_function(
+                        reserved_func_name, changed_client_info, old_value, new_value
+                    )
+
+            # Message (listens for EVERY command)
+            #  TODO FIXME - This is a mess, and should be cleaned up
+            if "message" in self.funcs.keys():
+                inner_client_data = self.clients[client_socket]
+                content = message["data"]
+
+                ####################################
+                ### Type hinting -> Type casting ###
+                ####################################
+                if dict_was_sent:
+                    content = json.loads(message["data"].decode())
+                type_casted_content = _type_cast(
+                    self.funcs["message"]["type_hint"]["message"],
+                    message["data"],
+                    self.funcs["message"],
+                )
+
+                if type_casted_content == content and dict_was_sent:
+                    content = json.loads(message["data"])
+                elif type_casted_content is not None:
+                    content = type_casted_content
+                elif type_casted_content is None:
+                    raise InvalidTypeCast(
+                        f"{self.funcs['message']['type_hint']['message']} is an invalid "
+                        f"type cast!"
+                    )
+
+                self._call_function("message", inner_client_data, content)
+
+            ### Unreserved ###
+
+            # Dictionary sent (for type casting)
+            if message["data"].startswith(b"$USRSENTDICT$"):
+                message["data"] = _removeprefix(message["data"], b"$USRSENTDICT$")
+                dict_was_sent = True
+
+            # Declaring these here for cache after this
+            has_corresponding_function = False
+            content = None
+            command = None
+
+            for matching_command, func in self.funcs.items():
+                if not message["data"].startswith(matching_command.encode()):
+                    continue
+
+                has_corresponding_function = True  # For cache
+                command = matching_command
+
+                content = message["data"].lstrip(matching_command + " ")
+
+                self._call_function(
+                    command,
+                    client_data,
+                    self._type_cast_received_data(content, func, dict_was_sent),
+                )
+
+            # Caching
+            if self.cache_size >= 0:
+                if has_corresponding_function:
+                    cache_content = content
                 else:
-                    # "header" - The header of the msg, mostly not needed
-                    # "data" - The actual data/content of the msg
-                    message = receive_message(notified_sock, self.header_len)
+                    cache_content = message["data"]
+                self.cache.append(
+                    MessageCacheMember(
+                        {
+                            "header": message["header"],
+                            "content": cache_content,
+                            "called": has_corresponding_function,
+                            "command": command,
+                        }
+                    )
+                )
 
-                    if not message or message["data"] == b"$USRCLOSE$":
-                        # Most likely client disconnect, sometimes can be client error
-                        client_disconnect = self.clients[notified_sock]["ip"]
-                        more_client_info = self.clients[notified_sock]
-
-                        # Remove socket from lists and dictionaries
-                        self._sockets_list.remove(notified_sock)
-                        del self.clients[notified_sock]
-                        del self.clients_rev[
-                            next(
-                                _dict_tupkey_lookup_key(
-                                    client_disconnect, self.clients_rev
-                                )
-                            )
-                        ]
-
-                        if "leave" in self.funcs:
-                            # Reserved function - Leave
-                            self._call_function(
-                                "leave",
-                                {
-                                    "ip": client_disconnect,
-                                    "name": more_client_info["name"],
-                                    "group": more_client_info["group"],
-                                },
-                            )
-
-                        # Send reserved functions to existing clients
-                        clt_dcnt_header = make_header(
-                            f"$CLTDISCONN$ {json.dumps(more_client_info)}",
-                            self.header_len,
-                        )
-
-                        for clt_to_send in self.clients:
-                            clt_to_send.send(
-                                clt_dcnt_header
-                                + f"$CLTDISCONN$ {json.dumps(more_client_info)}".encode()
-                            )
-                    else:
-                        # Actual client message received
-                        clt_data = self.clients[notified_sock]
-                        usr_sent_dict = False
-
-                        if message["data"] == b"$DH_NUMS$":
-                            if not self.tls_arguments["tls"]:
-                                # The server's not using TLS
-                                no_tls_header = make_header("$NOTLS$", self.header_len)
-                                notified_sock.send(no_tls_header + b"$NOTLS$")
-                            continue
-                        elif message["data"].startswith(b"$USRSENTDICT$"):
-                            message["data"] = _removeprefix(
-                                message["data"], b"$USRSENTDICT$"
-                            )
-                            usr_sent_dict = True
-                        elif message["data"].startswith(b"$GETCLT$"):
-                            try:
-                                result = self.get_client(
-                                    _removeprefix(
-                                        message["data"], b"$GETCLT$ "
-                                    ).decode()
-                                )
-                                del result["socket"]
-
-                                clt = json.dumps(result)
-                            except ValueError as e:
-                                clt = '{"traceback": "' + str(e) + '"'
-                            except TypeError:
-                                clt = '{"traceback": "$NOEXIST$"}'
-
-                            clt_header = make_header(clt.encode(), self.header_len)
-
-                            print(clt)
-                            notified_sock.send(clt_header + clt.encode())
-
-                        for matching_reserve in [b"$CHNAME$", b"$CHGROUP$"]:
-                            if message["data"].startswith(matching_reserve):
-                                name_or_group = _removeprefix(
-                                    message["data"], matching_reserve + b" "
-                                ).decode()
-
-                                if name_or_group == message["data"].decode():
-                                    # Most likely request to reset name
-                                    name_or_group = None
-
-                                clt_info = self.clients[notified_sock]
-                                clt_dict = {"ip": clt_info["ip"]}
-
-                                if matching_reserve == b"$CHNAME$":
-                                    clt_dict["name"] = name_or_group
-                                    clt_dict["group"] = clt_info["group"]
-
-                                elif matching_reserve == b"$CHGROUP$":
-                                    clt_dict["name"] = clt_info["name"]
-                                    clt_dict["group"] = name_or_group
-
-                                del self.clients[notified_sock]
-                                self.clients[notified_sock] = clt_dict
-
-                                for key, value in dict(self.clients_rev).items():
-                                    if value == notified_sock:
-                                        del self.clients_rev[key]
-                                self.clients_rev[
-                                    tuple(clt_dict.values())
-                                ] = notified_sock
-
-                                if (
-                                    "name_change" in self.funcs
-                                    and matching_reserve == b"$CHNAME$"
-                                ):
-                                    old_name = clt_info["name"]
-                                    new_name = name_or_group
-
-                                    self._call_function(
-                                        "name_change", clt_dict, old_name, new_name
-                                    )
-                                elif (
-                                    "group_change" in self.funcs
-                                    and matching_reserve == b"$CHGROUP$"
-                                ):
-                                    old_group = clt_info["group"]
-                                    new_group = name_or_group
-
-                                    self._call_function(
-                                        "group_change", clt_dict, old_group, new_group
-                                    )
-
-                        if "message" in self.funcs:
-                            # Reserved function - message
-                            inner_clt_data = self.clients[notified_sock]
-                            parse_content = message["data"]
-
-                            ####################################
-                            ### Type hinting -> Type casting ###
-                            ####################################
-                            if usr_sent_dict:
-                                parse_content = json.loads(message["data"].decode())
-                            temp_parse_content = _type_cast(
-                                self.funcs["message"]["type_hint"]["msg"],
-                                message["data"],
-                                self.funcs["message"],
-                            )
-
-                            if temp_parse_content == parse_content and usr_sent_dict:
-                                parse_content = json.loads(message["data"])
-                            elif temp_parse_content is not None:
-                                parse_content = temp_parse_content
-                            elif temp_parse_content is None:
-                                raise InvalidTypeCast(
-                                    f"{self.funcs['message']['type_hint']['msg']} is an invalid "
-                                    f"type cast!"
-                                )
-
-                            self._call_function(
-                                "message", inner_clt_data, parse_content
-                            )
-
-                        has_corresponding_function = False
-                        parse_content = None  # FINE pycharm
-                        command = None
-
-                        for matching_cmd, func in self.funcs.items():
-                            if message["data"].startswith(matching_cmd.encode()):
-                                has_corresponding_function = True
-                                command = matching_cmd
-
-                                parse_content = message["data"][len(matching_cmd) + 1 :]
-
-                                temp_parse_content = _type_cast(
-                                    func["type_hint"]["msg"],
-                                    parse_content,
-                                    func,
-                                )
-
-                                if (
-                                    temp_parse_content == parse_content
-                                    and usr_sent_dict
-                                ):
-                                    parse_content = json.loads(parse_content)
-                                elif temp_parse_content is not None:
-                                    parse_content = temp_parse_content
-                                elif temp_parse_content is None:
-                                    raise InvalidTypeCast(
-                                        f"{func['type_hint']['msg']} is an invalid "
-                                        f"type cast!"
-                                    )
-
-                                if not func["threaded"]:
-                                    func["func"](clt_data, parse_content)
-                                else:
-                                    function_thread = threading.Thread(
-                                        target=func["func"],
-                                        args=(
-                                            clt_data,
-                                            parse_content,
-                                        ),
-                                    )
-                                    function_thread.setDaemon(
-                                        True
-                                    )  # FORGIVE ME PEP 8 FOR I HAVE SINNED
-                                    function_thread.start()
-
-                        # Caching
-                        if self.cache_size >= 0:
-                            if has_corresponding_function:
-                                cache_content = parse_content
-                            else:
-                                cache_content = message["data"]
-                            self.cache.append(
-                                MessageCacheMember(
-                                    {
-                                        "header": message["header"],
-                                        "content": cache_content,
-                                        "called": has_corresponding_function,
-                                        "command": command,
-                                    }
-                                )
-                            )
-
-                            if 0 < self.cache_size < len(self.cache):
-                                self.cache.pop(0)
+                if 0 < self.cache_size < len(self.cache):
+                    self.cache.pop(0)
 
     def close(self):
         """
