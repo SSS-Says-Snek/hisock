@@ -138,7 +138,7 @@ class HiSockServer:
         self.sock.listen(max_connections)
 
         # Function related storage
-        # {"func_name": {"func": Callable, "name": str, "type_hint": Any}}
+        # {"func_name": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
         self.funcs = {}
         # Stores the names of the reserved functions
         # Used for the `on` decorator
@@ -152,11 +152,11 @@ class HiSockServer:
         # Stores the number of parameters each reserved function takes
         # Used for the `on` decorator
         self._reserved_functions_parameters_num = (
-            2,  # join
-            2,  # leave
-            2,  # message
-            3,  # name_change
-            3,  # group_change
+            1,  # join
+            1,  # leave
+            1,  # message
+            2,  # name_change
+            2,  # group_change
         )
 
         # Cache
@@ -286,10 +286,7 @@ class HiSockServer:
             "group": client_hello["group"],
         }
         self.clients[connection] = client_info
-
-        self.clients_rev[
-            (address, client_hello["name"], client_hello["group"])
-        ] = connection
+        self._update_clients_rev_dict()
 
         # Send reserved command to existing clients
         self.send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_info)}".encode())
@@ -298,7 +295,7 @@ class HiSockServer:
             self._call_function("join", client_info)
             return
 
-        raise FunctionNotFoundWarning("leave")
+        raise FunctionNotFoundWarning("join")
 
     def _client_disconnection(self, client: socket.socket):
         """
@@ -307,11 +304,14 @@ class HiSockServer:
         :param client: The client socket
         :type client: socket.socket
 
-        :raise ServerException: The client wasn't connected to the server
+        :raise ClientNotFound: The client wasn't connected to the server
         """
 
-        if client in self._sockets_list:
-            raise ServerException("Client already connected")
+        if client not in self._sockets_list:
+            raise ClientNotFound("Client isn't connected")
+
+        # Save the client info for leave command
+        client_info = self.clients[client]
 
         # Remove socket from lists and dictionaries
         self._sockets_list.remove(client)
@@ -319,7 +319,7 @@ class HiSockServer:
         self._update_clients_rev_dict()
 
         if "leave" in self.funcs:
-            self._call_function("leave")
+            self._call_function("leave", client_info)
             return
 
         raise FunctionNotFoundWarning("leave")
@@ -338,51 +338,34 @@ class HiSockServer:
         :raise KeyError: If the client isn't a valid client.
         """
 
+        clients = self.clients
         if idx is not None:
             clients = (self.clients[self._sockets_list[idx]],)
-        else:
-            clients = self.clients
 
-        for client in clients:
-            self.clients_rev[(client["ip"], client["name"], client["group"])] = client
+        for client_socket, client_info in clients.items():
+            self.clients_rev[
+                (client_info["ip"], client_info["name"], client_info["group"])
+            ] = client_socket
 
-    def _type_cast_received_data(
-        self, content: bytes, func: dict, dict_was_sent: bool
-    ) -> str:
+    def _send_type_cast(self, content: Any) -> bytes:
         """
-        Type cast the received data
+        Type casting content for the send methods.
+        This method exists so type casting can easily be changed without changing
+        it in all 6 send methods.
 
-        :param content: The received data to be type-casted
-        :type content: bytes
-        :param func: The dictionary of the function
-        :type func: dict
-        :param dict_was_sent: Whether the data was sent as a dictionary
-        :type dict_was_sent: bool
+        :param content: The content to type cast
+        :type content: Any
+        :return: The type casted content
+        :rtype: bytes
 
-        :return: The received data type-casted
-        :rtype: str
+        :raise InvalidTypeCast: If the content cannot be type casted
         """
 
-        if not dict_was_sent:
-            type_casted_content = _type_cast(
-                type_cast=func["type_hint"]["message"],
-                content_to_typecast=content,
-                func_dict=func,
-            )
-        else:
-            # FIXME type casting dict -> bytes results in dict type
-            type_casted_content = json.loads(content)
-
-        if type_casted_content is None:
-            raise InvalidTypeCast(
-                f"{func['type_hint']['message']} is an invalid type cast!"
-            )
-
-        return type_casted_content
+        return _type_cast(bytes, content, "<sending function>")
 
     # On decorator
 
-    def _call_function(self, func_name, *args, **kwargs) -> Any:
+    def _call_function(self, func_name, *args, **kwargs):
         """
         Calls a function with the given arguments and returns the result.
 
@@ -390,8 +373,6 @@ class HiSockServer:
         :type func_name: str
         :param args: The arguments to pass to the function.
         :param kwargs: The keyword arguments to pass to the function.
-        :return: The result of the function call.
-        :rtype: Any
 
         :raise FunctionNotFoundException: If the function is not found.
         """
@@ -402,7 +383,8 @@ class HiSockServer:
 
         # Normal
         if not self.funcs[func_name]["threaded"]:
-            return self.funcs[func_name]["func"](*args, **kwargs)
+            self.funcs[func_name]["func"](*args, **kwargs)
+            return
 
         # Threaded
         function_thread = threading.Thread(
@@ -417,11 +399,16 @@ class HiSockServer:
         """Decorator used to handle something when receiving command"""
 
         def __init__(
-            self, outer: HiSockServer, command_activation: str, threaded: bool = False
+            self,
+            outer: HiSockServer,
+            command_activation: str,
+            threaded: bool,
+            override: bool,
         ):
             self.outer = outer
             self.command_activation = command_activation
             self.threaded = threaded
+            self.override = override
 
         def __call__(self, func: Callable) -> Callable:
             """
@@ -431,7 +418,11 @@ class HiSockServer:
             """
 
             func_args = inspect.getfullargspec(func).args
-            self._assert_num_func_args_valid(len(func_args))
+
+            if not self.override:
+                self._assert_num_func_args_valid(len(func_args))
+            # Overriding a reserved command, remove it
+            # TODO: must refactor client first
 
             # Store annotations of function
             annotations = inspect.getfullargspec(func).annotations  # {"param": type}
@@ -456,6 +447,7 @@ class HiSockServer:
                 "func": func,
                 "name": func.__name__,
                 "type_hint": parameter_annotations,
+                "threaded": self.threaded,
             }
 
             # Decorator stuff
@@ -491,7 +483,9 @@ class HiSockServer:
                     f"arguments, not {actual_num_func_args}"
                 )
 
-    def on(self, command: str, threaded: bool = False) -> Callable:
+    def on(
+        self, command: str, threaded: bool = False, override: bool = False
+    ) -> Callable:
         """
         A decorator that adds a function that gets called when the server
         receives a matching command
@@ -523,12 +517,17 @@ class HiSockServer:
         - ``dict`` -> ``dict``
         - ``dict`` -> ``bytes``
 
-        :param command: A string, representing the command the function should activate
+        :param command: A string representing the command the function should activate
             when receiving it.
         :type command: str
-        :param threaded: A boolean, representing if the function should be run in a thread
+        :param threaded: A boolean representing if the function should be run in a thread
             in order to not block the run() loop.
             Default is False.
+        :type threaded: bool
+        :param override: A boolean representing if the function should override the
+            reserved function with the same name and to treat it as an unreserved function.
+            Default is False.
+        :type override: bool
         :return: The same function (the decorator just appended the function to a stack).
         :rtype: function
 
@@ -536,7 +535,7 @@ class HiSockServer:
         """
 
         # Passes in outer to _on decorator/class
-        return self._on(self, command, threaded)
+        return self._on(self, command, threaded, override)
 
     # Getters
 
@@ -546,6 +545,8 @@ class HiSockServer:
         """
         Gets a client socket from a name or tuple in the form of (ip, port).
 
+        :param client: The name or tuple of the client.
+        :type client: Union[str, tuple]
         :return: The socket of the client.
         :rtype: socket.socket
 
@@ -567,7 +568,7 @@ class HiSockServer:
                 validate_ipv4(client)  # Raises ValueError if invalid
                 client_socket: socket.socket = next(
                     _dict_tupkey_lookup(
-                        (client.split(":")[0], client.split(":")[0][1]),
+                        client,
                         self.clients_rev,
                         idx_to_match=0,
                     )
@@ -736,7 +737,7 @@ class HiSockServer:
         :type content: bytes
         """
 
-        data_to_send = command.encode() + b" " + content
+        data_to_send = command.encode() + b" " + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         for client in self.clients:
             client.send(content_header + data_to_send)
@@ -772,7 +773,7 @@ class HiSockServer:
         :raise GroupNotFound: The group does not exist.
         """
 
-        data_to_send = command.encode() + b" " + content
+        data_to_send = command.encode() + b" " + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_all_client_sockets_in_group(group):
             client.send(content_header + data_to_send)
@@ -796,7 +797,7 @@ class HiSockServer:
             the same name is detected.
         """
 
-        data_to_send = command.encode() + b" " + content
+        data_to_send = command.encode() + b" " + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         self._get_client_from_name_or_ip_port(client).send(
             content_header + data_to_send
@@ -820,7 +821,7 @@ class HiSockServer:
             the same name is detected
         """
 
-        data_to_send = content
+        data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         self._get_client_from_name_or_ip_port(client).send(
             content_header + data_to_send
@@ -845,7 +846,7 @@ class HiSockServer:
         :raise GroupNotFound: The group does not exist.
         """
 
-        data_to_send = content
+        data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_all_client_sockets_in_group(group):
             client.send(content_header + data_to_send)
@@ -920,7 +921,7 @@ class HiSockServer:
 
             # Receiving data
             # "header" - The header of the message, mostly unneeded
-            # "data" - The actual data/content of the message
+            # "data" - The actual data/content of the message (type: bytes)
             message = receive_message(client_socket, self.header_len)
 
             # Handle client disconnection
@@ -928,12 +929,11 @@ class HiSockServer:
                 not message  # Most likely client disconnect, could be client error
                 or message["data"] == b"$USRCLOSE$"
             ):
-                self._client_disconnected(client_socket)
+                self._client_disconnection(client_socket)
                 continue
 
             # Actual client message received
             client_data = self.clients[client_socket]
-            dict_was_sent = False
 
             # TLS
             if message["data"] == b"$DH_NUMS$":
@@ -1001,7 +1001,6 @@ class HiSockServer:
             # Dictionary sent (for type casting)
             if message["data"].startswith(b"$USRSENTDICT$"):
                 message["data"] = _removeprefix(message["data"], b"$USRSENTDICT$")
-                dict_was_sent = True
 
             # Declaring these here for cache after this
             has_corresponding_function = False
@@ -1015,12 +1014,14 @@ class HiSockServer:
                 has_corresponding_function = True  # For cache
                 command = matching_command
 
-                content = message["data"].lstrip(matching_command + " ")
+                content = _removeprefix(
+                    message["data"], matching_command.encode() + b" "
+                )
 
                 self._call_function(
                     command,
                     client_data,
-                    self._type_cast_received_data(content, func, dict_was_sent),
+                    _type_cast(func["type_hint"]["message"], content, func["name"]),
                 )
 
             # Caching
@@ -1051,10 +1052,10 @@ class HiSockServer:
                 self._call_function(
                     "message",
                     client_data,
-                    self._type_cast_received_data(
+                    _type_cast(
+                        self.funcs["message"]["type_hint"]["message"],
                         content,
-                        self.funcs["message"],
-                        dict_was_sent,
+                        func_name="message",
                     ),
                 )
 
