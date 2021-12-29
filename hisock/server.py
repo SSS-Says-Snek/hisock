@@ -16,7 +16,6 @@ import socket
 import inspect  # Type-hinting detection for type casting
 import select  # Handle multiple clients at once
 import json  # Handle sending dictionaries
-import re  # Make sure arguments are passed correctly
 import threading  # Threaded server and decorators
 import warnings  # Non-severe errors
 from typing import Callable, Union, Any  # Type hints
@@ -30,6 +29,10 @@ try:
         NoMessageException,
         InvalidTypeCast,
         ServerException,
+        FunctionNotFoundException,
+        FunctionNotFoundWarning,
+        ClientNotFound,
+        GroupNotFound,
         receive_message,
         _removeprefix,
         make_header,
@@ -46,6 +49,10 @@ except ImportError:
         NoMessageException,
         InvalidTypeCast,
         ServerException,
+        FunctionNotFoundException,
+        FunctionNotFoundWarning,
+        ClientNotFound,
+        GroupNotFound,
         receive_message,
         _removeprefix,
         make_header,
@@ -284,11 +291,14 @@ class HiSockServer:
             (address, client_hello["name"], client_hello["group"])
         ] = connection
 
-        if "join" in self.funcs:
-            self._call_function("join", client_info)
-
         # Send reserved command to existing clients
         self.send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_info)}".encode())
+
+        if "join" in self.funcs:
+            self._call_function("join", client_info)
+            return
+
+        raise FunctionNotFoundWarning("leave")
 
     def _client_disconnection(self, client: socket.socket):
         """
@@ -303,8 +313,6 @@ class HiSockServer:
         if client in self._sockets_list:
             raise ServerException("Client already connected")
 
-        client_info = self.clients[client]
-
         # Remove socket from lists and dictionaries
         self._sockets_list.remove(client)
         del self.clients[client]
@@ -312,9 +320,9 @@ class HiSockServer:
 
         if "leave" in self.funcs:
             self._call_function("leave")
+            return
 
-        # Send reserved command to existing clients
-        self.send_all_clients_raw(f"$CLTDISCONN$ {json.dumps(client_info)}".encode())
+        raise FunctionNotFoundWarning("leave")
 
     def _update_clients_rev_dict(self, idx: int = None):
         """
@@ -322,11 +330,12 @@ class HiSockServer:
 
         :param idx: Index of the client to update if known. If not known,
             the whole dictionary will be updated.
+        :type idx: int
 
-        :raises IndexError: If the client idx doesn't exist.
-        :raises TypeError: If the client idx is not an integer.
-        :raises KeyError: If the client doesn't exist in :ivar:`self.clients`
-        :raises KeyError: If the client isn't a valid client.
+        :raise IndexError: If the client idx doesn't exist.
+        :raise TypeError: If the client idx is not an integer.
+        :raise KeyError: If the client doesn't exist in :ivar:`self.clients`
+        :raise KeyError: If the client isn't a valid client.
         """
 
         if idx is not None:
@@ -343,10 +352,14 @@ class HiSockServer:
         """
         Type cast the received data
 
-        :param data: The received data
-        :type data: bytes
+        :param content: The received data to be type-casted
+        :type content: bytes
+        :param func: The dictionary of the function
+        :type func: dict
+        :param dict_was_sent: Whether the data was sent as a dictionary
+        :type dict_was_sent: bool
 
-        :return: The received data type casted
+        :return: The received data type-casted
         :rtype: str
         """
 
@@ -380,12 +393,12 @@ class HiSockServer:
         :return: The result of the function call.
         :rtype: Any
 
-        :raises TypeError: If the function is not found.
+        :raise FunctionNotFoundException: If the function is not found.
         """
 
         # Check if the function exists
         if func_name not in self.funcs:
-            raise TypeError(f"Function {func_name} not found")
+            raise FunctionNotFoundException(f"Function {func_name} not found")
 
         # Normal
         if not self.funcs[func_name]["threaded"]:
@@ -414,7 +427,7 @@ class HiSockServer:
             """
             Adds a function that gets called when the server receives a matching command.
 
-            :raises TypeError: If the number of function arguments is invalid.
+            :raise ValueError: If the number of function arguments is invalid.
             """
 
             func_args = inspect.getfullargspec(func).args
@@ -452,7 +465,7 @@ class HiSockServer:
             """
             Asserts the number of function arguments is valid.
 
-            :raises TypeError: If the number of function arguments is invalid.
+            :raise ValueError: If the number of function arguments is invalid.
             """
 
             number_of_func_args = 2  # Normal commands
@@ -473,7 +486,7 @@ class HiSockServer:
 
             # Check if the number of function arguments is valid
             if actual_num_func_args != number_of_func_args:
-                raise TypeError(
+                raise ValueError(
                     f"{self.command_activation} command must have {number_of_func_args} "
                     f"arguments, not {actual_num_func_args}"
                 )
@@ -518,6 +531,8 @@ class HiSockServer:
             Default is False.
         :return: The same function (the decorator just appended the function to a stack).
         :rtype: function
+
+        :raise ValueError: If the number of function arguments is invalid.
         """
 
         # Passes in outer to _on decorator/class
@@ -531,8 +546,11 @@ class HiSockServer:
         """
         Gets a client socket from a name or tuple in the form of (ip, port).
 
+        :return: The socket of the client.
+        :rtype: socket.socket
+
         :raise ValueError: Client format is wrong
-        :raise TypeError: Client does not exist
+        :raise ClientNotFound: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected
 
@@ -555,7 +573,7 @@ class HiSockServer:
                     )
                 )
             except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
+                raise ClientNotFound(f"Client with IP {client} is not connected")
 
             ret_client_socket = client_socket
 
@@ -610,7 +628,8 @@ class HiSockServer:
 
         :param group: A string, representing the group to look up
         :type group: str
-        :raise TypeError: Group does not exist
+
+        :raise GroupNotFound: Group does not exist
 
         :return: A list of dictionaries of clients in that group, containing
           the address, name, group, and socket
@@ -634,7 +653,7 @@ class HiSockServer:
             mod_group_clients.append(mod_dict)
 
         if len(mod_group_clients) == 0:
-            raise TypeError(f"Group {group} does not exist")
+            raise GroupNotFound(f"Group {group} does not exist")
 
         return mod_group_clients
 
@@ -687,7 +706,7 @@ class HiSockServer:
         :rtype: socket.socket
 
         :raise ValueError: Client format is wrong
-        :raise TypeError: Client does not exist
+        :raise ClientNotFound: Client does not exist
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected
         """
@@ -749,7 +768,8 @@ class HiSockServer:
         :param content: A bytes-like object, with the content/message
             to send.
         :type content: bytes
-        :raise TypeError: The group does not exist.
+
+        :raise GroupNotFound: The group does not exist.
         """
 
         data_to_send = command.encode() + b" " + content
@@ -769,8 +789,9 @@ class HiSockServer:
         :param content: A bytes-like object, with the content/message
             to send.
         :type content: bytes
+
         :raise ValueError: Client format is wrong.
-        :raise TypeError: Client does not exist.
+        :raise ClientNotFound: Client does not exist.
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
@@ -820,7 +841,8 @@ class HiSockServer:
         :param content: A bytes-like object, with the content/message
             to send.
         :type content: bytes
-        :raise TypeError: The group does not exist.
+
+        :raise GroupNotFound: The group does not exist.
         """
 
         data_to_send = content
@@ -842,8 +864,9 @@ class HiSockServer:
         :param content: A bytes-like object, with the content/message
             to send.
         :type content: bytes
+
         :raise ValueError: Client format is wrong.
-        :raise TypeError: Client does not exist.
+        :raise ClientNotFound: Client does not exist.
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
@@ -883,7 +906,6 @@ class HiSockServer:
         if self._closed:
             return
 
-        # gets all sockets from select.select
         read_sock, write_sock, exception_sock = select.select(
             self._sockets_list, [], self._sockets_list
         )
@@ -974,35 +996,6 @@ class HiSockServer:
                         reserved_func_name, changed_client_info, old_value, new_value
                     )
 
-            # Message (listens for EVERY command)
-            #  TODO FIXME - This is a mess, and should be cleaned up
-            if "message" in self.funcs.keys():
-                inner_client_data = self.clients[client_socket]
-                content = message["data"]
-
-                ####################################
-                ### Type hinting -> Type casting ###
-                ####################################
-                if dict_was_sent:
-                    content = json.loads(message["data"].decode())
-                type_casted_content = _type_cast(
-                    self.funcs["message"]["type_hint"]["message"],
-                    message["data"],
-                    self.funcs["message"],
-                )
-
-                if type_casted_content == content and dict_was_sent:
-                    content = json.loads(message["data"])
-                elif type_casted_content is not None:
-                    content = type_casted_content
-                elif type_casted_content is None:
-                    raise InvalidTypeCast(
-                        f"{self.funcs['message']['type_hint']['message']} is an invalid "
-                        f"type cast!"
-                    )
-
-                self._call_function("message", inner_client_data, content)
-
             ### Unreserved ###
 
             # Dictionary sent (for type casting)
@@ -1049,6 +1042,21 @@ class HiSockServer:
 
                 if 0 < self.cache_size < len(self.cache):
                     self.cache.pop(0)
+
+            # Extra special case! Message reserved (listens on every command)
+            if "message" in self.funcs.keys():
+                client_data = self.clients[client_socket]
+                content = message["data"]
+
+                self._call_function(
+                    "message",
+                    client_data,
+                    self._type_cast_received_data(
+                        content,
+                        self.funcs["message"],
+                        dict_was_sent,
+                    ),
+                )
 
     def close(self):
         """
