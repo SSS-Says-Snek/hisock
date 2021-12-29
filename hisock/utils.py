@@ -45,8 +45,24 @@ class ClientDisconnected(Exception):
     pass
 
 
+class FunctionNotFoundException(Exception):
+    pass
+
+
+class ClientNotFound(Exception):
+    pass
+
+
+class GroupNotFound(Exception):
+    pass
+
+
 # Custom warnings
 class NoHeaderWarning(Warning):
+    pass
+
+
+class FunctionNotFoundWarning(Warning):
     pass
 
 
@@ -180,68 +196,56 @@ def _dict_tupkey_lookup_key(
             yield key
 
 
-def _type_cast(type_cast: Any, content_to_typecast: bytes, func_dict: dict) -> Any:
+def _type_cast(type_cast: Any, content_to_type_cast: Any, func_name: str) -> Any:
     """
-    Basis for type casting on the server
-    If testing, replace `func_dict` with a dummy one
-    Currently NOT guranteed to return, please remember to change this API
+    Type casts data to be sent.
+
+    :param type_cast: The type to type cast to.
+    :type type_cast: Any
+    :param content_to_type_cast: The content to type cast. If it is not
+        bytes, this function will attempt to convert it to bytes.
+    :type content_to_type_cast: Any
+    :param func_name: The name of the function that is calling this function.
+        Used for exception messages.
+    :type func_name: str
+    :return: The type casted content (will be the same type as :param:`type_cast`).
+    :rtype: Any
+
+    :raise InvalidTypeCast: If the type cast is invalid.
     """
-    # TODO: refactor
-    if type_cast == bytes:
-        return content_to_typecast
-    if type_cast == str:
-        try:
-            typecasted_content = content_to_typecast.decode()
-            return typecasted_content  # Remember to change this, but I'm lazy!
-        except UnicodeDecodeError as e:
-            raise TypeError(
-                f"Type casting from bytes to string failed for function "
-                f"\"{func_dict['name']}\"\n{str(e)}"
-            )
-    elif type_cast == int:
-        try:
-            typecasted_content = int(content_to_typecast)
-            return typecasted_content  # Remember to change this, but I'm lazy!
-        except ValueError as e:
-            raise TypeError(
-                f"Type casting from bytes to int failed for function "
-                f"\"{func_dict['name']}\":\n           {e}"
-            ) from ValueError
-    elif type_cast == float:
-        try:
-            typecasted_content = float(content_to_typecast)
-            return typecasted_content  # Remember to change this, but I'm lazy!
-        except ValueError as e:
-            raise TypeError(
-                f"Type casting from bytes to float failed for function "
-                f"\"{func_dict['name']}\":\n           {e}"
-            ) from ValueError
-    elif type_cast is None:
-        return content_to_typecast
-    for _type in [list, dict]:
-        if type_cast == _type:
-            try:
-                typecasted_content = json.loads(content_to_typecast)
-                return typecasted_content
-            except UnicodeDecodeError:
+
+    try:
+        # Convert content_to_type_cast to bytes
+        if not isinstance(content_to_type_cast, bytes):
+            if isinstance(content_to_type_cast, str):
+                content_to_type_cast = content_to_type_cast.encode()
+            elif type(content_to_type_cast) in (int, float):
+                content_to_type_cast = str(content_to_type_cast).encode()
+            elif type(content_to_type_cast) in (list, dict):
+                content_to_type_cast = json.dumps(content_to_type_cast).encode()
+            else:
                 raise TypeError(
-                    f"Cannot decode message data during "
-                    f"bytes->{_type.__name__} type cast"
-                    "(current implementation requires string to "
-                    "type cast, not bytes)"
-                ) from UnicodeDecodeError
-            except ValueError:
-                raise TypeError(
-                    f"Type casting from bytes to {_type.__name__} "
-                    f"failed for function \"{func_dict['name']}\""
-                    f":\n           Message is not a {_type.__name__}"
-                ) from ValueError
-            except Exception as e:
-                raise TypeError(
-                    f"Type casting from bytes to {_type.__name__} "
-                    f"failed for function \"{func_dict['name']}\""
-                    f":\n           {e}"
-                ) from type(e)
+                    f"Cannot type cast {type(content_to_type_cast)} to bytes"
+                )
+
+        # Type cast content_to_type_cast to type_cast
+        if type_cast == bytes:
+            return content_to_type_cast
+        elif type_cast in (str, int, float):
+            return type_cast(content_to_type_cast.decode())
+        elif type_cast in (list, dict):
+            return json.loads(content_to_type_cast.decode())
+        raise InvalidTypeCast(
+            f"Cannot type cast bytes to {type_cast.__name__}."
+            " See `HiSockServer.on` for available type hints."
+        )
+
+    except Exception as e:
+        raise InvalidTypeCast(
+            f"Type casting from {type(content_to_type_cast).__name__} "
+            f"to {type(type_cast).__name__} failed for function "
+            f'"{func_name}":\n{e}'
+        ) from e
 
 
 def validate_ipv4(
@@ -263,6 +267,7 @@ def validate_ipv4(
     :type require_port: bool
     :return: If the address is valid
     :rtype: bool
+
     :raise ValueError: IP address is not valid
     """
 
@@ -284,7 +289,7 @@ def validate_ipv4(
     # Port checking
     if require_port:
         port = deconstructed_ip[-1]
-        if not port.isdigit():
+        if isinstance(port, str) and not port.isdigit():
             raise ValueError(f"Port must be a number, not {port}")
 
         elif int(port) < 0 or int(port) > 65535:
@@ -432,9 +437,10 @@ def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
         an INTEGER port as the second element
     :rtype: tuple[str, int]
     """
+
     ip_split = formatted_ip.split(":")
     recon_ip_split = [str(ip_split[0]), int(ip_split[1])]
-    return tuple(recon_ip_split)  # Convert list to tuple
+    return tuple(recon_ip_split)
 
 
 def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
