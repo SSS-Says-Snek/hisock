@@ -137,22 +137,29 @@ class HiSockClient:
                 "Server is not running! Aborting..."
             ) from ConnectionRefusedError
 
-        # Function and cache storage
+        # Function related storage
+        # {"func_name": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
         self.funcs = {}
-        self.cache_size = cache_size
-        if cache_size >= 0:
-            # cache_size <= -1: No cache
-            self.cache = []
-
         # Stores the names of the reserved functions
         # Used for the `on` decorator
-        self._reserved_functions = ("client_connect", "client_disconnect")
+        self._reserved_functions = (
+            "client_connect",
+            "client_disconnect",
+            "force_disconnect",
+        )
         # Stores the number of parameters each reserved function takes
         # Used for the `on` decorator
         self._reserved_functions_parameters_num = (
             1,  # client_connect
             1,  # client_disconnect
+            0,  # force_disconnect
         )
+
+        # Cache
+        self.cache_size = cache_size
+        if cache_size > 0:
+            # cache_size <= 0: No cache
+            self.cache = []
 
         # TLS arguments
         self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
@@ -162,6 +169,9 @@ class HiSockClient:
         self.connected = False
         self.connect_time = 0  # Unix timestamp
         self.sock.setblocking(blocking)
+
+        # Send client hello
+        self._send_client_hello()
 
     def __str__(self) -> str:
         """Example: <HiSockClient connected to 192.168.1.133:5000>"""
@@ -241,11 +251,8 @@ class HiSockClient:
             )
 
         hello_dict = {"name": self.name, "group": self.group}
-        conn_header = make_header(
-            f"$CLTHELLO$ {json.dumps(hello_dict)}", self.header_len
-        )
+        self.send_raw(f"$CLTHELLO$ {json.dumps(hello_dict)}")
 
-        self.sock.send(conn_header + f"$CLTHELLO$ {json.dumps(hello_dict)}".encode())
         self.connected = True
         self.connect_time = time()
 
@@ -323,15 +330,15 @@ class HiSockClient:
             self._assert_num_func_args_valid(len(func_args))
 
             annotations = inspect.getfullargspec(func).annotations  # {"param": type}
-            parameter_annotations = {"msg": None}
+            parameter_annotations = {"message": None}
 
             # Process unreserved commands
             if self.command not in self.outer._reserved_functions:
                 # Map function arguments into type hint compliant ones
                 # Note: this is the same code as in `HiSockServer` which is why
                 # this could support multiple arguments. However, for now, the
-                # only argument is `msg`.
-                for func_argument, argument_name in zip(func_args, ("msg",)):
+                # only argument is `message`.
+                for func_argument, argument_name in zip(func_args, ("message",)):
                     if func_argument not in annotations:
                         continue
                     parameter_annotations[argument_name] = annotations[func_argument]
@@ -355,12 +362,12 @@ class HiSockClient:
             :raises TypeError: If the number of function arguments is invalid.
             """
 
-            number_of_func_args = 2  # Normal commands
+            number_of_func_args = 1  # Normal commands
 
             # Reserved commands
             try:
                 index_of_reserved_cmd = self.outer._reserved_functions.index(
-                    self.cmd_activation
+                    self.command
                 )
                 # Get the number of parameters for the reserved command
                 number_of_func_args = self.outer._reserved_functions_parameters_num[
@@ -374,7 +381,7 @@ class HiSockClient:
             # Check if the number of function arguments is valid
             if actual_num_func_args != number_of_func_args:
                 raise TypeError(
-                    f"{self.cmd_activation} command must have {number_of_func_args} "
+                    f"{self.command} command must have {number_of_func_args} "
                     f"arguments, not {actual_num_func_args}"
                 )
 
@@ -509,6 +516,9 @@ class HiSockClient:
 
         data_to_send = self._send_type_cast(content)
         header = make_header(data_to_send, self.header_len)
+        print(f"debug")
+        print(data_to_send)
+        print(header)
         self.sock.send(header + data_to_send)
 
     def recv_raw(self) -> bytes:
@@ -524,8 +534,8 @@ class HiSockClient:
         """
 
         # Blocks depending on your blocking settings, until message
-        msg_len = int(self.sock.recv(self.header_len).decode())
-        message = self.sock.recv(msg_len)
+        message_len = int(self.sock.recv(self.header_len).decode())
+        message = self.sock.recv(message_len)
 
         # Returns message
         return message
@@ -624,7 +634,7 @@ class HiSockClient:
                     parse_content = content[len(matching_command) + 1 :]
 
                     parse_content = _type_cast(
-                        func["type_hint"], parse_content, func["name"]
+                        func["type_hint"]["message"], parse_content, func["name"]
                     )
 
                     # Call function

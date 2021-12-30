@@ -116,15 +116,15 @@ class File:
 
 
 def make_header(
-    header_msg: Union[str, bytes], header_len: int, encode=True
+    header_message: Union[str, bytes], header_len: int, encode=True
 ) -> Union[str, bytes]:
     """
-    Makes a header of ``header_msg``, with a maximum
+    Makes a header of ``header_message``, with a maximum
     header length of ``header_len``
 
-    :param header_msg: A string OR bytes-like object, representing
+    :param header_message: A string OR bytes-like object, representing
         the data to make a header from
-    :type header_msg: Union[str, bytes]
+    :type header_message: Union[str, bytes]
     :param header_len: An integer, specifying
         the actual header length (will be padded)
     :type header_len: int
@@ -134,8 +134,8 @@ def make_header(
     :rtype: Union[str, bytes]
     """
 
-    msg_len = len(header_msg)
-    constructed_header = f"{msg_len}{' ' * (header_len - len(str(msg_len)))}"
+    message_len = len(header_message)
+    constructed_header = f"{message_len}{' ' * (header_len - len(str(message_len)))}"
     if encode:
         return constructed_header.encode()
     return constructed_header
@@ -158,14 +158,15 @@ def receive_message(
         while the second one refers to the actual data
     :rtype: dict["header": bytes, "data": bytes]
     """
+
     try:
-        header_msg = connection.recv(header_len)
+        header_message = connection.recv(header_len)
 
-        if header_msg:
-            msg_len = int(header_msg)
-            data = connection.recv(msg_len)
+        if header_message:
+            message_len = int(header_message)
+            data = connection.recv(message_len)
 
-            return {"header": header_msg, "data": data}
+            return {"header": header_message, "data": data}
         return False
     except ConnectionResetError:
         # This is most likely where clients will disconnect
@@ -177,6 +178,7 @@ def _removeprefix(
     prefix: Union[str, bytes],
 ) -> Union[str, bytes]:
     """A backwards-compatible alternative of str.removeprefix"""
+
     if string.startswith(prefix):
         return string[len(prefix) :]
     else:
@@ -190,13 +192,13 @@ def _dict_tupkey_lookup(
     Returns the value of the dict looked up,
     given a key that is part of a key-tuple
     """
+
     for key, value in _dict.items():
         if idx_to_match is None:
             if multikey in key:
                 yield value
-        elif isinstance(idx_to_match, int):
-            if multikey == key[idx_to_match]:
-                yield value
+        elif isinstance(idx_to_match, int) and multikey == key[idx_to_match]:
+            yield value
 
 
 def _dict_tupkey_lookup_key(
@@ -206,6 +208,7 @@ def _dict_tupkey_lookup_key(
     Returns the key of the dict looked up,
     given a key that is part of a key-tuple
     """
+
     for key in _dict.keys():
         if idx_to_match is None:
             if multikey in key:
@@ -214,20 +217,22 @@ def _dict_tupkey_lookup_key(
             yield key
 
 
-def _type_cast(type_cast: Any, content_to_type_cast: Any, func_name: str) -> Any:
+def _type_cast(
+    type_cast: Sendable, content_to_type_cast: Sendable, func_name: str
+) -> Sendable:
     """
     Type casts data to be sent.
 
     :param type_cast: The type to type cast to.
-    :type type_cast: Any
+    :type type_cast: Sendable
     :param content_to_type_cast: The content to type cast. If it is not
         bytes, this function will attempt to convert it to bytes.
-    :type content_to_type_cast: Any
+    :type content_to_type_cast: Sendable
     :param func_name: The name of the function that is calling this function.
         Used for exception messages.
     :type func_name: str
     :return: The type casted content (will be the same type as :param:`type_cast`).
-    :rtype: Any
+    :rtype: Sendable
 
     :raise InvalidTypeCast: If the type cast is invalid.
     """
@@ -338,6 +343,7 @@ def get_local_ip(all_ips: bool = False) -> str:
         format "ip:port"
     :rtype: str
     """
+
     if not all_ips:
         return socket.gethostbyname(socket.gethostname())
     else:
@@ -474,4 +480,5 @@ def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
     :return: A string, with the format "ip:port"
     :rtype: str
     """
+
     return f"{formatted_tuple[0]}:{formatted_tuple[1]}"
