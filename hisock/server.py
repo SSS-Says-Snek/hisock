@@ -33,16 +33,17 @@ try:
         FunctionNotFoundWarning,
         ClientNotFound,
         GroupNotFound,
+        MessageCacheMember,
         Sendable,
         Client,
-        receive_message,
         _removeprefix,
-        make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
         _type_cast,
+        receive_message,
+        make_header,
         validate_ipv4,
-        MessageCacheMember,
+        validate_command_not_reserved,
     )
 except ImportError:
     # Relative import doesn't work for non-pip builds
@@ -55,16 +56,17 @@ except ImportError:
         FunctionNotFoundWarning,
         ClientNotFound,
         GroupNotFound,
+        MessageCacheMember,
         Sendable,
         Client,
-        receive_message,
         _removeprefix,
-        make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
         _type_cast,
+        receive_message,
+        make_header,
         validate_ipv4,
-        MessageCacheMember,
+        validate_command_not_reserved,
     )
 
 
@@ -405,14 +407,16 @@ class HiSockServer:
         def __init__(
             self,
             outer: HiSockServer,
-            command_activation: str,
+            command: str,
             threaded: bool,
             override: bool,
         ):
             self.outer = outer
-            self.command_activation = command_activation
+            self.command = command
             self.threaded = threaded
             self.override = override
+
+            validate_command_not_reserved(self.command)
 
         def __call__(self, func: Callable) -> Callable:
             """
@@ -423,10 +427,16 @@ class HiSockServer:
 
             func_args = inspect.getfullargspec(func).args
 
-            if not self.override:
-                self._assert_num_func_args_valid(len(func_args))
-            # Overriding a reserved command, remove it
-            # TODO: must refactor client first
+            # Overriding a reserved command, remove it from reserved functions
+            if self.override:
+                if self.command in self.outer.reserved_commands.keys():
+                    self.outer.funcs.pop(self.command)
+
+                index = self.outer._reserved_functions.index(self.command)
+                self.outer._reserved_functions.pop(index)
+                self.outer._reserved_functions_parameters_num.pop(index)
+
+            self._assert_num_func_args_valid(len(func_args))
 
             # Store annotations of function
             annotations = inspect.getfullargspec(func).annotations  # {"param": type}
@@ -435,8 +445,8 @@ class HiSockServer:
             # Process unreserved commands and reserved `message` (only reserved
             # command to have 2 arguments)
             if (
-                self.command_activation not in self.outer._reserved_functions
-                or self.command_activation == "message"
+                self.command not in self.outer._reserved_functions
+                or self.command == "message"
             ):
                 # Map function arguments into type hint compliant ones
                 for func_argument, argument_name in zip(
@@ -447,7 +457,7 @@ class HiSockServer:
                     parameter_annotations[argument_name] = annotations[func_argument]
 
             # Creates function dictionary to add to `outer.funcs`
-            self.outer.funcs[self.command_activation] = {
+            self.outer.funcs[self.command] = {
                 "func": func,
                 "name": func.__name__,
                 "type_hint": parameter_annotations,
@@ -469,7 +479,7 @@ class HiSockServer:
             # Reserved commands
             try:
                 index_of_reserved_command = self.outer._reserved_functions.index(
-                    self.command_activation
+                    self.command
                 )
                 # Get the number of parameters for the reserved command
                 number_of_func_args = self.outer._reserved_functions_parameters_num[
@@ -483,7 +493,7 @@ class HiSockServer:
             # Check if the number of function arguments is valid
             if actual_num_func_args != number_of_func_args:
                 raise ValueError(
-                    f"{self.command_activation} command must have {number_of_func_args} "
+                    f"{self.command} command must have {number_of_func_args} "
                     f"arguments, not {actual_num_func_args}"
                 )
 
@@ -1032,19 +1042,21 @@ class HiSockServer:
                     self.cache.pop(0)
 
             # Extra special case! Message reserved (listens on every command)
-            if "message" in self.funcs.keys():
-                client_data = self.clients[client_socket]
-                content = message["data"]
+            if "message" not in self.funcs.keys():
+                continue
 
-                self._call_function(
-                    "message",
-                    client_data,
-                    _type_cast(
-                        self.funcs["message"]["type_hint"]["message"],
-                        content,
-                        func_name="message",
-                    ),
-                )
+            client_data = self.clients[client_socket]
+            content = message["data"]
+
+            self._call_function(
+                "message",
+                client_data,
+                _type_cast(
+                    self.funcs["message"]["type_hint"]["message"],
+                    content,
+                    func_name="message",
+                ),
+            )
 
     def close(self):
         """

@@ -18,6 +18,7 @@ import pathlib
 import socket
 from typing import Union, Any
 from ipaddress import IPv4Address
+from re import search
 
 # Custom exceptions
 class ClientException(Exception):
@@ -57,11 +58,11 @@ class GroupNotFound(Exception):
 
 
 # Custom warnings
-class NoHeaderWarning(Warning):
+class NoHeaderWarning(UserWarning):
     pass
 
 
-class FunctionNotFoundWarning(Warning):
+class FunctionNotFoundWarning(UserWarning):
     pass
 
 
@@ -269,6 +270,23 @@ def _type_cast(
             f"to {type(type_cast).__name__} failed for function "
             f'"{func_name}":\n{e}'
         ) from e
+
+
+def validate_command_not_reserved(command: str):
+    """
+    Checks for illegal $cmd$ notation (used for reserved functions).
+
+    :param command: The command to check.
+    :type command: str
+
+    :raise ValueError: If the command is reserved.
+    """
+
+    if search(r"\$.+\$", command):
+        raise ValueError(
+            'The format "$command$" is used for reserved functions - '
+            "consider using a different format."
+        )
 
 
 def validate_ipv4(

@@ -16,12 +16,9 @@ from __future__ import annotations  # Remove when 3.10 is used by majority
 import socket
 import inspect  # Type-hinting detection for type casting
 import json  # Handle sending dictionaries
-import re  # Make sure arguments are passed correctly
 import errno  # Handle fatal errors with the server
 import sys  # Utilize stderr
 import threading  # Threaded client and decorators
-import warnings  # Handle warnings
-import builtins  # Convert string methods into builtins
 import traceback  # Error handling
 from typing import Callable, Union, Any  # Type hints
 from ipaddress import IPv4Address  # Comparisons
@@ -31,30 +28,32 @@ from time import time  # Unix timestamp support
 try:
     # Pip builds require relative import
     from .utils import (
-        make_header,
-        _removeprefix,
-        ServerNotRunning,
         ClientException,
         FunctionNotFoundException,
+        ServerNotRunning,
+        MessageCacheMember,
         Sendable,
         Client,
-        iptup_to_str,
+        _removeprefix,
         _type_cast,
-        MessageCacheMember,
+        make_header,
+        iptup_to_str,
+        validate_command_not_reserved,
     )
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
-        make_header,
-        _removeprefix,
-        ServerNotRunning,
         ClientException,
         FunctionNotFoundException,
+        ServerNotRunning,
+        MessageCacheMember,
         Sendable,
         Client,
-        iptup_to_str,
+        _removeprefix,
         _type_cast,
-        MessageCacheMember,
+        make_header,
+        iptup_to_str,
+        validate_command_not_reserved,
     )
 
 
@@ -316,17 +315,22 @@ class HiSockClient:
             self.threaded = threaded
             self.override = override
 
+            validate_command_not_reserved(self.command)
+
         def __call__(self, func: Callable) -> Callable:
             """Adds a function that gets called when the client receives a matching command"""
 
-            # Checks for illegal $cmd$ notation (used for reserved functions)
-            if re.search(r"\$.+\$", self.command):
-                raise ValueError(
-                    'The format "$command$" is used for reserved functions - '
-                    "Consider using a different format"
-                )
-
             func_args = inspect.getfullargspec(func).args
+
+            # Overriding a reserved command, remove it from reserved functions
+            if self.override:
+                if self.command_activation in self.outer.reserved_commands.keys():
+                    self.outer.funcs.pop(self.command_activation)
+
+                index = self.outer._reserved_functions.index(self.command_activation)
+                self.outer._reserved_functions.pop(index)
+                self.outer._reserved_functions_parameters_num.pop(index)
+
             self._assert_num_func_args_valid(len(func_args))
 
             annotations = inspect.getfullargspec(func).annotations  # {"param": type}
@@ -771,7 +775,7 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_siz
         Default is True.
     :type header_len: int, optional
 
-    :return: A :class:`HiSockClient` instance
+    :return: A :class:`HiSockClient` instance.
     :rtype: instance
 
     .. note::
@@ -788,7 +792,7 @@ def threaded_connect(
 ):
     """
     Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
-    for more details
+    and :func:`connect` for more details.
 
     :return: A :class:`ThreadedHiSockClient` instance
     """
