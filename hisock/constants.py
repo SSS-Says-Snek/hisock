@@ -30,7 +30,7 @@ DH_N = int(
 
 DH_DEFAULT = {"P": DH_P, "N": DH_N}
 
-__version__ = "1.1"
+__version__ = "1.2"
 __name__ = "hisock"
 __copyright__ = "SSS-Says-Snek, 2021-present"
 __author__ = "SSS-Says-Snek"

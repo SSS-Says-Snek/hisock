@@ -10,15 +10,15 @@ from urllib.error import HTTPError
 
 path = pathlib.Path(os.path.dirname(__file__))
 
-sys.path.append(
-    os.path.join(
-        str(path),
-        str(path.parent.parent),
-    ),
-)
+sys.path.append(os.path.join(str(path), str(path.parent.parent)))
 
 sys.path.insert(0, os.path.abspath("."))
 sys.path.insert(0, os.path.abspath("../../"))
+# sys.path.insert(
+#     0, os.path.abspath(
+#         '../../'
+#     )
+# )
 
 sys.modules["__future__"] = Mock()
 sys.modules["__future__.annotations"] = Mock()

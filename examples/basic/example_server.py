@@ -31,9 +31,9 @@ def run():
         # The client data, with IP, name, and group
         # (Names and Groups are just an easy way to identify clients without IP)
         print(f"Cool, {':'.join(map(str, client_data['ip']))} joined!")
-        if client_data['name'] is not None:
+        if client_data["name"] is not None:
             print(f"    - With a sick name \"{client_data['name']}\", very cool!")
-        if client_data['group'] is not None:
+        if client_data["group"] is not None:
             print(f"    - In a sick group \"{client_data['group']}\", cool!")
 
         print("I'm gonna send them a quick hello message")
@@ -41,7 +41,9 @@ def run():
         # The current way to send; it takes in a tuple of IP,
         # The command to send (essentially what to label the message as),
         # And the content (Content must be in bytes for now, str support may be added)
-        server.send_client(client_data['ip'], "hello_message", str(time.time()).encode())
+        server.send_client(
+            client_data["ip"], "hello_message", str(time.time()).encode()
+        )
 
     # Client SHOULD send a command `processing1`, soon after the server message
     # This will activate whenever a client sends a `processing1` command
@@ -53,9 +55,11 @@ def run():
         # Into another supported type, like str, int, or float
 
         # `iptup_to_str` converts a tuple IP into a string IP ('1.1.1.1', 4) -> 1.1.1.1:4
-        print(f"\nAlright, looks like {iptup_to_str(client['ip'])} received the hello message, "
-              "\nas now they're trying to compute something on the server, because they have "
-              "potato computers")
+        print(
+            f"\nAlright, looks like {iptup_to_str(client['ip'])} received the hello message, "
+            "\nas now they're trying to compute something on the server, because they have "
+            "potato computers"
+        )
         print("Their processing request is:", process_request)
 
         for _ in range(process_request.count("randnum")):
@@ -69,7 +73,7 @@ def run():
         # creating 500 commands, use `send_client_raw`. Along with
         # `recv_raw`, it can be used to send multiple content rounds.
         # Here, we are sending the result back to the client
-        server.send_client_raw(client['ip'], str(result).encode())
+        server.send_client_raw(client["ip"], str(result).encode())
 
     while True:
         server.run()

@@ -14,19 +14,13 @@ cli_on = HiSockClient._on
 class DummyFuncClassServer:
     def __init__(self):
         self.funcs = {}
-        self.reserved_functions = [
-            'join', 'leave',
-            'message'
-        ]
+        self.reserved_functions = ["join", "leave", "message"]
 
 
 class DummyFuncClassClient(DummyFuncClassServer):
     def __init__(self):
         super().__init__()
-        self.reserved_functions = [
-            'client_connect',
-            'client_disconnect'
-        ]
+        self.reserved_functions = ["client_connect", "client_disconnect"]
 
 
 _ServerDec = serv_on
@@ -82,63 +76,58 @@ def func_client_typecast(msg: int):
 
 class TestServerDecs:
     def test_server_no_typehint(self):
-        assert server_dummy.funcs['e'] == {
+        assert server_dummy.funcs["e"] == {
             "func": func_server_no_typecast,
             "name": func_server_no_typecast.__name__,
-            "type_hint": {
-                "clt": None,
-                "msg": None
-            }
+            "type_hint": {"clt": None, "msg": None},
+            "threaded": False
         }
 
     def test_server_two_typecast(self):
-        assert server_dummy.funcs['f'] == {
+        assert server_dummy.funcs["f"] == {
             "func": func_server_two_typecast,
             "name": func_server_two_typecast.__name__,
-            "type_hint": {
-                "clt": str,
-                "msg": int
-            }
+            "type_hint": {"clt": str, "msg": int},
+            "threaded": False
         }
 
     def test_server_one_typecast(self):
-        assert server_dummy.funcs['g'] == {
+        assert server_dummy.funcs["g"] == {
             "func": func_server_one_typecast,
             "name": func_server_one_typecast.__name__,
-            "type_hint": {
-                "clt": None,
-                "msg": float
-            }
+            "type_hint": {"clt": None, "msg": float},
+            "threaded": False
         }
 
     def test_server_clt_typecast(self):
-        assert server_dummy.funcs['h'] == {
+        assert server_dummy.funcs["h"] == {
             "func": func_server_clt_typecast,
             "name": func_server_clt_typecast.__name__,
-            "type_hint": {
-                "clt": list,
-                "msg": None
-            }
+            "type_hint": {"clt": list, "msg": None},
+            "threaded": False
         }
 
 
 class TestClientDecs:
     def test_client_no_typecast(self):
-        assert client_dummy.funcs['i'] == {
+        assert client_dummy.funcs["i"] == {
             "func": func_client_no_typecast,
             "name": func_client_no_typecast.__name__,
-            "type_hint": None
+            "type_hint": None,
+            "threaded": False
         }
 
     def test_client_typecast(self):
-        assert client_dummy.funcs['j'] == {
+        assert client_dummy.funcs["j"] == {
             "func": func_client_typecast,
             "name": func_client_typecast.__name__,
-            "type_hint": int
+            "type_hint": int,
+            "threaded": False
         }
 
     def test_client_exception(self):
         with pytest.raises(ValueError):
+
             @client_dec("$RESERVED$")
             def func_client_exception(msg):
                 pass
