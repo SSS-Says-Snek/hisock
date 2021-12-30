@@ -33,6 +33,8 @@ try:
         FunctionNotFoundWarning,
         ClientNotFound,
         GroupNotFound,
+        Sendable,
+        Client,
         receive_message,
         _removeprefix,
         make_header,
@@ -53,6 +55,8 @@ except ImportError:
         FunctionNotFoundWarning,
         ClientNotFound,
         GroupNotFound,
+        Sendable,
+        Client,
         receive_message,
         _removeprefix,
         make_header,
@@ -347,21 +351,21 @@ class HiSockServer:
                 (client_info["ip"], client_info["name"], client_info["group"])
             ] = client_socket
 
-    def _send_type_cast(self, content: Any) -> bytes:
+    def _send_type_cast(self, content: Sendable) -> bytes:
         """
         Type casting content for the send methods.
         This method exists so type casting can easily be changed without changing
         it in all 6 send methods.
 
         :param content: The content to type cast
-        :type content: Any
+        :type content: Sendable
         :return: The type casted content
         :rtype: bytes
 
         :raise InvalidTypeCast: If the content cannot be type casted
         """
 
-        return _type_cast(bytes, content, "<sending function>")
+        return _type_cast(bytes, content, "<server sending function>")
 
     # On decorator
 
@@ -539,14 +543,12 @@ class HiSockServer:
 
     # Getters
 
-    def _get_client_from_name_or_ip_port(
-        self, client: Union[str, tuple]
-    ) -> socket.socket:
+    def _get_client_from_name_or_ip_port(self, client: Client) -> socket.socket:
         """
         Gets a client socket from a name or tuple in the form of (ip, port).
 
         :param client: The name or tuple of the client.
-        :type client: Union[str, tuple]
+        :type client: Client
         :return: The socket of the client.
         :rtype: socket.socket
 
@@ -726,15 +728,14 @@ class HiSockServer:
 
     # Send
 
-    def send_all_clients(self, command: str, content: bytes):
+    def send_all_clients(self, command: str, content: Sendable):
         """
         Sends the command and content to *ALL* clients connected.
 
         :param command: A string, representing the command to send to every client.
         :type command: str
-        :param content: A bytes-like object, containing the message/content to send
-            to each client.
-        :type content: bytes
+        :param content: The message / content to send
+        :type content: Sendable
         """
 
         data_to_send = command.encode() + b" " + self._send_type_cast(content)
@@ -742,20 +743,19 @@ class HiSockServer:
         for client in self.clients:
             client.send(content_header + data_to_send)
 
-    def send_all_clients_raw(self, content: bytes):
+    def send_all_clients_raw(self, content: Sendable):
         """
         Sends the command and content to *ALL* clients connected *without a command*.
 
-        :param content: A bytes-like object, containing the message/content to send
-            to each client.
-        :type content: bytes
+        :param content: The message / content to send
+        :type content: Sendable
         """
 
         content_header = make_header(content, self.header_len)
         for client in self.clients:
             client.send(content_header + content)
 
-    def send_group(self, group: str, command: str, content: bytes):
+    def send_group(self, group: str, command: str, content: Sendable):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
@@ -766,9 +766,8 @@ class HiSockServer:
         :type group: str
         :param command: A string, containing the command to send.
         :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send.
-        :type content: bytes
+        :param content: The message / content to send
+        :type content: Sendable
 
         :raise GroupNotFound: The group does not exist.
         """
@@ -778,18 +777,17 @@ class HiSockServer:
         for client in self._get_all_client_sockets_in_group(group):
             client.send(content_header + data_to_send)
 
-    def send_client(self, client: Union[str, tuple], command: str, content: bytes):
+    def send_client(self, client: Client, command: str, content: Sendable):
         """
         Sends data to a specific client.
 
         :param client: The client to send data to. The format could be either by IP+port,
             or a client name.
-        :type client: Union[str, tuple]
+        :type client: Client
         :param command: A string, containing the command to send.
         :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send.
-        :type content: bytes
+        :param content: The message / content to send
+        :type content: Sendable
 
         :raise ValueError: Client format is wrong.
         :raise ClientNotFound: Client does not exist.
@@ -803,17 +801,16 @@ class HiSockServer:
             content_header + data_to_send
         )
 
-    def send_client_raw(self, client, content: bytes):
+    def send_client_raw(self, client: Client, content: Sendable):
         """
         Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
 
         :param client: The client to send data to. The format could be either by IP+port,
             or a client name
-        :type client: Union[str, tuple]
-        :param content: A bytes-like object, with the content/message
-            to send
-        :type content: bytes
+        :type client: Client
+        :param content: The message / content to send
+        :type content: Sendable
 
         :raise ValueError: Client format is wrong
         :raise TypeError: Client does not exist
@@ -827,7 +824,7 @@ class HiSockServer:
             content_header + data_to_send
         )
 
-    def send_group_raw(self, group: str, content: bytes):
+    def send_group_raw(self, group: str, content: Sendable):
         """
         Sends data to a specific group, without commands.
         Groups are recommended for more complicated servers or multipurpose
@@ -839,9 +836,8 @@ class HiSockServer:
 
         :param group: A string, representing the group to send data to.
         :type group: str
-        :param content: A bytes-like object, with the content/message
-            to send.
-        :type content: bytes
+        :param content: The message / content to send
+        :type content: Sendable
 
         :raise GroupNotFound: The group does not exist.
         """
@@ -853,18 +849,13 @@ class HiSockServer:
 
     # Disconnect
 
-    def disconnect_client(self, client: Union[str, tuple], force: bool = False):
+    def disconnect_client(self, client: Client, force: bool = False):
         """
         Disconnects a specific client.
 
         :param client: The client to send data to. The format could be either by IP+port,
             or a client name.
-        :type client: Union[str, tuple]
-        :param command: A string, containing the command to send.
-        :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send.
-        :type content: bytes
+        :type client: Client
 
         :raise ValueError: Client format is wrong.
         :raise ClientNotFound: Client does not exist.
@@ -997,10 +988,6 @@ class HiSockServer:
                     )
 
             ### Unreserved ###
-
-            # Dictionary sent (for type casting)
-            if message["data"].startswith(b"$USRSENTDICT$"):
-                message["data"] = _removeprefix(message["data"], b"$USRSENTDICT$")
 
             # Declaring these here for cache after this
             has_corresponding_function = False

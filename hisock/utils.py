@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import json
 import pathlib
-import re
 import socket
 from typing import Union, Any
 from ipaddress import IPv4Address
@@ -64,6 +63,25 @@ class NoHeaderWarning(Warning):
 
 class FunctionNotFoundWarning(Warning):
     pass
+
+
+# Custom type hints
+Sendable = Union[
+    bytes,
+    str,
+    int,
+    float,
+    list[Union[str, int, float, bool, None, dict, list]],
+    dict[
+        Union[str, int, float, bool, None, dict, list],
+        Union[str, int, float, bool, None, dict, list],
+    ],
+]
+
+Client = Union[
+    str,  # Name
+    tuple[str, int],  # Port
+]
 
 
 # Custom classes

@@ -13,42 +13,49 @@ Copyright SSS_Says_Snek, 2021-present
 # Imports
 from __future__ import annotations  # Remove when 3.10 is used by majority
 
-import builtins  # Builtins, to convert string methods into builtins
-import inspect  # Inspect, for type-hinting detection
-import re  # regex, to make sure that arguments are correct
-import socket  # socket, because.... bruh
-import json  # json, to communicate to server (without 10000 commands)
-import errno  # errno, to communicate to server
-import sys  # sys
-import threading  # threading, for ThreadedHiSockClient and threaded decorator parameter
-import traceback  # traceback, for... tracebacks
-from ipaddress import IPv4Address  # ipaddress, for comparisons between IPs
-
-from typing import Union, Callable, Any
+import socket
+import inspect  # Type-hinting detection for type casting
+import json  # Handle sending dictionaries
+import re  # Make sure arguments are passed correctly
+import errno  # Handle fatal errors with the server
+import sys  # Utilize stderr
+import threading  # Threaded client and decorators
+import warnings  # Handle warnings
+import builtins  # Convert string methods into builtins
+import traceback  # Error handling
+from typing import Callable, Union, Any  # Type hints
+from ipaddress import IPv4Address  # Comparisons
+from time import time  # Unix timestamp support
 
 # Utilities
 try:
-    # use relative import for pip builds (required)
+    # Pip builds require relative import
     from .utils import (
         make_header,
         _removeprefix,
         ServerNotRunning,
-        ClientDisconnected,
-        iptup_to_str, _type_cast,
-        MessageCacheMember
+        ClientException,
+        FunctionNotFoundException,
+        Sendable,
+        Client,
+        iptup_to_str,
+        _type_cast,
+        MessageCacheMember,
     )
-    from . import utils  # Starting now, I'm too lazy to do from imports
 except ImportError:
-    # relative import doesn't work for non-pip builds
+    # Relative import doesn't work for non-pip builds
     from utils import (
         make_header,
         _removeprefix,
         ServerNotRunning,
-        ClientDisconnected,
-        iptup_to_str, _type_cast,
-        MessageCacheMember
+        ClientException,
+        FunctionNotFoundException,
+        Sendable,
+        Client,
+        iptup_to_str,
+        _type_cast,
+        MessageCacheMember,
     )
-    import utils  # Starting now, I'm too lazy to do from imports
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -57,71 +64,79 @@ except ImportError:
 # ██║░░██╗██╔══██║██║░░░██║░░░██║░░░██║██║░░██║██║╚████║╚═╝
 # ╚█████╔╝██║░░██║╚██████╔╝░░░██║░░░██║╚█████╔╝██║░╚███║██╗
 # ░╚════╝░╚═╝░░╚═╝░╚═════╝░░░░╚═╝░░░╚═╝░╚════╝░╚═╝░░╚══╝╚═╝
-#      Change the above code IF and only IF you know
-#                  what you are doing!
+#   Change this code only if you know what you are doing!
+# If this code is changed, the client may not work properly
 
 
 class HiSockClient:
     """
-    The client class for hisock.
-    HiSockClient offers a higher-level version of sockets. No need to worry about headers now, yay!
-    HiSockClient also utilizes decorators to receive messages, as an easy way of organizing your
-    code structure (methods are provided, like :func:`recv_raw`, of course)
+    The client class for :mod:`HiSock`.
 
     :param addr: A two-element tuple, containing the IP address and the
-        port number of the server wishing to connect to
-        Only IPv4 currently supported
+        port number of where the server is hosted.
+        **Only IPv4 is currently supported.**
     :type addr: tuple
     :param name: Either a string or NoneType, representing the name the client
-        goes by. Having a name provides an easy interface of sending
+        goes by. Having a name provides an easy interface of sending.
         data to a specific client and identifying clients. It is therefore
-        highly recommended to pass in a name
+        highly recommended to pass in a name.
 
-        Pass in NoneType for no name (`connect` should handle that)
+        Pass in NoneType for no name (:meth:`connect` should handle that)
     :type name: str, optional
-    :param group: Either a string or NoneType, representing the group the client
+    :param group: Either a string or NoneType representing the group the client
         is in. Being in a group provides an easy interface of sending
         data to multiple specific clients, and identifying multiple clients.
-        It is highly recommended to provide a group for complex servers
-
-        Pass in NoneType for no group (`connect` should handle that)
+        It is highly recommended to provide a group for complex servers.
+        Pass in NoneType for no group (:meth:`connect` should handle that)
     :type group: str, optional
-    :param blocking: A boolean, set to whether the client should block the loop
+    :param blocking: A boolean set to whether the client should block the loop
         while waiting for message or not.
-        Default sets to True
+        Default is True.
     :type blocking: bool, optional
-    :param header_len: An integer, defining the header length of every message.
-        A smaller header length would mean a smaller maximum message
-        length (about 10**header_len).
-        The header length MUST be the same as the server connecting, or it will
-        crash (hard to debug though).
-        Default sets to 16 (maximum length of content: 10 quadrillion bytes)
+    :param header_len: An integer defining the header length of every message.
+        A larger header length would mean a larger maximum message length
+        (about 10**header_len).
+        **MUST** be the same header length as the server, or else it will crash
+        (hard to debug too!).
+        Default sets to 16 (maximum length of content: 10 quadrillion bytes).
     :type header_len: int, optional
 
-    :ivar tuple addr: A two-element tuple, containing the IP address and the
-        port number
-    :ivar int header_len: An integer, storing the header length of each "message"
-    :ivar str name: A string, representing the name of the client to identify by.
-        Defaults to None
-    :ivar str group: A string, representing the group of the client to identify by.
-        Defaults to None
+    :ivar tuple addr: A two-element tuple containing the IP address and the
+        port number of the server.
+    :ivar int header_len: An integer storing the header length of each "message".
+    :ivar str name: A string representing the name of the client to identify by.
+        Default is None.
+    :ivar str group: A string representing the group of the client to identify by.
+        Default is None.
     :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
-
-        .. warning::
-
-           This is mainly used for under-the-hood-code, so it is **NOT** recommended
-           to be used in production-ready code
+        **This is mainly used for under-the-hood-code.**
+    :ivar int connect_time: An integer sotring the Unix timestamp of when the
+        client connected to the server.
     """
 
     def __init__(
-            self,
-            addr: tuple[str, int],
-            name: Union[str, None],
-            group: Union[str, None],
-            blocking: bool = True,
-            header_len: int = 16,
-            cache_size: int = -1,
+        self,
+        addr: tuple[str, int],
+        name: Union[str, None],
+        group: Union[str, None],
+        blocking: bool = True,
+        header_len: int = 16,
+        cache_size: int = -1,
     ):
+        self.addr = addr
+        self.name = name
+        self.group = group
+        self.header_len = header_len
+
+        # Socket initialization
+        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            self.sock.connect(self.addr)
+        except ConnectionRefusedError:
+            raise ServerNotRunning(
+                "Server is not running! Aborting..."
+            ) from ConnectionRefusedError
+
         # Function and cache storage
         self.funcs = {}
         self.cache_size = cache_size
@@ -129,253 +144,170 @@ class HiSockClient:
             # cache_size <= -1: No cache
             self.cache = []
 
+        # Stores the names of the reserved functions
+        # Used for the `on` decorator
+        self._reserved_functions = ("client_connect", "client_disconnect")
+        # Stores the number of parameters each reserved function takes
+        # Used for the `on` decorator
+        self._reserved_functions_parameters_num = (
+            1,  # client_connect
+            1,  # client_disconnect
+        )
+
         # TLS arguments
         self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
 
-        # Info for socket
-        self.addr = addr
-        self.name = name
-        self.group = group
-        self.header_len = header_len
-
         # Flags
         self._closed = False
-
-        # Remember to update them as more rev funcs are added
-        self.reserved_functions = ["client_connect", "client_disconnect"]
-
-        # Socket intialization
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        try:
-            self.sock.connect(self.addr)
-        except ConnectionRefusedError:
-            # Server not running
-            raise ServerNotRunning(
-                "Server is not running! Aborting..."
-            ) from ConnectionRefusedError
-
+        self.connected = False
+        self.connect_time = 0  # Unix timestamp
         self.sock.setblocking(blocking)
 
-        # Send client hello
+    def __str__(self) -> str:
+        """Example: <HiSockClient connected to 192.168.1.133:5000>"""
+
+        return f"<HiSockClient connected to {iptup_to_str(self.addr)}>"
+
+    def __repr__(self):
+        return self.__str__()
+
+    def __len__(self):
+        """Returns how many clients are connected"""
+
+    # Comparisons
+
+    def __gt__(self, other: Union[HiSockClient, str]) -> bool:
+        """Example: HiSockClient(...) > "192.168.1.133:5000" """
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError("Type not supported for > comparison")
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
+        ip = other.split(":")
+
+        return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
+
+    def __ge__(self, other: Union[HiSockClient, str]) -> bool:
+        """Example: HiSockClient(...) >= "192.168.1.133:5000" """
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError("Type not supported for >= comparison")
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
+        ip = other.split(":")
+
+        return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
+
+    def __lt__(self, other: Union[HiSockClient, str]) -> bool:
+        """Example: HiSockClient(...) < "192.168.1.133:5000" """
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError("Type not supported for < comparison")
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
+        ip = other.split(":")
+
+        return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
+
+    def __le__(self, other: Union[HiSockClient, str]) -> bool:
+        """Example: HiSockClient(...) <= "192.168.1.133:5000" """
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError("Type not supported for <= comparison")
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
+        ip = other.split(":")
+
+        return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
+
+    def __eq__(self, other: Union[HiSockClient, str]) -> bool:
+        """Example: HiSockClient(...) == "192.168.1.133:5000" """
+        if type(other) not in [HiSockClient, str]:
+            raise TypeError("Type not supported for == comparison")
+        if isinstance(other, HiSockClient):
+            return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
+        ip = other.split(":")
+
+        return IPv4Address(self.addr[0]) == IPv4Address(ip[0])
+
+    # Internal methods
+
+    def _send_client_hello(self):
+        """
+        Sends a hello to the server for the first connection
+
+        :raises ClientException: If the client is already connected
+        """
+
+        if self.connected:
+            raise ClientException(
+                f"Client is already connected! (connected {time() - self.connect_time} seconds ago)"
+            )
+
         hello_dict = {"name": self.name, "group": self.group}
         conn_header = make_header(
             f"$CLTHELLO$ {json.dumps(hello_dict)}", self.header_len
         )
 
         self.sock.send(conn_header + f"$CLTHELLO$ {json.dumps(hello_dict)}".encode())
+        self.connected = True
+        self.connect_time = time()
 
-    def __str__(self) -> str:
-        """Example: <HiSockClient connected to 192.168.1.133:33333"""
-        return f"<HiSockClient connected to {iptup_to_str(self.addr)}>"
+    def _send_type_cast(self, content: Sendable) -> bytes:
+        """
+        Type casting content for the send methods.
+        This method exists so type casting can easily be changed without changing
+        all the send methods.
 
-    def __gt__(self, other: Union[HiSockClient, str]) -> bool:
-        """Example: HiSockClient(...) > '192.168.1.131'"""
-        if type(other) not in [HiSockClient, str]:
-            raise TypeError("Type not supported for > comparison")
-        if isinstance(other, HiSockClient):
-            return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of ports
+        :param content: The content to type cast
+        :type content: Sendable
+        :return: The type casted content
+        :rtype: bytes
 
-        return IPv4Address(self.addr[0]) > IPv4Address(ip[0])
+        :raise InvalidTypeCast: If the content cannot be type casted
+        """
 
-    def __ge__(self, other: Union[HiSockClient, str]) -> bool:
-        """Example: HiSockClient(...) >= '192.168.1.131'"""
-        if type(other) not in [HiSockClient, str]:
-            raise TypeError("Type not supported for >= comparison")
-        if isinstance(other, HiSockClient):
-            return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of ports
+        return _type_cast(bytes, content, "<client sending function>")
 
-        return IPv4Address(self.addr[0]) >= IPv4Address(ip[0])
+    # On decorator
 
-    def __lt__(self, other: Union[HiSockClient, str]) -> bool:
-        """Example: HiSockClient(...) < '192.168.1.131'"""
-        if type(other) not in [HiSockClient, str]:
-            raise TypeError("Type not supported for < comparison")
-        if isinstance(other, HiSockClient):
-            return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of ports
+    def _call_function(self, func_name, *args, **kwargs) -> Any:
+        """
+        Calls a function with the given arguments and returns the result.
 
-        return IPv4Address(self.addr[0]) < IPv4Address(ip[0])
+        :param func_name: The name of the function to call.
+        :type func_name: str
+        :param args: The arguments to pass to the function.
+        :param kwargs: The keyword arguments to pass to the function.
+        :return: The result of the function call.
+        :rtype: Any
 
-    def __le__(self, other: Union[HiSockClient, str]) -> bool:
-        """Example: HiSockClient(...) <= '192.168.1.131'"""
-        if type(other) not in [HiSockClient, str]:
-            raise TypeError("Type not supported for <= comparison")
-        if isinstance(other, HiSockClient):
-            return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of ports
+        :raises FunctionNotFoundException: If the function is not found.
+        """
 
-        return IPv4Address(self.addr[0]) <= IPv4Address(ip[0])
+        # Check if the function exists
+        if func_name not in self.funcs:
+            raise FunctionNotFoundException(f"Function {func_name} not found")
 
-    def __eq__(self, other: Union[HiSockClient, str]) -> bool:
-        """Example: HiSockClient(...) == '192.168.1.131'"""
-        if type(other) not in [HiSockClient, str]:
-            raise TypeError("Type not supported for == comparison")
-        if isinstance(other, HiSockClient):
-            return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
-        ip = other.split(":")  # Gets rid of ports
-
-        return IPv4Address(self.addr[0]) == IPv4Address(ip[0])
-
-    def _call_function(self, func_name, *args, **kwargs):
+        # Normal
         if not self.funcs[func_name]["threaded"]:
-            self.funcs[func_name]["func"](*args, **kwargs)
-        else:
-            function_thread = threading.Thread(
-                target=self.funcs[func_name]["func"],
-                args=args, kwargs=kwargs
-            )
-            function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
-            function_thread.start()
+            return self.funcs[func_name]["func"](*args, **kwargs)
 
-    def update(self):
-        """
-        Handles newly received messages, excluding the received messages for `wait_recv`
-        This method must be called every iteration of a while loop, as to not lose valuable info.
-        In some cases, it is recommended to run this in a thread, as to not block the
-        program
-        """
-        self.called_update = True  # I forgot what this does
-
-        if not self._closed:  # Checks if client hasn't been closed with `close`
-            try:
-                while True:
-                    # Receives header - If doesn't exist, server error
-                    try:
-                        content_header = self.sock.recv(self.header_len)
-                    except ConnectionResetError:
-                        # Raise ServerNotRunning exception FROM ConnectionResetError
-                        raise ServerNotRunning(
-                            "Server has stopped running, aborting..."
-                        ) from ConnectionResetError
-
-                    if not content_header:
-                        # Most likely server error; aborts
-                        print(
-                            "[SERVER] Connection forcibly closed by server, exiting..."
-                        )
-                        raise SystemExit
-                    content = self.sock.recv(int(content_header.decode()))
-
-                    for matching in self.funcs.keys():
-                        if re.search(r"\$.+\$", matching):
-                            raise ValueError(
-                                'The format "$command$" is used for reserved functions - '
-                                "Consider using a different format\n"
-                                f'(Found with function "{matching}"'
-                            )
-
-                    # Handle "reserved functions"
-                    if content == b"$DISCONN$":
-                        self.close()
-
-                        if "force_disconnect" in self.funcs:
-                            self._call_function("force_disconnect")
-                    if (
-                            content.startswith(b"$CLTCONN$")
-                            and "client_connect" in self.funcs
-                    ):
-                        # Client connected to server; parse and call function
-                        clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
-                        self._call_function("client_connect", clt_content)
-                    elif (
-                            content.startswith(b"$CLTDISCONN$")
-                            and "client_disconnect" in self.funcs
-                    ):
-                        # Client disconnected from server; parse and call function
-                        clt_content = json.loads(
-                            _removeprefix(content, b"$CLTDISCONN$ ")
-                        )
-                        self._call_function("client_disconnect", clt_content)
-
-                    has_corresponding_function = False
-                    parse_content = None  # FINE pycharm
-                    command = None
-
-                    for matching_cmd, func in self.funcs.items():
-                        # Loop through functions and binded commands
-                        if (
-                                content.startswith(matching_cmd.encode())
-                                and matching_cmd not in self.reserved_functions
-                        ):
-                            has_corresponding_function = True
-                            command = matching_cmd
-                            parse_content = content[len(matching_cmd) + 1:]
-
-                            # Type Hint -> Type Cast
-                            # (Exceptions need to have "From ValueError")
-                            parse_content = _type_cast(
-                                func["type_hint"],
-                                parse_content,
-                                func
-                            )
-
-                            # Call function
-                            if not func["threaded"]:
-                                func["func"](parse_content)
-                            else:
-                                function_thread = threading.Thread(
-                                    target=func["func"], args=(parse_content,)
-                                )
-                                function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
-                                function_thread.start()
-
-                            continue
-
-                    # Caching
-                    if self.cache_size >= 0:
-                        if has_corresponding_function:
-                            cache_content = parse_content  # Bruh pycharm it DOES exist if hcf is True
-                        else:
-                            cache_content = content
-                        self.cache.append(
-                            MessageCacheMember(
-                                {
-                                    "header": content_header,
-                                    "content": cache_content,
-                                    "called": has_corresponding_function,
-                                    "command": command,
-                                }
-                            )
-                        )
-
-                        if 0 < self.cache_size < len(self.cache):
-                            self.cache.pop(0)
-
-            except IOError as e:
-                # Normal, means message has ended
-                if (
-                        e.errno != errno.EAGAIN
-                        and e.errno != errno.EWOULDBLOCK
-                        and not self._closed
-                ):
-                    # Fatal Error, abort client (print exception, print log, exit python)
-                    traceback.print_exception(
-                        type(e), e, e.__traceback__, file=sys.stderr
-                    )
-                    print(
-                        "\nServer Error encountered, aborting client...",
-                        file=sys.stderr,
-                    )
-                    self.close()
-
-                    raise SystemExit
+        # Threaded
+        function_thread = threading.Thread(
+            target=self.funcs[func_name]["func"],
+            args=args,
+            kwargs=kwargs,
+            daemon=True,
+        )
+        function_thread.start()
 
     class _on:
         """Decorator used to handle something when receiving command"""
 
         def __init__(
-                self,
-                outer: HiSockClient,
-                command: str,
-                threaded: bool = False
+            self, outer: HiSockClient, command: str, threaded: bool, override: bool
         ):
-            # `outer` arg is for the HiSockClient instance
-            # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
             self.command = command
             self.threaded = threaded
+            self.override = override
 
         def __call__(self, func: Callable) -> Callable:
             """Adds a function that gets called when the client receives a matching command"""
@@ -386,212 +318,124 @@ class HiSockClient:
                     'The format "$command$" is used for reserved functions - '
                     "Consider using a different format"
                 )
-            # Gets annotations of function
-            annots = inspect.getfullargspec(func).annotations
-            func_args = inspect.getfullargspec(func).args
 
-            try:
-                # Try to map first arg (client data)
-                # Into type hint compliant one
-                msg_annotation = annots[func_args[0]]
-                if isinstance(msg_annotation, str):
-                    msg_annotation = builtins.__dict__[annots[func_args[0]]]
-            except KeyError:
-                # builtins is not what we thought; I dunno why I did this
-                msg_annotation = None
-            except IndexError:
-                msg_annotation = None
+            func_args = inspect.getfullargspec(func).args
+            self._assert_num_func_args_valid(len(func_args))
+
+            annotations = inspect.getfullargspec(func).annotations  # {"param": type}
+            parameter_annotations = {"msg": None}
+
+            # Process unreserved commands
+            if self.command not in self.outer._reserved_functions:
+                # Map function arguments into type hint compliant ones
+                # Note: this is the same code as in `HiSockServer` which is why
+                # this could support multiple arguments. However, for now, the
+                # only argument is `msg`.
+                for func_argument, argument_name in zip(func_args, ("msg",)):
+                    if func_argument not in annotations:
+                        continue
+                    parameter_annotations[argument_name] = annotations[func_argument]
 
             # Creates function dictionary to add to `outer.funcs`
             func_dict = {
-                "func": func,  # Function
-                "name": func.__name__,  # Function name
-                "type_hint": msg_annotation,  # All function type hints,
-                "threaded": self.threaded
+                "func": func,
+                "name": func.__name__,
+                "type_hint": parameter_annotations,
+                "threaded": self.threaded,
             }
             self.outer.funcs[self.command] = func_dict
 
             # Returns the inner function, like a decorator
             return func
 
-    def on(self, command: str, threaded: bool = False) -> Callable:
+        def _assert_num_func_args_valid(self, actual_num_func_args: int):
+            """
+            Asserts the number of function arguments is valid.
+
+            :raises TypeError: If the number of function arguments is invalid.
+            """
+
+            number_of_func_args = 2  # Normal commands
+
+            # Reserved commands
+            try:
+                index_of_reserved_cmd = self.outer._reserved_functions.index(
+                    self.cmd_activation
+                )
+                # Get the number of parameters for the reserved command
+                number_of_func_args = self.outer._reserved_functions_parameters_num[
+                    index_of_reserved_cmd
+                ]
+
+            except ValueError:
+                # Not a reserved command
+                pass
+
+            # Check if the number of function arguments is valid
+            if actual_num_func_args != number_of_func_args:
+                raise TypeError(
+                    f"{self.cmd_activation} command must have {number_of_func_args} "
+                    f"arguments, not {actual_num_func_args}"
+                )
+
+    def on(
+        self, command: str, threaded: bool = False, override: bool = False
+    ) -> Callable:
         """
         A decorator that adds a function that gets called when the client
         receives a matching command
 
         Reserved functions are functions that get activated on
-        specific events. Currently, there are 2 for HiSockClient:
+        specific events, and they are:
 
-        1. client_connect - Activated when a client connects to the server
-
-        2. client_disconnect - Activated when a client disconnects from the server
+        1. ``client_connect`` - Activated when a client connects to the server
+        2. ``client_disconnect`` - Activated when a client disconnects from the server
 
         The parameters of the function depend on the command to listen.
-        For example, reserved functions `client_connect` and
-        `client_disconnect` gets the client's data passed in as an argument.
-        All other nonreserved functions get the message passed in.
+        For example, reserved functions ``client_connect`` and
+        ``client_disconnect`` gets the client's data passed in as an argument.
+        All other unreserved functions get the message passed in.
 
-        In addition, certain type casting is available to nonreserved functions.
+        In addition, certain type casting is available to unreserved functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
 
-        1. bytes -> int (Will raise exception if bytes is not numerical)
-
-        2. bytes -> float (Will raise exception if bytes is not numerical)
-
-        3. bytes -> str (Will raise exception if there's a unicode error)
-
-        Type casting for reserved commands is scheduled to be
-        implemented, and is currently being worked on.
+        - ``bytes`` -> ``bytes``
+        - ``bytes`` -> ``str``
+        - ``bytes`` -> ``int``
+        - ``bytes`` -> ``dict``
+        - ``dict`` -> ``dict``
+        - ``dict`` -> ``bytes``
 
         :param command: A string, representing the command the function should activate
-            when receiving it
+            when receiving it.
         :type command: str
         :param threaded: A boolean, representing if the function should be run in a thread
             in order to not block the update() loop.
-
-            Defaults to False
+            Default is False
         :type threaded: bool, optional
-
-        :return: The same function
-            (The decorator just appended the function to a stack
+                :param override: A boolean representing if the function should override the
+            reserved function with the same name and to treat it as an unreserved function.
+            Default is False.
+        :type override: bool, optional
+        :return: The same function (the decorator just appended the function to a stack)
         :rtype: function
         """
+
         # Passes in outer to _on decorator/class
-        return self._on(self, command, threaded)
+        return self._on(self, command, threaded, override)
 
-    def send(
-            self,
-            command: str,
-            content: Union[
-                bytes,
-                dict[
-                    Union[str, int, float, bool, None],
-                    Union[str, int, float, bool, None],
-                ],
-            ],
-    ):
-        """
-        Sends a command & content to the server, where it will be interpreted
-
-        :param command: A string, containing the command to send
-        :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send
-        :type content: Union[bytes, dict]
-        """
-        # Creates header and sends to server
-        if re.search(r"\$.+\$", command):
-            raise TypeError(
-                'Command format "$command$" is used for reserved functions - '
-                "consider using a different command"
-            )
-        if isinstance(content, dict):
-            content = json.dumps(content).encode()
-            content_header = make_header(
-                b"$USRSENTDICT$" +
-                command.encode() + b" " + content, self.header_len
-            )
-            self.sock.send(content_header + b"$USRSENTDICT$" + command.encode() + b" " + content)
-        else:
-            content_header = make_header(
-                command.encode() + b" " + content, self.header_len
-            )
-            self.sock.send(content_header + command.encode() + b" " + content)
-
-    def raw_send(
-            self,
-            content: bytes,
-    ):  # TODO: Add dict-sending support for this method
-        """
-        Sends a message to the server: NO COMMAND REQUIRED.
-        This is preferable in some situations, where clients need to send
-        multiple data over the server, without overcomplicating it with commands
-
-        :param content: A bytes-like object, with the content/message
-            to send
-        :type content: bytes
-        """
-        # Creates header and send content to server, but no command
-        if re.search(b"^\\$.+\\$", content):
-            raise TypeError(
-                'Command format "$command$" is used for reserved functions - '
-                "consider not sending a message starting with $command$"
-            )
-
-        # Send to server
-        header = make_header(content, self.header_len)
-        self.sock.send(header + content)
-
-    def recv_raw(self) -> bytes:
-        """
-        Waits (blocks) until a message is sent, and returns that message.
-        This is not recommended for content with commands attached;
-        it is meant to be used alongside with :func:`HiSockServer.send_client_raw` and
-        :func:`HiSockServer.send_group_raw`
-
-        :return: A bytes-like object, containing the content/message
-          the client first receives
-        :rtype: bytes
-        """
-        # Blocks depending on your blocking settings, until message
-        msg_len = int(self.sock.recv(self.header_len).decode())
-        message = self.sock.recv(msg_len)
-
-        # Returns message
-        return message
-
-    def change_name(self, new_name: Union[str, None]):
-        """
-        Changes the name of the client
-
-        :param new_name: The new name for the client to be called
-        :type new_name: Union[str, None]
-        """
-        if new_name is not None:
-            new_name_header = make_header(
-                b"$CHNAME$ " + new_name.encode(), self.header_len
-            )
-        else:
-            new_name_header = make_header(b"$CHNAME$", self.header_len)
-
-        # Send name change to server
-        self.sock.send(
-            new_name_header + (b"$CHNAME$ " + new_name.encode())
-            if new_name is not None
-            else b"$CHNAME$"
-        )
-
-    def change_group(self, new_group: Union[str, None]):
-        """
-        Changes the client's group
-
-        :param new_group: The new group name of the client
-        :type new_group: Union[str, None]
-        """
-        if new_group is not None:
-            new_group_header = make_header(
-                b"$CHGROUP$ " + new_group.encode(), self.header_len
-            )
-        else:
-            new_group_header = make_header(b"$CHGROUP$", self.header_len)
-
-        self.sock.send(
-            new_group_header + (b"$CHGROUP$ " + new_group.encode())
-            if new_group is not None
-            else b"$CHGROUP$"
-        )
-
+    # Getters
     def get_cache(
-            self,
-            idx: Union[int, slice, None] = None,
+        self,
+        idx: Union[int, slice, None] = None,
     ) -> list[MessageCacheMember]:
         """
         Gets the message cache.
 
         :param idx: An integer or ``slice``, specifying what specific message caches to return.
 
-            Defaults to None (Retrieves the entire cache)
+            Default is None (Retrieves the entire cache)
         :type idx: Union[int, slice], optional
 
         :return: A list of dictionaries, representing the cache
@@ -637,6 +481,195 @@ class HiSockClient:
         """
         return self.sock.getsockname()
 
+    # Send
+
+    def send(self, command: str, content: Sendable):
+        """
+        Sends a command & content to the server.
+
+        :param command: A string, containing the command to send
+        :type command: str
+        :param content: The message / content to send
+        :type content: Sendable
+        """
+
+        data_to_send = command.encode() + b" " + self._send_type_cast(content)
+        content_header = make_header(data_to_send, self.header_len)
+        self.sock.send(content_header + data_to_send)
+
+    def send_raw(self, content: Sendable):
+        """
+        Sends a message to the server: NO COMMAND REQUIRED.
+        This is preferable in some situations, where clients need to send
+        multiple data over the server, without overcomplicating it with commands
+
+        :param content: The message / content to send
+        :type content: Sendable
+        """
+
+        data_to_send = self._send_type_cast(content)
+        header = make_header(data_to_send, self.header_len)
+        self.sock.send(header + data_to_send)
+
+    def recv_raw(self) -> bytes:
+        """
+        Waits (blocks) until a message is sent, and returns that message.
+        This is not recommended for content with commands attached;
+        it is meant to be used alongside with :func:`HiSockServer.send_client_raw` and
+        :func:`HiSockServer.send_group_raw`
+
+        :return: A bytes-like object, containing the content/message
+          the client first receives
+        :rtype: bytes
+        """
+
+        # Blocks depending on your blocking settings, until message
+        msg_len = int(self.sock.recv(self.header_len).decode())
+        message = self.sock.recv(msg_len)
+
+        # Returns message
+        return message
+
+    def change_name(self, new_name: Union[str, None]):
+        """
+        Changes the name of the client
+
+        :param new_name: The new name for the client to be called
+            If left blank, then the name will be reset.
+        :type new_name: str, optional
+        """
+
+        data_to_send = "$CHNAME$" + (f" {new_name}" or "")
+        self.send_raw(data_to_send)
+
+    def change_group(self, new_group: Union[str, None]):
+        """
+        Changes the client's group.
+
+        :param new_group: The new group name of the client
+        :type new_group: Union[str, None]
+        """
+
+        data_to_send = "$CHGROUP$" + (f" {new_group}" or "")
+        self.send_raw(data_to_send)
+
+    def update(self):
+        """
+        Handles newly received messages, excluding the received messages for :meth:`wait_recv`
+        This method must be called every iteration of a while loop, as to not lose valuable info.
+        In some cases, it is recommended to run this in a thread, as to not block the
+        program
+        """
+
+        if self._closed:
+            return
+
+        try:
+            # Receive header
+            try:
+                content_header = self.sock.recv(self.header_len)
+            except ConnectionResetError:
+                raise ServerNotRunning(
+                    "Server has stopped running, aborting..."
+                ) from ConnectionResetError
+
+            # Most likely server has stopped running
+            if not content_header:
+                print("Connection forcibly closed by server, exiting...")
+                raise SystemExit
+
+            content = self.sock.recv(int(content_header.decode()))
+
+            ### Reserved ###
+
+            # Handle force disconnection
+            if content == b"$DISCONN$":
+                self.close()
+                if "force_disconnect" in self.funcs:
+                    self._call_function("force_disconnect")
+                return
+
+            # Handle new client connection
+            if (
+                content.startswith(b"$CLTCONN$")  # No standalone code for this
+                and "client_connect" in self.funcs
+            ):
+                clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
+                self._call_function("client_connect", clt_content)
+                return
+
+            # Handle client disconnection
+            if (
+                content.startswith(b"$CLTDISCONN$")  # No standalone code for this
+                and "client_disconnect" in self.funcs
+            ):
+                # Client disconnected from server; parse and call function
+                clt_content = json.loads(_removeprefix(content, b"$CLTDISCONN$ "))
+                self._call_function("client_disconnect", clt_content)
+
+            ### Unreserved ###
+
+            # Declaring these here for cache after this
+            has_corresponding_function = False
+            parse_content = None
+            command = None
+
+            for matching_command, func in self.funcs.items():
+                if (
+                    content.startswith(matching_command.encode())
+                    and matching_command not in self._reserved_functions
+                ):
+                    has_corresponding_function = True
+                    command = matching_command
+                    parse_content = content[len(matching_command) + 1 :]
+
+                    parse_content = _type_cast(
+                        func["type_hint"], parse_content, func["name"]
+                    )
+
+                    # Call function
+                    self._call_function(func["name"], parse_content)
+                    break  # only one command can be received at a time for now
+
+            # Caching
+            if self.cache_size >= 0:
+                if has_corresponding_function:
+                    cache_content = parse_content
+                else:
+                    cache_content = content
+                self.cache.append(
+                    MessageCacheMember(
+                        {
+                            "header": content_header,
+                            "content": cache_content,
+                            "called": has_corresponding_function,
+                            "command": command,
+                        }
+                    )
+                )
+
+                if 0 < self.cache_size < len(self.cache):
+                    self.cache.pop(0)
+
+        except IOError as e:
+            # Normal, means message has ended
+            if not (
+                e.errno != errno.EAGAIN
+                and e.errno != errno.EWOULDBLOCK
+                and not self._closed
+            ):
+                return
+
+            # Fatal error, abort client (print exception, print log, exit python)
+            traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
+            print(
+                "\nServer error encountered, aborting client...",
+                file=sys.stderr,
+            )
+            self.close()
+
+            raise SystemExit
+
     def close(self, emit_leave: bool = True):
         """
         Closes the client; running `client.update()` won't do anything now
@@ -644,9 +677,8 @@ class HiSockClient:
         :param emit_leave: Decides if the client will emit `leave` to the server or not
         :type emit_leave: bool
         """
-        # Changes _closed flag to True to prevent
-        # `update` being crazy
-        self._closed = True
+
+        self._closed = True  # Prevents :meth:`update` from running
         if emit_leave:
             close_header = make_header(b"$USRCLOSE$", self.header_len)
             self.sock.send(close_header + b"$USRCLOSE$")
@@ -668,7 +700,7 @@ class ThreadedHiSockClient(HiSockClient):
     """
 
     def __init__(
-            self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+        self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
     ):
         super().__init__(addr, name, group, blocking, header_len, cache_size)
         self._thread = threading.Thread(target=self.run)
@@ -681,7 +713,7 @@ class ThreadedHiSockClient(HiSockClient):
         self._stop_event.set()
         self.sock.close()
 
-    def run(self):
+    def _run(self):
         """
         The main while loop to run the thread
 
@@ -689,7 +721,7 @@ class ThreadedHiSockClient(HiSockClient):
 
         .. warning::
            This method is **NOT** recommended to be used in an actual
-           production enviroment. This is used internally for the thread, and should
+           production environment. This is used internally for the thread, and should
            not be interacted with the user
         """
         while not self._stop_event.is_set():
@@ -711,34 +743,38 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_siz
     """
     Creates a `HiSockClient` instance. See HiSockClient for more details
 
-    :param addr: A two-element tuple, containing the IP address and
-        the port number
+    :param addr: A two-element tuple containing the IP address and
+        the port number of the server.
     :type addr: tuple
-    :param name: A string, containing the name of what the client should go by.
-        This argument is optional
+    :param name: A string containing the name of what the client should go by.
+        This argument is optional.
     :type name: str, optional
     :param group: A string, containing the "group" the client is in.
         Groups can be utilized to send specific messages to them only.
-        This argument is optional
+        This argument is optional.
     :type group: str, optional
-    :param blocking: A boolean, specifying if the client should block or not
+    :param blocking: A boolean specifying if the client should block or not
         in the socket.
-
-        Defaults to True
+        Default is True.
     :type blocking: bool, optional
-    :param header_len: An integer, defining the header length of every message.
-
-        Defaults to True
+    :param header_len: An integer defining the header length of every message.
+        Default is True.
     :type header_len: int, optional
 
     :return: A :class:`HiSockClient` instance
     :rtype: instance
+
+    .. note::
+        A simple way to use this function is to use :func:`utils.input_client_config`
+        which will ask you for the server IP, port, name, and group. Then, you can
+        call this function by simply doing ``connect(*input_client_config())``
     """
+
     return HiSockClient(addr, name, group, blocking, header_len, cache_size)
 
 
 def threaded_connect(
-        addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+    addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
 ):
     """
     Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
@@ -746,69 +782,9 @@ def threaded_connect(
 
     :return: A :class:`ThreadedHiSockClient` instance
     """
+
     return ThreadedHiSockClient(addr, name, group, blocking, header_len, cache_size)
 
 
 if __name__ == "__main__":
-    s = threaded_connect(
-        ("192.168.1.131", 33333), name="Sussus", group="Amogus", cache_size=5
-    )
-    s.change_name("Burp")
-
-
-    @s.on("Joe")
-    def hehe(_):
-        print(
-            "This message was sent from server after client connection\n"
-            "(Sent to every client)"
-        )
-        s.send("Sussus", b"Some random msg I guess")
-
-
-    @s.on("pog")
-    def eee(msg):
-        print("Follow up message sent by server\n" "(Also sent to every client)")
-        print("Message:", msg)
-
-
-    @s.on("client_connect", threaded=True)
-    def please(data):
-        print(f"Client {':'.join(map(str, data['ip']))} connected :)")
-        __import__('time').sleep(10)
-
-
-    @s.on("client_disconnect")
-    def haha_bois(disconn_data):
-        print(f"Aww man, {':'.join(map(str, disconn_data['ip']))} disconnected :(")
-
-
-    @s.on("Test")
-    def test(data):
-        print("Group message received:", data)
-        print(s.get_cache()[0].content)
-        s.send("lol", {"I am": "inevitable"})
-
-
-    @s.on("force_disconnect")
-    def susmogus():
-        print("AAAAAAAAA DISCONNECTED :(((((((")
-
-
-    @s.on("dicttest")
-    def amogus(yes: dict):
-        print(f"OMG SO COOL I RECEIVED THIS DICT: Does this {yes['Does this']}")
-
-
-    @s.on("shrek", threaded=True)
-    def sticker(yum):
-        print("Sleeping zzz")
-        __import__('time').sleep(30)
-        print("HEHE BOIS THREADED")
-
-
-    @s.on('john')
-    def sus(chicken):
-        print("I'm fineeeeee, and the thread is running!")
-
-
-    s.start_client()
+    print("Why are you running this file? You're weird...")
