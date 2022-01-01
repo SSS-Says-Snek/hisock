@@ -29,6 +29,8 @@ try:
     # Pip builds require relative import
     from .utils import (
         ClientException,
+        ClientNotFound,
+        ServerException,
         FunctionNotFoundException,
         ServerNotRunning,
         MessageCacheMember,
@@ -38,12 +40,15 @@ try:
         _type_cast,
         make_header,
         iptup_to_str,
+        validate_ipv4,
         validate_command_not_reserved,
     )
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
         ClientException,
+        ClientNotFound,
+        ServerException,
         FunctionNotFoundException,
         ServerNotRunning,
         MessageCacheMember,
@@ -53,6 +58,7 @@ except ImportError:
         _type_cast,
         make_header,
         iptup_to_str,
+        validate_ipv4,
         validate_command_not_reserved,
     )
 
@@ -457,20 +463,42 @@ class HiSockClient:
         else:
             return self.cache[idx]
 
-    def get_client(self, client: Union[str, tuple[str, int]]):
-        """PROTOTYPE; DO NOT USE YET"""
-        if isinstance(client, tuple):
-            if len(client) == 2:
-                client = f"{client[0]}:{client[1]}"
-            else:
-                raise TypeError("Client tuple not correctly formatted")
-        get_client_header = make_header(b"$GETCLT$ " + client.encode(), self.header_len)
-        self.sock.send(get_client_header + b"$GETCLT$ " + client.encode())
+    def get_client(self, client: Client):
+        """
+        Gets the client data for a client.
 
-        client = self.recv_raw()
+        :param client: The client name or IP+port to get.
+        :type client: Client
+        :return: The client data.
+        :rtype: dict
 
-        print(client)
-        raise NotImplementedError("BRUH IT'S NOT IMPLEMENTED")
+        :raises ValueError: If the client IP is invalid.
+        :raise ClientNotFound: If the client couldn't be found.
+        :raise ServerException: If another error occurred.
+        """
+
+        try:
+            validate_ipv4(iptup_to_str(client))
+        except ValueError as e:
+            # Names are allowed, too.
+            if not isinstance(client, str):
+                print(client)
+                raise e
+
+        self.send_raw(f"$GETCLT$ {client}")
+        response = self.recv_raw()
+        print(response)
+        response = _type_cast(dict, response, "<get_client response>")
+
+        # Validate response
+        if "traceback" not in response:
+            return response
+
+        if response["traceback"] == "$NOEXIST$":
+            raise ClientNotFound(f"Client {client} not connected to the server.")
+        raise ServerException(
+            f"Failed to get client from server: {response['traceback']}"
+        )
 
     def get_server_addr(self) -> tuple[str, int]:
         """
@@ -480,6 +508,7 @@ class HiSockClient:
         :return: A tuple, with the format (str IP, int port)
         :rtype: tuple[str, int]
         """
+
         return self.addr
 
     def get_client_addr(self) -> tuple[str, int]:

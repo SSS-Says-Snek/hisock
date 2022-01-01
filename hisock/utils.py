@@ -324,7 +324,7 @@ def validate_ipv4(
     elif isinstance(ip, tuple):
         deconstructed_ip = ip
 
-    if len(deconstructed_ip) == 0:
+    if deconstructed_ip is None or len(deconstructed_ip) == 0:
         raise ValueError("IP address is empty")
 
     # Port checking
@@ -402,10 +402,10 @@ def _input_port(question: str) -> int:
     port = input(question)
     try:
         validate_ipv4(port, require_ip=False)
-    except ValueError as error:
+    except (TypeError, ValueError) as error:
         print(f"\033[91mInvalid port: {error}\033[0m\n")
         return _input_port(question)
-    return port
+    return int(port)
 
 
 def input_server_config(
@@ -463,7 +463,7 @@ def input_client_config(
     if group_prompt:
         group = input(group_prompt)
 
-    return tuple(filter(None, (ip, port, name, group)))
+    return tuple(filter(None, ((ip, port), name, group)))
 
 
 def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
@@ -471,18 +471,21 @@ def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
     Converts a string IP address into a tuple equivalent
 
     :param formatted_ip: A string, representing the IP address.
-
         Must be in the format "ip:port"
     :type formatted_ip: str
-
     :return: A tuple, with IP address as the first element, and
         an INTEGER port as the second element
     :rtype: tuple[str, int]
+
+    :raise ValueError: If the IP address isn't in the "ip:port" format.
     """
 
-    ip_split = formatted_ip.split(":")
-    recon_ip_split = [str(ip_split[0]), int(ip_split[1])]
-    return tuple(recon_ip_split)
+    try:
+        ip_split = formatted_ip.split(":")
+        recon_ip_split = [str(ip_split[0]), int(ip_split[1])]
+        return tuple(recon_ip_split)
+    except IndexError:
+        raise ValueError(f"{formatted_ip} is not a valid IP address")
 
 
 def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
@@ -494,9 +497,13 @@ def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
     :param formatted_tuple: A two-element tuple, containing the IP address and the port.
         Must be in the format (ip: str, port: int)
     :type formatted_tuple: tuple[str, int]
-
     :return: A string, with the format "ip:port"
     :rtype: str
+
+    :raise ValueError: If the IP address isn't in the "ip:port" format.
     """
 
-    return f"{formatted_tuple[0]}:{formatted_tuple[1]}"
+    try:
+        return f"{formatted_tuple[0]}:{formatted_tuple[1]}"
+    except IndexError:
+        raise ValueError(f"{formatted_tuple} is not a valid IP address")

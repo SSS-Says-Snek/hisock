@@ -44,6 +44,7 @@ try:
         make_header,
         validate_ipv4,
         validate_command_not_reserved,
+        ipstr_to_tup,
     )
 except ImportError:
     # Relative import doesn't work for non-pip builds
@@ -67,6 +68,7 @@ except ImportError:
         make_header,
         validate_ipv4,
         validate_command_not_reserved,
+        ipstr_to_tup,
     )
 
 
@@ -301,7 +303,7 @@ class HiSockServer:
             self._call_function("join", client_info)
             return
 
-        raise FunctionNotFoundWarning("join")
+        warnings.warn("join", FunctionNotFoundWarning)
 
     def _client_disconnection(self, client: socket.socket):
         """
@@ -328,7 +330,7 @@ class HiSockServer:
             self._call_function("leave", client_info)
             return
 
-        raise FunctionNotFoundWarning("leave")
+        warnings.warn("leave", FunctionNotFoundWarning)
 
     def _update_clients_rev_dict(self, idx: int = None):
         """
@@ -562,14 +564,10 @@ class HiSockServer:
         :return: The socket of the client.
         :rtype: socket.socket
 
-        :raise ValueError: Client format is wrong
-        :raise ClientNotFound: Client does not exist
+        :raise ValueError: Client format is wrong.
+        :raise ClientNotFound: Client does not exist.
         :raise UserWarning: Using client name, and more than one client with
-            the same name is detected
-
-        .. warning::
-            This is the same as :meth:`get_client`... should this be removed?
-            IDK because the other naming style for getting clients is like this...
+            the same name is detected.
         """
 
         ret_client_socket = None
@@ -593,24 +591,24 @@ class HiSockServer:
         # Search by name
         elif isinstance(client, str):
             try:
-                # Modify dictionary so only names and IPs are included
-                mod_clients_rev = {}
-                for key, value in self.clients_rev.items():
-                    mod_key = (key[0], key[1])
-                    mod_clients_rev[mod_key] = value
-
-                client_socket: socket.socket = list(
-                    _dict_tupkey_lookup(client, mod_clients_rev, idx_to_match=1)
+                # Modify dictionary so only names are included
+                client_sockets: socket.socket = list(
+                    _dict_tupkey_lookup(
+                        client,
+                        self.clients_rev,
+                        idx_to_match=1,
+                    )
                 )
+
             except StopIteration:
                 raise TypeError(f'Client with name "{client}" doesn\'t exist')
 
-            if len(client_socket) > 1:
+            if len(client_sockets) > 1:
                 warnings.warn(
-                    f'{len(client_socket)} clients with name "{client}" detected; sending data to '
-                    f"Client with IP {':'.join(map(str, client_socket[0].getpeername()))}"
+                    f'{len(client_sockets)} clients with name "{client}" detected; sending data to '
+                    f"Client with IP {':'.join(map(str, client_sockets[0].getpeername()))}"
                 )
-                ret_client_socket = client_socket[0]
+            ret_client_socket = client_sockets[0]
 
         else:
             raise ValueError("Client format is wrong (must be of type tuple or str).")
@@ -713,18 +711,18 @@ class HiSockServer:
         self, client: Union[str, tuple[str, int]]
     ) -> dict[str, Union[str, socket.socket]]:
         """
-        Gets a client socket from a name or tuple in the form of (ip, port).
+        Gets the client data for a client from a name or tuple in the form of (ip, port).
 
-        :return: The client socket
-        :rtype: socket.socket
+        :return: The client data without the socket.
+        :rtype: dict
 
-        :raise ValueError: Client format is wrong
-        :raise ClientNotFound: Client does not exist
+        :raise ValueError: Client format is wrong.
+        :raise ClientNotFound: Client does not exist.
         :raise UserWarning: Using client name, and more than one client with
-            the same name is detected
+            the same name is detected.
         """
 
-        return self._get_client_from_name_or_ip_port(client)
+        return self.clients[self._get_client_from_name_or_ip_port(client)]
 
     def get_addr(self) -> tuple[str, int]:
         """
@@ -817,15 +815,15 @@ class HiSockServer:
         Different formats of the client is supported. It can be:
 
         :param client: The client to send data to. The format could be either by IP+port,
-            or a client name
+            or a client name.
         :type client: Client
-        :param content: The message / content to send
+        :param content: The message / content to send.
         :type content: Sendable
 
-        :raise ValueError: Client format is wrong
-        :raise TypeError: Client does not exist
+        :raise ValueError: Client format is wrong.
+        :raise TypeError: Client does not exist.
         :raise UserWarning: Using client name, and more than one client with
-            the same name is detected
+            the same name is detected.
         """
 
         data_to_send = self._send_type_cast(content)
@@ -947,21 +945,25 @@ class HiSockServer:
             # Get client
             if message["data"].startswith(b"$GETCLT$"):
                 try:
-                    result = self.get_client(
-                        _removeprefix(message["data"], b"$GETCLT$ ").decode()
-                    )
-                    del result["socket"]
+                    client_identifier = _removeprefix(
+                        message["data"], b"$GETCLT$ "
+                    ).decode()
 
-                    client = json.dumps(result)
+                    # Determine if the client identifier is a name or an IP+port
+                    try:
+                        validate_ipv4(client_identifier)
+                        client_identifier = ipstr_to_tup(client_identifier)
+                    except ValueError:
+                        pass
+
+                    client = self.get_client(client_identifier)
                 except ValueError as e:
-                    client = '{"traceback": "%s"}' % e
-                except TypeError:
-                    client = '{"traceback": "$NOEXIST$"}'
+                    client = {"traceback": f"{e!s}"}
+                except ClientNotFound:
+                    client = {"traceback": f"$NOEXIST$"}
 
-                client_header = make_header(client.encode(), self.header_len)
-                client_socket.send(client_header + client.encode())
-
-                self.send_client_raw(self.clients[client_socket]["ip"], client.encode())
+                self.send_client_raw(self.clients[client_socket]["ip"], client)
+                continue
 
             # Change name or group
             for matching_reserve, key in zip(
