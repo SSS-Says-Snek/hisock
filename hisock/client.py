@@ -17,6 +17,7 @@ import socket
 import inspect  # Type-hinting detection for type casting
 import json  # Handle sending dictionaries
 import errno  # Handle fatal errors with the server
+import warnings  # Non-severe errors
 import sys  # Utilize stderr
 import threading  # Threaded client and decorators
 import traceback  # Error handling
@@ -32,6 +33,7 @@ try:
         ClientNotFound,
         ServerException,
         FunctionNotFoundException,
+        FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
         Sendable,
@@ -50,6 +52,7 @@ except ImportError:
         ClientNotFound,
         ServerException,
         FunctionNotFoundException,
+        FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
         Sendable,
@@ -165,9 +168,6 @@ class HiSockClient:
         if cache_size > 0:
             # cache_size <= 0: No cache
             self.cache = []
-
-        # TLS arguments
-        self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
 
         # Flags
         self._closed = False
@@ -376,12 +376,12 @@ class HiSockClient:
 
             # Reserved commands
             try:
-                index_of_reserved_cmd = self.outer._reserved_functions.index(
+                index_of_reserved_command = self.outer._reserved_functions.index(
                     self.command
                 )
                 # Get the number of parameters for the reserved command
                 number_of_func_args = self.outer._reserved_functions_parameters_num[
-                    index_of_reserved_cmd
+                    index_of_reserved_command
                 ]
 
             except ValueError:
@@ -407,29 +407,39 @@ class HiSockClient:
 
         1. ``client_connect`` - Activated when a client connects to the server
         2. ``client_disconnect`` - Activated when a client disconnects from the server
+        3. ``force_disconnect`` - Activated when the client gets force disconnected
+            from the server
+            .. note::
+                Even though this command gets called, the client will still always be
+                disconnected from the server.
 
         The parameters of the function depend on the command to listen.
         For example, reserved functions ``client_connect`` and
-        ``client_disconnect`` gets the client's data passed in as an argument.
+        ``client_disconnect`` gets the client's data passed in as an argument,
+        while ``force_disconnect`` gets no arguments.
         All other unreserved functions get the message passed in.
 
-        In addition, certain type casting is available to unreserved functions.
+        In addition, certain type casting is available to both reserved and unreserved
+        functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
 
-        - ``bytes`` -> ``bytes``
-        - ``bytes`` -> ``str``
-        - ``bytes`` -> ``int``
-        - ``bytes`` -> ``dict``
-        - ``dict`` -> ``dict``
-        - ``dict`` -> ``bytes``
+        - ``bytes``
+        - ``str``
+        - ``int``
+        - ``float``
+        - ``bool``
+        - ``list`` (with the types listed here)
+        - ``dict`` (with the types listed here)
+
+        For more information, read the wiki for type casting.
 
         :param command: A string, representing the command the function should activate
             when receiving it.
         :type command: str
         :param threaded: A boolean, representing if the function should be run in a thread
             in order to not block the update() loop.
-            Default is False
+            Default is False.
         :type threaded: bool, optional
                 :param override: A boolean representing if the function should override the
             reserved function with the same name and to treat it as an unreserved function.
@@ -458,6 +468,7 @@ class HiSockClient:
         :return: A list of dictionaries, representing the cache
         :rtype: list[dict]
         """
+
         if idx is None:
             return self.cache
         else:
@@ -482,12 +493,10 @@ class HiSockClient:
         except ValueError as e:
             # Names are allowed, too.
             if not isinstance(client, str):
-                print(client)
                 raise e
 
         self.send_raw(f"$GETCLT$ {client}")
         response = self.recv_raw()
-        print(response)
         response = _type_cast(dict, response, "<get_client response>")
 
         # Validate response
@@ -521,7 +530,7 @@ class HiSockClient:
         """
         return self.sock.getsockname()
 
-    # Send
+    # Transmitting data
 
     def send(self, command: str, content: Sendable):
         """
@@ -549,9 +558,6 @@ class HiSockClient:
 
         data_to_send = self._send_type_cast(content)
         header = make_header(data_to_send, self.header_len)
-        print(f"debug")
-        print(data_to_send)
-        print(header)
         self.sock.send(header + data_to_send)
 
     def recv_raw(self) -> bytes:
@@ -596,6 +602,8 @@ class HiSockClient:
         data_to_send = "$CHGROUP$" + (f" {new_group}" or "")
         self.send_raw(data_to_send)
 
+    # Update
+
     def update(self):
         """
         Handles newly received messages, excluding the received messages for :meth:`wait_recv`
@@ -618,7 +626,7 @@ class HiSockClient:
 
             # Most likely server has stopped running
             if not content_header:
-                print("Connection forcibly closed by server, exiting...")
+                print("[FATAL] Connection forcibly closed by server, exiting...")
                 raise SystemExit
 
             content = self.sock.recv(int(content_header.decode()))
@@ -633,22 +641,23 @@ class HiSockClient:
                 return
 
             # Handle new client connection
-            if (
-                content.startswith(b"$CLTCONN$")  # No standalone code for this
-                and "client_connect" in self.funcs
-            ):
-                clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
-                self._call_function("client_connect", clt_content)
+            if content.startswith(b"$CLTCONN$"):
+                if "client_connect" not in self.funcs:
+                    warnings.warn("client_connect", FunctionNotFoundWarning)
+                    return
+
+                client_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
+                self._call_function("client_connect", client_content)
                 return
 
             # Handle client disconnection
-            if (
-                content.startswith(b"$CLTDISCONN$")  # No standalone code for this
-                and "client_disconnect" in self.funcs
-            ):
-                # Client disconnected from server; parse and call function
-                clt_content = json.loads(_removeprefix(content, b"$CLTDISCONN$ "))
-                self._call_function("client_disconnect", clt_content)
+            if content.startswith(b"$CLTDISCONN$"):
+                if "client_disconnect" not in self.funcs:
+                    warnings.warn("client_disconnect", FunctionNotFoundWarning)
+                    return
+
+                client_content = json.loads(_removeprefix(content, b"$CLTDISCONN$ "))
+                self._call_function("client_disconnect", client_content)
 
             ### Unreserved ###
 
@@ -674,12 +683,20 @@ class HiSockClient:
                     self._call_function(func["name"], parse_content)
                     break  # only one command can be received at a time for now
 
+            # No function found
+            if not has_corresponding_function:
+                warnings.warn(
+                    f"No function found for command {content.decode()}",
+                    FunctionNotFoundWarning,
+                )
+
             # Caching
             if self.cache_size >= 0:
                 if has_corresponding_function:
                     cache_content = parse_content
                 else:
                     cache_content = content
+
                 self.cache.append(
                     MessageCacheMember(
                         {
@@ -703,10 +720,10 @@ class HiSockClient:
             ):
                 return
 
-            # Fatal error, abort client (print exception, print log, exit python)
+            # Fatal error, abort client
             traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
             print(
-                "\nServer error encountered, aborting client...",
+                "\n[FATAL] Server error encountered, aborting client...",
                 file=sys.stderr,
             )
             self.close()
@@ -767,6 +784,7 @@ class ThreadedHiSockClient(HiSockClient):
            production environment. This is used internally for the thread, and should
            not be interacted with the user
         """
+
         while not self._stop_event.is_set():
             try:
                 self.update()
@@ -775,10 +793,12 @@ class ThreadedHiSockClient(HiSockClient):
 
     def start_client(self):
         """Starts the main server loop"""
+
         self._thread.start()
 
     def join(self):
         """Waits for the thread to be killed"""
+
         self._thread.join()
 
 

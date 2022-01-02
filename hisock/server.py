@@ -122,6 +122,8 @@ class HiSockServer:
         :attr:`clients`).
     :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
         **This is mainly used for under-the-hood-code.**
+
+    :raise TypeError: If the address is not a tuple.
     """
 
     def __init__(
@@ -131,7 +133,6 @@ class HiSockServer:
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
-        tls: Union[dict, str] = None,
     ):
         self.addr = addr
         self.header_len = header_len
@@ -142,7 +143,7 @@ class HiSockServer:
         try:
             self.sock.bind(addr)
         except socket.gaierror:  # getaddrinfo error
-            raise TypeError("The IP address and/or port are invalid!")
+            raise TypeError("The IP address and/or port are invalid.")
         self.sock.listen(max_connections)
 
         # Function related storage
@@ -177,25 +178,11 @@ class HiSockServer:
         self._sockets_list = [self.sock]  # Our socket will always be the first
         # socket: {"ip": (ip, port), "name": str, "group": str}
         self.clients = {}
-        # ((ip, port), name, group): socket
+        # ((ip: str, port: int), name: str, group: str): socket
         self.clients_rev = {}
 
         # Flags
         self._closed = False
-
-        # TLS
-        if tls is None:
-            self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
-            return
-        if isinstance(tls, dict):
-            self.tls_arguments = tls
-            return
-        if isinstance(tls, str) and tls == "default":
-            self.tls_arguments = {
-                "rsa_authentication_dir": ".pubkeys",
-                "suite": "default",
-                "diffie_hellman": constants.DH_DEFAULT,
-            }
 
     def __str__(self):
         """Example: <HiSockServer serving at 192.168.1.133:5000>"""
@@ -215,7 +202,7 @@ class HiSockServer:
         """Example: HiSockServer(...) > "192.168.1.133:5000" """
 
         if type(other) not in [self.__class__, str]:
-            raise TypeError("Type not supported for > comparison")
+            raise TypeError("Type not supported for > comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
         ip = other.split(":")
@@ -225,7 +212,7 @@ class HiSockServer:
         """Example: HiSockServer(...) >= "192.168.1.133:5000" """
 
         if type(other) not in [self.__class__, str]:
-            raise TypeError("Type not supported for >= comparison")
+            raise TypeError("Type not supported for >= comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
         ip = other.split(":")
@@ -235,7 +222,7 @@ class HiSockServer:
         """Example: HiSockServer(...) < "192.168.1.133:5000" """
 
         if type(other) not in [self.__class__, str]:
-            raise TypeError("Type not supported for < comparison")
+            raise TypeError("Type not supported for < comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
         ip = other.split(":")
@@ -245,7 +232,7 @@ class HiSockServer:
         """Example: HiSockServer(...) <= "192.168.1.133:5000" """
 
         if type(other) not in [self.__class__, str]:
-            raise TypeError("Type not supported for <= comparison")
+            raise TypeError("Type not supported for <= comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
         ip = other.split(":")
@@ -255,7 +242,7 @@ class HiSockServer:
         """Example: HiSockServer(...) == "192.168.1.133:5000" """
 
         if type(other) not in [self.__class__, str]:
-            raise TypeError("Type not supported for == comparison")
+            raise TypeError("Type not supported for == comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
         ip = other.split(":")
@@ -278,7 +265,7 @@ class HiSockServer:
         """
 
         if connection in self._sockets_list:
-            raise ServerException("Client already connected")
+            raise ServerException("Client already connected.")
 
         self._sockets_list.append(connection)
 
@@ -316,7 +303,7 @@ class HiSockServer:
         """
 
         if client not in self._sockets_list:
-            raise ClientNotFound("Client isn't connected")
+            raise ClientNotFound(f'Client "{client}" is not connected.')
 
         # Save the client info for leave command
         client_info = self.clients[client]
@@ -387,7 +374,7 @@ class HiSockServer:
 
         # Check if the function exists
         if func_name not in self.funcs:
-            raise FunctionNotFoundException(f"Function {func_name} not found")
+            raise FunctionNotFoundException(f'Function "{func_name}" was not found.')
 
         # Normal
         if not self.funcs[func_name]["threaded"]:
@@ -496,7 +483,7 @@ class HiSockServer:
             if actual_num_func_args != number_of_func_args:
                 raise ValueError(
                     f"{self.command} command must have {number_of_func_args} "
-                    f"arguments, not {actual_num_func_args}"
+                    f"arguments, not {actual_num_func_args}."
                 )
 
     def on(
@@ -504,7 +491,7 @@ class HiSockServer:
     ) -> Callable:
         """
         A decorator that adds a function that gets called when the server
-        receives a matching command
+        receives a matching command.
 
         Reserved functions are functions that get activated on
         specific events, and they are:
@@ -522,16 +509,20 @@ class HiSockServer:
         Other unreserved functions will also be passed in the same
         parameters as ``message``.
 
-        In addition, certain type casting is available to unreserved functions.
+        In addition, certain type casting is available to both reserved and unreserved
+        functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
 
-        - ``bytes`` -> ``bytes``
-        - ``bytes`` -> ``str``
-        - ``bytes`` -> ``int``
-        - ``bytes`` -> ``dict``
-        - ``dict`` -> ``dict``
-        - ``dict`` -> ``bytes``
+        - ``bytes``
+        - ``str``
+        - ``int``
+        - ``float``
+        - ``bool``
+        - ``list`` (with the types listed here)
+        - ``dict`` (with the types listed here)
+
+        For more information, read the wiki for type casting.
 
         :param command: A string representing the command the function should activate
             when receiving it.
@@ -584,7 +575,7 @@ class HiSockServer:
                     )
                 )
             except StopIteration:
-                raise ClientNotFound(f"Client with IP {client} is not connected")
+                raise ClientNotFound(f'Client with IP "{client}" is not connected.')
 
             ret_client_socket = client_socket
 
@@ -601,7 +592,7 @@ class HiSockServer:
                 )
 
             except StopIteration:
-                raise TypeError(f'Client with name "{client}" doesn\'t exist')
+                raise TypeError(f'Client with name "{client}" does not exist.')
 
             if len(client_sockets) > 1:
                 warnings.warn(
@@ -664,7 +655,7 @@ class HiSockServer:
             mod_group_clients.append(mod_dict)
 
         if len(mod_group_clients) == 0:
-            raise GroupNotFound(f"Group {group} does not exist")
+            raise GroupNotFound(f'Group "{group}" does not exist')
 
         return mod_group_clients
 
@@ -865,8 +856,8 @@ class HiSockServer:
             or a client name.
         :type client: Client
 
-        :raise ValueError: Client format is wrong.
-        :raise ClientNotFound: Client does not exist.
+        :raise ValueError: If the client format is wrong.
+        :raise ClientNotFound: If the client does not exist.
         :raise UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
@@ -933,14 +924,6 @@ class HiSockServer:
 
             # Actual client message received
             client_data = self.clients[client_socket]
-
-            # TLS
-            if message["data"] == b"$DH_NUMS$":
-                if not self.tls_arguments["tls"]:
-                    # The server's not using TLS
-                    no_tls_header = make_header("$NOTLS$", self.header_len)
-                    client_socket.send(no_tls_header + b"$NOTLS$")
-                continue  # There is no code to deal with TLS currently... (TODO)
 
             # Get client
             if message["data"].startswith(b"$GETCLT$"):
