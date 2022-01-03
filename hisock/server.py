@@ -164,8 +164,8 @@ class HiSockServer:
             1,  # join
             1,  # leave
             1,  # message
-            2,  # name_change
-            2,  # group_change
+            3,  # name_change
+            3,  # group_change
         )
 
         # Cache
@@ -491,7 +491,7 @@ class HiSockServer:
     ) -> Callable:
         """
         A decorator that adds a function that gets called when the server
-        receives a matching command.
+        receives a matching command
 
         Reserved functions are functions that get activated on
         specific events, and they are:
@@ -583,13 +583,24 @@ class HiSockServer:
         elif isinstance(client, str):
             try:
                 # Modify dictionary so only names are included
-                client_sockets: socket.socket = list(
-                    _dict_tupkey_lookup(
-                        client,
-                        self.clients_rev,
-                        idx_to_match=1,
+                try:
+                    client = ipstr_to_tup(client)
+                except ValueError:
+                    client_sockets = list(
+                        _dict_tupkey_lookup(
+                            client,
+                            self.clients_rev,
+                            idx_to_match=1,
+                        )
                     )
-                )
+                else:
+                    client_sockets = list(
+                        _dict_tupkey_lookup(
+                            client,
+                            self.clients_rev,
+                            idx_to_match=0,
+                        )
+                    )
 
             except StopIteration:
                 raise TypeError(f'Client with name "{client}" does not exist.')
@@ -622,7 +633,7 @@ class HiSockServer:
            If the group does not exist, an empty iterable is returned.
         """
 
-        return _dict_tupkey_lookup_key(group, self.clients_rev, idx_to_match=2)
+        return _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
 
     def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
@@ -655,7 +666,7 @@ class HiSockServer:
             mod_group_clients.append(mod_dict)
 
         if len(mod_group_clients) == 0:
-            raise GroupNotFound(f'Group "{group}" does not exist')
+            raise GroupNotFound(f'Group "{group}" does not exist.')
 
         return mod_group_clients
 
@@ -717,7 +728,7 @@ class HiSockServer:
 
     def get_addr(self) -> tuple[str, int]:
         """
-        Gets the address of where the hisock server is serving at.
+        Gets the address of where the HiSock server is serving at.
 
         :return: A tuple of the address in the form of (ip, port)
         :rtype: tuple[str, int]
@@ -974,7 +985,7 @@ class HiSockServer:
                 # Call reserved function
                 reserved_func_name = f"{key}_changed"
 
-                if reserved_func_name in self.reserved_functions:
+                if reserved_func_name in self._reserved_functions:
                     old_value = client_info[key]
                     new_value = changed_client_info[key]
 
@@ -1141,7 +1152,3 @@ def start_threaded_server(addr, blocking=True, max_connections=0, header_len=16)
     """
 
     return ThreadedHiSockServer(addr, blocking, max_connections, header_len)
-
-
-if __name__ == "__main__":
-    print("Why are you running this file? You're weird...")

@@ -169,6 +169,9 @@ class HiSockClient:
             # cache_size <= 0: No cache
             self.cache = []
 
+        # TLS arguments
+        self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
+
         # Flags
         self._closed = False
         self.connected = False
@@ -376,12 +379,12 @@ class HiSockClient:
 
             # Reserved commands
             try:
-                index_of_reserved_command = self.outer._reserved_functions.index(
+                index_of_reserved_cmd = self.outer._reserved_functions.index(
                     self.command
                 )
                 # Get the number of parameters for the reserved command
                 number_of_func_args = self.outer._reserved_functions_parameters_num[
-                    index_of_reserved_command
+                    index_of_reserved_cmd
                 ]
 
             except ValueError:
@@ -407,20 +410,13 @@ class HiSockClient:
 
         1. ``client_connect`` - Activated when a client connects to the server
         2. ``client_disconnect`` - Activated when a client disconnects from the server
-        3. ``force_disconnect`` - Activated when the client gets force disconnected
-            from the server
-            .. note::
-                Even though this command gets called, the client will still always be
-                disconnected from the server.
 
         The parameters of the function depend on the command to listen.
         For example, reserved functions ``client_connect`` and
-        ``client_disconnect`` gets the client's data passed in as an argument,
-        while ``force_disconnect`` gets no arguments.
+        ``client_disconnect`` gets the client's data passed in as an argument.
         All other unreserved functions get the message passed in.
 
-        In addition, certain type casting is available to both reserved and unreserved
-        functions.
+        In addition, certain type casting is available to unreserved functions.
         That means, that, using type hints, you can automatically convert
         between needed instances. The type casting currently supports:
 
@@ -468,7 +464,6 @@ class HiSockClient:
         :return: A list of dictionaries, representing the cache
         :rtype: list[dict]
         """
-
         if idx is None:
             return self.cache
         else:
@@ -530,7 +525,7 @@ class HiSockClient:
         """
         return self.sock.getsockname()
 
-    # Transmitting data
+    # Send
 
     def send(self, command: str, content: Sendable):
         """
@@ -542,7 +537,9 @@ class HiSockClient:
         :type content: Sendable
         """
 
-        data_to_send = command.encode() + b" " + self._send_type_cast(content)
+        data_to_send = (
+            command.encode() + b" $USRSENTDICT$" + self._send_type_cast(content)
+        )
         content_header = make_header(data_to_send, self.header_len)
         self.sock.send(content_header + data_to_send)
 
@@ -626,7 +623,7 @@ class HiSockClient:
 
             # Most likely server has stopped running
             if not content_header:
-                print("[FATAL] Connection forcibly closed by server, exiting...")
+                print("Connection forcibly closed by server, exiting...")
                 raise SystemExit
 
             content = self.sock.recv(int(content_header.decode()))
@@ -696,7 +693,6 @@ class HiSockClient:
                     cache_content = parse_content
                 else:
                     cache_content = content
-
                 self.cache.append(
                     MessageCacheMember(
                         {
@@ -723,7 +719,7 @@ class HiSockClient:
             # Fatal error, abort client
             traceback.print_exception(type(e), e, e.__traceback__, file=sys.stderr)
             print(
-                "\n[FATAL] Server error encountered, aborting client...",
+                "\nServer error encountered, aborting client...",
                 file=sys.stderr,
             )
             self.close()
@@ -732,13 +728,13 @@ class HiSockClient:
 
     def close(self, emit_leave: bool = True):
         """
-        Closes the client; running `client.update()` won't do anything now
+        Closes the client; running ``client.update()`` won't do anything now
 
         :param emit_leave: Decides if the client will emit `leave` to the server or not
         :type emit_leave: bool
         """
 
-        self._closed = True  # Prevents :meth:`update` from running
+        self._closed = True
         if emit_leave:
             close_header = make_header(b"$USRCLOSE$", self.header_len)
             self.sock.send(close_header + b"$USRCLOSE$")
@@ -763,9 +759,9 @@ class ThreadedHiSockClient(HiSockClient):
         self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
     ):
         super().__init__(addr, name, group, blocking, header_len, cache_size)
-        self._thread = threading.Thread(target=self.run)
-
+        self._thread = threading.Thread(target=self._run)
         self._stop_event = threading.Event()
+        del self.update
 
     def stop_client(self):
         """Stops the client"""
@@ -777,14 +773,13 @@ class ThreadedHiSockClient(HiSockClient):
         """
         The main while loop to run the thread
 
-        Refer to :class:`HiSockClient` for more details
+        Refer to :class:`HiSockClient` for more details (:meth:`update`)
 
         .. warning::
            This method is **NOT** recommended to be used in an actual
            production environment. This is used internally for the thread, and should
            not be interacted with the user
         """
-
         while not self._stop_event.is_set():
             try:
                 self.update()
@@ -793,12 +788,10 @@ class ThreadedHiSockClient(HiSockClient):
 
     def start_client(self):
         """Starts the main server loop"""
-
         self._thread.start()
 
     def join(self):
         """Waits for the thread to be killed"""
-
         self._thread.join()
 
 
@@ -847,7 +840,3 @@ def threaded_connect(
     """
 
     return ThreadedHiSockClient(addr, name, group, blocking, header_len, cache_size)
-
-
-if __name__ == "__main__":
-    print("Why are you running this file? You're weird...")

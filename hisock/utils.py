@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import pathlib
 import socket
-from typing import Union, Any
+from typing import Union, Any, Optional
 from ipaddress import IPv4Address
 from re import search
 
@@ -238,6 +238,9 @@ def _type_cast(
     :raise InvalidTypeCast: If the type cast is invalid.
     """
 
+    if type_cast is None:
+        return content_to_type_cast
+
     try:
         # Convert content_to_type_cast to bytes
         if not isinstance(content_to_type_cast, bytes):
@@ -426,7 +429,7 @@ def input_server_config(
     :rtype: tuple[str, int]
     """
 
-    return (_input_ip_address(ip_prompt), _input_port(port_prompt))
+    return _input_ip_address(ip_prompt), _input_port(port_prompt)
 
 
 def input_client_config(
@@ -434,7 +437,7 @@ def input_client_config(
     port_prompt: str = "Enter the port of the server: ",
     name_prompt: Union[str, None] = "Enter name: ",
     group_prompt: Union[str, None] = "Enter group to connect to: ",
-) -> tuple[Union[str, int], ...]:
+) -> tuple[tuple[str, int], Optional[str], Optional[str]]:
     """
     Provides a built-in way to obtain the IP and port of the configuration
     of the server to connect to
@@ -482,17 +485,24 @@ def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
 
     try:
         ip_split = formatted_ip.split(":")
-        recon_ip_split = [str(ip_split[0]), int(ip_split[1])]
-        return tuple(recon_ip_split)
+        if len(ip_split) != 2:
+            raise IndexError
+        if len(ip_split[0].split(".")) != 4:
+            raise IndexError
+        if int(ip_split[1]) <= 0 or int(ip_split[1]) > 65535:
+            raise IndexError
+
+        recon_ip_split = (str(ip_split[0]), int(ip_split[1]))
+        return recon_ip_split
     except IndexError:
-        raise ValueError(f"{formatted_ip} is not a valid IP address")
+        raise ValueError(f"{formatted_ip} is not a valid IP address") from None
 
 
 def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
     """
     Converts a tuple IP address into a string equivalent
 
-    This function is like the opposite of ``ipstr_to_tup``
+    This function is like the opposite of :func:`ipstr_to_tup`
 
     :param formatted_tuple: A two-element tuple, containing the IP address and the port.
         Must be in the format (ip: str, port: int)
