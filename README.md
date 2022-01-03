@@ -27,7 +27,16 @@ $ python -m pip install hisock (WINDOWS)
   OR
 $ pip3 install hisock (MAC/LINUX)
 ```
-Of course, you'd need pip and python for this step.
+
+---
+
+To build the *bleeding-edge* version of hisock from GitHub, download the repository with your favorite way, `cd` into it, then type:
+```shell
+$ python -m pip install -e . (WINDOWS)
+  OR
+$ pip3 install -e . (MAC/LINUX)
+```
+Note that you **MUST** cd into the cloned directory for this to work.
 
 ## Examples
 hisock utilizes decorators as the core of receiving messages instead of having 
