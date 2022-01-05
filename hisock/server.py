@@ -35,7 +35,8 @@ try:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast, MessageCacheMember
+        _type_cast,
+        MessageCacheMember,
     )
     from . import utils
 except ImportError:
@@ -48,7 +49,8 @@ except ImportError:
         make_header,
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
-        _type_cast, MessageCacheMember
+        _type_cast,
+        MessageCacheMember,
     )
     import utils
 
@@ -90,7 +92,18 @@ class HiSockServer:
         or else it will crash.
         Default passed in by :meth:`start_server` is 16 (maximum length: 10 quadrillion bytes)
     :type header_len: int, optional
+    :param cache_size: The size of the message cache.
+        -1 or below for no message cache, 0 for an unlimited cache size,
+        and any other number for the cache size.
+    :type cache_size: int, optional
+    :param keepalive: A bool indicating whether a keepalive signal should be sent or not.
 
+        If this is True, then a signal will be sent to every client every minute to prevent
+        hanging clients in the server. The clients have thirty seconds to send back an
+        acknowledge signal to show that they are still alive.
+
+        Defaults to True.
+    :type keepalive: bool, optional
     :ivar tuple addr: A two-element tuple, containing the IP address and the
         port number
     :ivar int header_len: An integer, storing the header length of each "message"
@@ -114,7 +127,7 @@ class HiSockServer:
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
-        tls: Union[dict, str] = None,
+        keepalive: bool = True,
     ):
         # Binds address and header length to class attributes
         self.addr = addr
@@ -148,20 +161,18 @@ class HiSockServer:
         self.clients = {}
         self.clients_rev = {}
 
-        if tls is None:
-            self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
-        else:
-            if isinstance(tls, dict):
-                self.tls_arguments = tls
-            elif isinstance(tls, str):
-                if tls == "default":
-                    self.tls_arguments = {
-                        "rsa_authentication_dir": ".pubkeys",
-                        "suite": "default",
-                        "diffie_hellman": constants.DH_DEFAULT,
-                    }
         self.called_run = False
-        self._closed = False
+        self.closed = False
+
+        # Keepalive
+        self._keepalive_event = threading.Event()
+        self._unresponsive_clients = []
+        self.keepalive = keepalive
+
+        if self.keepalive:
+            keepalive_thread = threading.Thread(target=self._keepalive_thread)
+            keepalive_thread.setDaemon(True)  # Another sin
+            keepalive_thread.start()
 
     def __str__(self) -> str:
         """Example: <HiSockServer serving at 192.168.1.133:33333>"""
@@ -221,46 +232,11 @@ class HiSockServer:
         """Example: len(HiSockServer(...)) -> Num clients"""
         return len(self.clients)
 
-    def _call_function(self, func_name, *args, **kwargs):
-        if not self.funcs[func_name]["threaded"]:
-            self.funcs[func_name]["func"](*args, **kwargs)
-        else:
-            function_thread = threading.Thread(
-                target=self.funcs[func_name]["func"],
-                args=args, kwargs=kwargs
-            )
-            function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
-            function_thread.start()
-
-    class _TLS:
-        """
-        Base class for establishing TLS connections,
-        and getting information about it
-
-        TLS (Transport Layer Security) is a protocol, that basically is
-        used on every internet connection. It establishes
-        a secure connection between the client and the server, to prevent
-        eavesdropping.
-
-        While TLS usually allows clients and servers to pick what "suites"
-        they have available, there is currently only one predefined suite
-        to be used. Of course, as the projects gets bigger, more suites
-        would be added.
-
-        CLASS AND TLS IMPLEMENTATION NOT READY YET - DO NOT USE
-        """
-
-        def __init__(self, outer):
-            self.outer = outer
-
     class _on:
         """Decorator used to handle something when receiving command"""
 
         def __init__(
-                self,
-                outer: HiSockServer,
-                cmd_activation: str,
-                threaded: bool = False
+            self, outer: HiSockServer, cmd_activation: str, threaded: bool = False
         ):
             # `outer` arg is for the HiSockServer instance
             # `cmd_activation` is the command... on activation (WOW)
@@ -320,13 +296,60 @@ class HiSockServer:
                 "func": func,
                 "name": func.__name__,
                 "type_hint": {"clt": clt_annotation, "msg": msg_annotation},
-                "threaded": self.threaded
+                "threaded": self.threaded,
             }
 
             self.outer.funcs[self.cmd_activation] = func_dict
 
             # Returns inner function, like a decorator would do
             return func
+
+    def _force_remove(self, sock):
+        clt = self.clients[sock]["ip"]
+
+        self._sockets_list.remove(sock)
+        del self.clients[sock]
+        del self.clients_rev[
+            next(
+                _dict_tupkey_lookup_key(
+                    clt, self.clients_rev
+                )
+            )
+        ]
+
+    def _call_function(self, func_name, *args, **kwargs):
+        if not self.funcs[func_name]["threaded"]:
+            self.funcs[func_name]["func"](*args, **kwargs)
+        else:
+            function_thread = threading.Thread(
+                target=self.funcs[func_name]["func"], args=args, kwargs=kwargs
+            )
+            function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+            function_thread.start()
+
+    def _keepalive_thread(self):
+        keepalive_header = make_header(b"$KEEPALIVE$", self.header_len)
+        disconn_keepalive_header = make_header(b"$DISCONNKEEP$", self.header_len)
+
+        while not self._keepalive_event.is_set():
+            self._keepalive_event.wait(30)
+
+            # If statement is required, since if the event is set,
+            # wait() will finish itself and move on to the next code
+            if not self._keepalive_event.is_set():
+                for client in self.clients:
+                    self._unresponsive_clients.append(client)
+                    client.send(keepalive_header + b"$KEEPALIVE$")
+
+            self._keepalive_event.wait(30)
+
+            # Same story
+            if not self._keepalive_event.is_set():
+                for client in self._unresponsive_clients:
+                    client.send(disconn_keepalive_header + b"$DISCONNKEEP$")
+                    client.shutdown(socket.SHUT_WR)
+                    client.close()
+                self._unresponsive_clients.clear()
 
     def on(self, command: str, threaded: bool = False) -> Callable:
         """
@@ -382,7 +405,8 @@ class HiSockServer:
         Running `server.run()` won't do anything now.
         :return:
         """
-        self._closed = True
+        self.closed = True
+        self._keepalive_event.set()
         self.disconnect_all_clients()
         self.sock.close()
 
@@ -488,6 +512,7 @@ class HiSockServer:
             self._sockets_list.clear()
             self.clients.clear()
             self.clients_rev.clear()
+            self._unresponsive_clients.clear()
 
     def send_all_clients(
         self,
@@ -850,7 +875,7 @@ class HiSockServer:
         """
         self.called_run = True
 
-        if not self._closed:
+        if not self.closed:
             # gets all sockets from select.select
             read_sock, write_sock, exception_sock = select.select(
                 self._sockets_list, [], self._sockets_list
@@ -900,6 +925,10 @@ class HiSockServer:
                 else:
                     # "header" - The header of the msg, mostly not needed
                     # "data" - The actual data/content of the msg
+                    if notified_sock.fileno() == -1:
+                        self._force_remove(notified_sock)
+                        continue
+
                     message = receive_message(notified_sock, self.header_len)
 
                     if not message or message["data"] == b"$USRCLOSE$":
@@ -908,15 +937,7 @@ class HiSockServer:
                         more_client_info = self.clients[notified_sock]
 
                         # Remove socket from lists and dictionaries
-                        self._sockets_list.remove(notified_sock)
-                        del self.clients[notified_sock]
-                        del self.clients_rev[
-                            next(
-                                _dict_tupkey_lookup_key(
-                                    client_disconnect, self.clients_rev
-                                )
-                            )
-                        ]
+                        self._force_remove(notified_sock)
 
                         if "leave" in self.funcs:
                             # Reserved function - Leave
@@ -926,8 +947,10 @@ class HiSockServer:
                                     "ip": client_disconnect,
                                     "name": more_client_info["name"],
                                     "group": more_client_info["group"],
-                                }
+                                },
                             )
+                        if notified_sock in self._unresponsive_clients:
+                            self._unresponsive_clients.remove(notified_sock)
 
                         # Send reserved functions to existing clients
                         clt_dcnt_header = make_header(
@@ -945,14 +968,12 @@ class HiSockServer:
                         clt_data = self.clients[notified_sock]
                         usr_sent_dict = False
 
-                        if message["data"] == b"$DH_NUMS$":
-                            if not self.tls_arguments["tls"]:
-                                # The server's not using TLS
-                                no_tls_header = make_header("$NOTLS$", self.header_len)
-                                notified_sock.send(no_tls_header + b"$NOTLS$")
-                            continue
+                        if message["data"] == b"$KEEPACK$":
+                            self._unresponsive_clients.remove(notified_sock)
                         elif message["data"].startswith(b"$USRSENTDICT$"):
-                            message["data"] = _removeprefix(message["data"], b"$USRSENTDICT$")
+                            message["data"] = _removeprefix(
+                                message["data"], b"$USRSENTDICT$"
+                            )
                             usr_sent_dict = True
                         elif message["data"].startswith(b"$GETCLT$"):
                             try:
@@ -1013,8 +1034,7 @@ class HiSockServer:
                                     new_name = name_or_group
 
                                     self._call_function(
-                                        "name_change",
-                                        clt_dict, old_name, new_name
+                                        "name_change", clt_dict, old_name, new_name
                                     )
                                 elif (
                                     "group_change" in self.funcs
@@ -1024,8 +1044,7 @@ class HiSockServer:
                                     new_group = name_or_group
 
                                     self._call_function(
-                                        "group_change",
-                                        clt_dict, old_group, new_group
+                                        "group_change", clt_dict, old_group, new_group
                                     )
 
                         if "message" in self.funcs:
@@ -1037,22 +1056,15 @@ class HiSockServer:
                             #         Type hinting -> Type casting             #
                             ####################################################
                             if usr_sent_dict:
-                                parse_content = json.loads(
-                                    message["data"]
-                                )
+                                parse_content = json.loads(message["data"])
                             temp_parse_content = _type_cast(
                                 self.funcs["message"]["type_hint"]["msg"],
                                 message["data"],
                                 self.funcs["message"],
                             )
 
-                            if (
-                                    temp_parse_content == parse_content and
-                                    usr_sent_dict
-                            ):
-                                parse_content = json.loads(
-                                    message["data"]
-                                )
+                            if temp_parse_content == parse_content and usr_sent_dict:
+                                parse_content = json.loads(message["data"])
                             elif temp_parse_content is not None:
                                 parse_content = temp_parse_content
                             elif temp_parse_content is None:
@@ -1061,7 +1073,9 @@ class HiSockServer:
                                     f"type cast!"
                                 )
 
-                            self._call_function("message", inner_clt_data, parse_content)
+                            self._call_function(
+                                "message", inner_clt_data, parse_content
+                            )
 
                         has_corresponding_function = False
                         parse_content = None  # FINE pycharm
@@ -1081,12 +1095,10 @@ class HiSockServer:
                                 )
 
                                 if (
-                                    temp_parse_content == parse_content and
-                                    usr_sent_dict
+                                    temp_parse_content == parse_content
+                                    and usr_sent_dict
                                 ):
-                                    parse_content = json.loads(
-                                        parse_content
-                                    )
+                                    parse_content = json.loads(parse_content)
                                 elif temp_parse_content is not None:
                                     parse_content = temp_parse_content
                                 elif temp_parse_content is None:
@@ -1099,9 +1111,15 @@ class HiSockServer:
                                     func["func"](clt_data, parse_content)
                                 else:
                                     function_thread = threading.Thread(
-                                        target=func["func"], args=(clt_data, parse_content,)
+                                        target=func["func"],
+                                        args=(
+                                            clt_data,
+                                            parse_content,
+                                        ),
                                     )
-                                    function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+                                    function_thread.setDaemon(
+                                        True
+                                    )  # FORGIVE ME PEP 8 FOR I HAVE SINNED
                                     function_thread.start()
 
                         # Caching
@@ -1116,7 +1134,7 @@ class HiSockServer:
                                         "header": message["header"],
                                         "content": cache_content,
                                         "called": has_corresponding_function,
-                                        "command": command
+                                        "command": command,
                                     }
                                 )
                             )
@@ -1418,7 +1436,7 @@ if __name__ == "__main__":
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
         s.send_client(clt_info["ip"], "shrek", b"")
-        s.send_client(clt_info['ip'], 'john', b"")
+        s.send_client(clt_info["ip"], "john", b"")
         # s.disconnect_all_clients()
 
     @s.on("lol")

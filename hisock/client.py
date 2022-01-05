@@ -34,8 +34,9 @@ try:
         _removeprefix,
         ServerNotRunning,
         ClientDisconnected,
-        iptup_to_str, _type_cast,
-        MessageCacheMember
+        iptup_to_str,
+        _type_cast,
+        MessageCacheMember,
     )
     from . import utils  # Starting now, I'm too lazy to do from imports
 except ImportError:
@@ -45,8 +46,9 @@ except ImportError:
         _removeprefix,
         ServerNotRunning,
         ClientDisconnected,
-        iptup_to_str, _type_cast,
-        MessageCacheMember
+        iptup_to_str,
+        _type_cast,
+        MessageCacheMember,
     )
     import utils  # Starting now, I'm too lazy to do from imports
 
@@ -114,13 +116,13 @@ class HiSockClient:
     """
 
     def __init__(
-            self,
-            addr: tuple[str, int],
-            name: Union[str, None],
-            group: Union[str, None],
-            blocking: bool = True,
-            header_len: int = 16,
-            cache_size: int = -1,
+        self,
+        addr: tuple[str, int],
+        name: Union[str, None],
+        group: Union[str, None],
+        blocking: bool = True,
+        header_len: int = 16,
+        cache_size: int = -1,
     ):
         # Function and cache storage
         self.funcs = {}
@@ -129,9 +131,6 @@ class HiSockClient:
             # cache_size <= -1: No cache
             self.cache = []
 
-        # TLS arguments
-        self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
-
         # Info for socket
         self.addr = addr
         self.name = name
@@ -139,7 +138,7 @@ class HiSockClient:
         self.header_len = header_len
 
         # Flags
-        self._closed = False
+        self.closed = False
 
         # Remember to update them as more rev funcs are added
         self.reserved_functions = ["client_connect", "client_disconnect"]
@@ -223,8 +222,7 @@ class HiSockClient:
             self.funcs[func_name]["func"](*args, **kwargs)
         else:
             function_thread = threading.Thread(
-                target=self.funcs[func_name]["func"],
-                args=args, kwargs=kwargs
+                target=self.funcs[func_name]["func"], args=args, kwargs=kwargs
             )
             function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
             function_thread.start()
@@ -238,10 +236,11 @@ class HiSockClient:
         """
         self.called_update = True  # I forgot what this does
 
-        if not self._closed:  # Checks if client hasn't been closed with `close`
+        if not self.closed:  # Checks if client hasn't been closed with `close`
             try:
-                while True:
+                while not self.closed:
                     # Receives header - If doesn't exist, server error
+                    content_header = None
                     try:
                         content_header = self.sock.recv(self.header_len)
                     except ConnectionResetError:
@@ -249,6 +248,10 @@ class HiSockClient:
                         raise ServerNotRunning(
                             "Server has stopped running, aborting..."
                         ) from ConnectionResetError
+                    except ConnectionAbortedError:
+                        # Keepalive timeout reached
+                        self.closed = True
+                        continue
 
                     if not content_header:
                         # Most likely server error; aborts
@@ -272,16 +275,21 @@ class HiSockClient:
 
                         if "force_disconnect" in self.funcs:
                             self._call_function("force_disconnect")
+                    if content == b"$KEEPALIVE$":
+                        response = make_header(b"$KEEPACK$", self.header_len)
+                        self.sock.send(response + b"$KEEPACK$")
+                    if content == b"$DISCONNKEEP":
+                        print("AMOGUS")
                     if (
-                            content.startswith(b"$CLTCONN$")
-                            and "client_connect" in self.funcs
+                        content.startswith(b"$CLTCONN$")
+                        and "client_connect" in self.funcs
                     ):
                         # Client connected to server; parse and call function
                         clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
                         self._call_function("client_connect", clt_content)
                     elif (
-                            content.startswith(b"$CLTDISCONN$")
-                            and "client_disconnect" in self.funcs
+                        content.startswith(b"$CLTDISCONN$")
+                        and "client_disconnect" in self.funcs
                     ):
                         # Client disconnected from server; parse and call function
                         clt_content = json.loads(
@@ -296,19 +304,17 @@ class HiSockClient:
                     for matching_cmd, func in self.funcs.items():
                         # Loop through functions and binded commands
                         if (
-                                content.startswith(matching_cmd.encode())
-                                and matching_cmd not in self.reserved_functions
+                            content.startswith(matching_cmd.encode())
+                            and matching_cmd not in self.reserved_functions
                         ):
                             has_corresponding_function = True
                             command = matching_cmd
-                            parse_content = content[len(matching_cmd) + 1:]
+                            parse_content = content[len(matching_cmd) + 1 :]
 
                             # Type Hint -> Type Cast
                             # (Exceptions need to have "From ValueError")
                             parse_content = _type_cast(
-                                func["type_hint"],
-                                parse_content,
-                                func
+                                func["type_hint"], parse_content, func
                             )
 
                             # Call function
@@ -318,7 +324,9 @@ class HiSockClient:
                                 function_thread = threading.Thread(
                                     target=func["func"], args=(parse_content,)
                                 )
-                                function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+                                function_thread.setDaemon(
+                                    True
+                                )  # FORGIVE ME PEP 8 FOR I HAVE SINNED
                                 function_thread.start()
 
                             continue
@@ -346,9 +354,9 @@ class HiSockClient:
             except IOError as e:
                 # Normal, means message has ended
                 if (
-                        e.errno != errno.EAGAIN
-                        and e.errno != errno.EWOULDBLOCK
-                        and not self._closed
+                    e.errno != errno.EAGAIN
+                    and e.errno != errno.EWOULDBLOCK
+                    and not self.closed
                 ):
                     # Fatal Error, abort client (print exception, print log, exit python)
                     traceback.print_exception(
@@ -365,12 +373,7 @@ class HiSockClient:
     class _on:
         """Decorator used to handle something when receiving command"""
 
-        def __init__(
-                self,
-                outer: HiSockClient,
-                command: str,
-                threaded: bool = False
-        ):
+        def __init__(self, outer: HiSockClient, command: str, threaded: bool = False):
             # `outer` arg is for the HiSockClient instance
             # `cmd_activation` is the command... on activation (WOW)
             self.outer = outer
@@ -407,7 +410,7 @@ class HiSockClient:
                 "func": func,  # Function
                 "name": func.__name__,  # Function name
                 "type_hint": msg_annotation,  # All function type hints,
-                "threaded": self.threaded
+                "threaded": self.threaded,
             }
             self.outer.funcs[self.command] = func_dict
 
@@ -461,15 +464,15 @@ class HiSockClient:
         return self._on(self, command, threaded)
 
     def send(
-            self,
-            command: str,
-            content: Union[
-                bytes,
-                dict[
-                    Union[str, int, float, bool, None],
-                    Union[str, int, float, bool, None],
-                ],
+        self,
+        command: str,
+        content: Union[
+            bytes,
+            dict[
+                Union[str, int, float, bool, None],
+                Union[str, int, float, bool, None],
             ],
+        ],
     ):
         """
         Sends a command & content to the server, where it will be interpreted
@@ -489,10 +492,11 @@ class HiSockClient:
         if isinstance(content, dict):
             content = json.dumps(content).encode()
             content_header = make_header(
-                b"$USRSENTDICT$" +
-                command.encode() + b" " + content, self.header_len
+                b"$USRSENTDICT$" + command.encode() + b" " + content, self.header_len
             )
-            self.sock.send(content_header + b"$USRSENTDICT$" + command.encode() + b" " + content)
+            self.sock.send(
+                content_header + b"$USRSENTDICT$" + command.encode() + b" " + content
+            )
         else:
             content_header = make_header(
                 command.encode() + b" " + content, self.header_len
@@ -500,8 +504,8 @@ class HiSockClient:
             self.sock.send(content_header + command.encode() + b" " + content)
 
     def raw_send(
-            self,
-            content: bytes,
+        self,
+        content: bytes,
     ):  # TODO: Add dict-sending support for this method
         """
         Sends a message to the server: NO COMMAND REQUIRED.
@@ -583,8 +587,8 @@ class HiSockClient:
         )
 
     def get_cache(
-            self,
-            idx: Union[int, slice, None] = None,
+        self,
+        idx: Union[int, slice, None] = None,
     ) -> list[MessageCacheMember]:
         """
         Gets the message cache.
@@ -646,7 +650,7 @@ class HiSockClient:
         """
         # Changes _closed flag to True to prevent
         # `update` being crazy
-        self._closed = True
+        self.closed = True
         if emit_leave:
             close_header = make_header(b"$USRCLOSE$", self.header_len)
             self.sock.send(close_header + b"$USRCLOSE$")
@@ -668,7 +672,7 @@ class ThreadedHiSockClient(HiSockClient):
     """
 
     def __init__(
-            self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+        self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
     ):
         super().__init__(addr, name, group, blocking, header_len, cache_size)
         self._thread = threading.Thread(target=self.run)
@@ -692,7 +696,7 @@ class ThreadedHiSockClient(HiSockClient):
            production enviroment. This is used internally for the thread, and should
            not be interacted with the user
         """
-        while not self._stop_event.is_set():
+        while not (self._stop_event.is_set() or self.closed):
             try:
                 self.update()
             except (OSError, ValueError):
@@ -738,7 +742,7 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_siz
 
 
 def threaded_connect(
-        addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+    addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
 ):
     """
     Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
@@ -751,10 +755,12 @@ def threaded_connect(
 
 if __name__ == "__main__":
     s = threaded_connect(
-        ("192.168.1.131", 33333), name="Sussus", group="Amogus", cache_size=5
+        ("192.168.1.131", 33333),
+        name="192.168.1.121:6969",
+        group="Amogus",
+        cache_size=5,
     )
-    s.change_name("Burp")
-
+    s.change_name("192.168.1.121:420")
 
     @s.on("Joe")
     def hehe(_):
@@ -764,23 +770,19 @@ if __name__ == "__main__":
         )
         s.send("Sussus", b"Some random msg I guess")
 
-
     @s.on("pog")
     def eee(msg):
         print("Follow up message sent by server\n" "(Also sent to every client)")
         print("Message:", msg)
 
-
     @s.on("client_connect", threaded=True)
     def please(data):
         print(f"Client {':'.join(map(str, data['ip']))} connected :)")
-        __import__('time').sleep(10)
-
+        __import__("time").sleep(10)
 
     @s.on("client_disconnect")
     def haha_bois(disconn_data):
         print(f"Aww man, {':'.join(map(str, disconn_data['ip']))} disconnected :(")
-
 
     @s.on("Test")
     def test(data):
@@ -788,27 +790,22 @@ if __name__ == "__main__":
         print(s.get_cache()[0].content)
         s.send("lol", {"I am": "inevitable"})
 
-
     @s.on("force_disconnect")
     def susmogus():
         print("AAAAAAAAA DISCONNECTED :(((((((")
-
 
     @s.on("dicttest")
     def amogus(yes: dict):
         print(f"OMG SO COOL I RECEIVED THIS DICT: Does this {yes['Does this']}")
 
-
-    @s.on("shrek", threaded=True)
+    @s.on("shrek", threaded=False)
     def sticker(yum):
         print("Sleeping zzz")
-        __import__('time').sleep(30)
+        __import__("time").sleep(70)
         print("HEHE BOIS THREADED")
 
-
-    @s.on('john')
+    @s.on("john")
     def sus(chicken):
         print("I'm fineeeeee, and the thread is running!")
-
 
     s.start_client()
