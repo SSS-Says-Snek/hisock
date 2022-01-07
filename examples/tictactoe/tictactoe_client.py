@@ -48,7 +48,7 @@ def run():
 
     print(f"Connecting to server at {ip_input}:{port_input}...", end=" ")
 
-    server = connect((ip_input, port_input), name)
+    client = connect((ip_input, port_input), name)
 
     print("SUCCESS!")
     clear()
@@ -57,11 +57,11 @@ def run():
     data = Data()
 
     # Hisock message receive decorators
-    @server.on("game_start")
+    @client.on("game_start")
     def game_started(opponent: str):
         print(f'Pairing succeeded! Opponent: "{opponent}"')
         data.tictactoe_opponent = opponent
-        goes_first = server.recv_raw()
+        goes_first = client.recv_raw()
 
         if goes_first == b"First":
             # Receives message from server; goes first, therefore is X
@@ -86,14 +86,14 @@ def run():
             print(data.board_layout.format(*data.board))
 
             # Sends to server the index of the move
-            server.send("player_turn", str(move_input - 1).encode())
+            client.send("player_turn", str(move_input - 1).encode())
         else:
             # Goes last, therefore is O
             data.letter = "O"
             print("You are O")
             print(data.board_layout.format(*data.board))
 
-    @server.on("player_turn")
+    @client.on("player_turn")
     def player_turn(move: int):
         # GETS CALLED EVERY TURN AFTER FIRST DETERMINATION
 
@@ -120,9 +120,9 @@ def run():
         print(f"You are {data.letter}")
         print(data.board_layout.format(*data.board))
 
-        server.send("player_turn", str(move_input - 1).encode())
+        client.send("player_turn", str(move_input - 1).encode())
 
-    @server.on("win")
+    @client.on("win")
     def player_win(missing_move: int):
         # Player won
 
@@ -136,7 +136,7 @@ def run():
 
         sys.exit()
 
-    @server.on("lose")
+    @client.on("lose")
     def player_lose(missing_move: int):
         # Player lost
 
@@ -150,7 +150,7 @@ def run():
 
         sys.exit()
 
-    @server.on("tie")
+    @client.on("tie")
     def player_tie(missing_move: int):
         # Players tied
 
@@ -164,15 +164,15 @@ def run():
 
         sys.exit()
 
-    @server.on("opp_disc")
+    @client.on("opp_disc")
     def opponent_leave(opp_name: str):
         clear()
         print(f'Opponent "{opp_name}"disconnected; disconnecting from server...')
         raise SystemExit
 
-    while True:
+    while not client.closed:
         # Updates server
-        server.update()
+        client.update()
 
 
 if __name__ == "__main__":

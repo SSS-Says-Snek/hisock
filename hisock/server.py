@@ -402,8 +402,7 @@ class HiSockServer:
         Closes the server; ALL clients will be disconnected, then the
         server socket will be closed.
 
-        Running `server.run()` won't do anything now.
-        :return:
+        Running ``server.run()`` won't do anything now.
         """
         self.closed = True
         self._keepalive_event.set()
@@ -871,7 +870,7 @@ class HiSockServer:
         """
         Runs the server. This method handles the sending and receiving of data,
         so it should be run once every iteration of a while loop, as to not
-        lose valuable information
+        lose valuable information. This is also called underhood in :meth:`start`.
         """
         self.called_run = True
 
@@ -1141,6 +1140,18 @@ class HiSockServer:
 
                             if 0 < self.cache_size < len(self.cache):
                                 self.cache.pop(0)
+
+    def start(self):
+        """
+        Starts a while loop that actually runs the server long-term. Exactly equivalent to:
+
+        .. code-block:: python
+           while not server.closed:
+               server.run()
+
+        """
+        while not self.closed:
+            self.run()
 
     def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
@@ -1455,5 +1466,5 @@ if __name__ == "__main__":
     def a(_, msg):  # _ actually is clt_data
         s.send_all_clients("pog", msg)
 
-    while True:
+    while not s.closed:
         s.run()

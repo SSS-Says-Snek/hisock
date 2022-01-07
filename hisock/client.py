@@ -217,6 +217,53 @@ class HiSockClient:
 
         return IPv4Address(self.addr[0]) == IPv4Address(ip[0])
 
+    class _on:
+        """Decorator used to handle something when receiving command"""
+
+        def __init__(self, outer: HiSockClient, command: str, threaded: bool = False):
+            # `outer` arg is for the HiSockClient instance
+            # `cmd_activation` is the command... on activation (WOW)
+            self.outer = outer
+            self.command = command
+            self.threaded = threaded
+
+        def __call__(self, func: Callable) -> Callable:
+            """Adds a function that gets called when the client receives a matching command"""
+
+            # Checks for illegal $cmd$ notation (used for reserved functions)
+            if re.search(r"\$.+\$", self.command):
+                raise ValueError(
+                    'The format "$command$" is used for reserved functions - '
+                    "Consider using a different format"
+                )
+            # Gets annotations of function
+            annots = inspect.getfullargspec(func).annotations
+            func_args = inspect.getfullargspec(func).args
+
+            try:
+                # Try to map first arg (client data)
+                # Into type hint compliant one
+                msg_annotation = annots[func_args[0]]
+                if isinstance(msg_annotation, str):
+                    msg_annotation = builtins.__dict__[annots[func_args[0]]]
+            except KeyError:
+                # builtins is not what we thought; I dunno why I did this
+                msg_annotation = None
+            except IndexError:
+                msg_annotation = None
+
+            # Creates function dictionary to add to `outer.funcs`
+            func_dict = {
+                "func": func,  # Function
+                "name": func.__name__,  # Function name
+                "type_hint": msg_annotation,  # All function type hints,
+                "threaded": self.threaded,
+            }
+            self.outer.funcs[self.command] = func_dict
+
+            # Returns the inner function, like a decorator
+            return func
+
     def _call_function(self, func_name, *args, **kwargs):
         if not self.funcs[func_name]["threaded"]:
             self.funcs[func_name]["func"](*args, **kwargs)
@@ -227,12 +274,57 @@ class HiSockClient:
             function_thread.setDaemon(True)  # FORGIVE ME PEP 8 FOR I HAVE SINNED
             function_thread.start()
 
+    def on(self, command: str, threaded: bool = False) -> Callable:
+        """
+        A decorator that adds a function that gets called when the client
+        receives a matching command
+
+        Reserved functions are functions that get activated on
+        specific events. Currently, there are 2 for HiSockClient:
+
+        1. client_connect - Activated when a client connects to the server
+
+        2. client_disconnect - Activated when a client disconnects from the server
+
+        The parameters of the function depend on the command to listen.
+        For example, reserved functions `client_connect` and
+        `client_disconnect` gets the client's data passed in as an argument.
+        All other nonreserved functions get the message passed in.
+
+        In addition, certain type casting is available to nonreserved functions.
+        That means, that, using type hints, you can automatically convert
+        between needed instances. The type casting currently supports:
+
+        1. bytes -> int (Will raise exception if bytes is not numerical)
+
+        2. bytes -> float (Will raise exception if bytes is not numerical)
+
+        3. bytes -> str (Will raise exception if there's a unicode error)
+
+        Type casting for reserved commands is scheduled to be
+        implemented, and is currently being worked on.
+
+        :param command: A string, representing the command the function should activate
+            when receiving it
+        :type command: str
+        :param threaded: A boolean, representing if the function should be run in a thread
+            in order to not block the update() loop.
+
+            Defaults to False
+        :type threaded: bool, optional
+
+        :return: The same function
+            (The decorator just appended the function to a stack
+        :rtype: function
+        """
+        # Passes in outer to _on decorator/class
+        return self._on(self, command, threaded)
+
     def update(self):
         """
-        Handles newly received messages, excluding the received messages for `wait_recv`
-        This method must be called every iteration of a while loop, as to not lose valuable info.
-        In some cases, it is recommended to run this in a thread, as to not block the
-        program
+        Handles newly received messages, excluding the received messages for `wait_recv`.
+        This method must be called every iteration of a while loop, as to not lose valuable info. 
+        This is also called underhood in :meth:`start`.
         """
         self.called_update = True  # I forgot what this does
 
@@ -370,98 +462,17 @@ class HiSockClient:
 
                     raise SystemExit
 
-    class _on:
-        """Decorator used to handle something when receiving command"""
-
-        def __init__(self, outer: HiSockClient, command: str, threaded: bool = False):
-            # `outer` arg is for the HiSockClient instance
-            # `cmd_activation` is the command... on activation (WOW)
-            self.outer = outer
-            self.command = command
-            self.threaded = threaded
-
-        def __call__(self, func: Callable) -> Callable:
-            """Adds a function that gets called when the client receives a matching command"""
-
-            # Checks for illegal $cmd$ notation (used for reserved functions)
-            if re.search(r"\$.+\$", self.command):
-                raise ValueError(
-                    'The format "$command$" is used for reserved functions - '
-                    "Consider using a different format"
-                )
-            # Gets annotations of function
-            annots = inspect.getfullargspec(func).annotations
-            func_args = inspect.getfullargspec(func).args
-
-            try:
-                # Try to map first arg (client data)
-                # Into type hint compliant one
-                msg_annotation = annots[func_args[0]]
-                if isinstance(msg_annotation, str):
-                    msg_annotation = builtins.__dict__[annots[func_args[0]]]
-            except KeyError:
-                # builtins is not what we thought; I dunno why I did this
-                msg_annotation = None
-            except IndexError:
-                msg_annotation = None
-
-            # Creates function dictionary to add to `outer.funcs`
-            func_dict = {
-                "func": func,  # Function
-                "name": func.__name__,  # Function name
-                "type_hint": msg_annotation,  # All function type hints,
-                "threaded": self.threaded,
-            }
-            self.outer.funcs[self.command] = func_dict
-
-            # Returns the inner function, like a decorator
-            return func
-
-    def on(self, command: str, threaded: bool = False) -> Callable:
+    def start(self):
         """
-        A decorator that adds a function that gets called when the client
-        receives a matching command
+        Starts a while loop that actually runs the client long-term. Exactly equivalent to:
 
-        Reserved functions are functions that get activated on
-        specific events. Currently, there are 2 for HiSockClient:
+        .. code-block:: python
+           while not client.closed:
+               client.update()
 
-        1. client_connect - Activated when a client connects to the server
-
-        2. client_disconnect - Activated when a client disconnects from the server
-
-        The parameters of the function depend on the command to listen.
-        For example, reserved functions `client_connect` and
-        `client_disconnect` gets the client's data passed in as an argument.
-        All other nonreserved functions get the message passed in.
-
-        In addition, certain type casting is available to nonreserved functions.
-        That means, that, using type hints, you can automatically convert
-        between needed instances. The type casting currently supports:
-
-        1. bytes -> int (Will raise exception if bytes is not numerical)
-
-        2. bytes -> float (Will raise exception if bytes is not numerical)
-
-        3. bytes -> str (Will raise exception if there's a unicode error)
-
-        Type casting for reserved commands is scheduled to be
-        implemented, and is currently being worked on.
-
-        :param command: A string, representing the command the function should activate
-            when receiving it
-        :type command: str
-        :param threaded: A boolean, representing if the function should be run in a thread
-            in order to not block the update() loop.
-
-            Defaults to False
-        :type threaded: bool, optional
-
-        :return: The same function
-            (The decorator just appended the function to a stack
-        :rtype: function
         """
-        # Passes in outer to _on decorator/class
-        return self._on(self, command, threaded)
+        while not self.closed:
+            self.update()
 
     def send(
         self,

@@ -56,7 +56,7 @@ You can take a look at some of them. The basic client-server examples are:
 
         print(f"WHOAAA! The result is {result}! Thanks server!")
 
-    while True:
+    while not s.closed:
         s.update()
 
 **Server**
@@ -109,6 +109,6 @@ You can take a look at some of them. The basic client-server examples are:
         server.send_client_raw(client['ip'], str(result).encode())
 
 
-    while True:
+    while not server.closed:
         server.run()
 

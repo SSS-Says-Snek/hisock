@@ -44,7 +44,7 @@ def run():
         port_input = 6969
 
     print(f"Starting server at {ip_input}:{port_input}...", end=" ")
-    s = start_server((ip_input, port_input))
+    server = start_server((ip_input, port_input))
     print("SUCCESS!")
 
     # Tic Tac Toe variable initialization
@@ -55,7 +55,7 @@ def run():
     data = Data()
 
     # Hisock message receive decorators
-    @s.on("join")
+    @server.on("join")
     def client_conn(client_info):
         print(f"Client \"{client_info['name']}\" connected")
 
@@ -74,18 +74,18 @@ def run():
 
             goes_first = random.random()
 
-            s.send_client(client_info["ip"], "game_start", last_pair[0].encode())
-            s.send_client(last_ip_pair[0], "game_start", client_info["name"].encode())
+            server.send_client(client_info["ip"], "game_start", last_pair[0].encode())
+            server.send_client(last_ip_pair[0], "game_start", client_info["name"].encode())
 
             if goes_first < 0.5:
                 # Connected client goes first
-                s.send_client_raw(client_info["ip"], b"First")
-                s.send_client_raw(last_ip_pair[0], b"Last")
+                server.send_client_raw(client_info["ip"], b"First")
+                server.send_client_raw(last_ip_pair[0], b"Last")
                 x_or_o.append(["O", "X"])
             else:
                 # Unpaired client goes first
-                s.send_client_raw(last_ip_pair[0], b"First")
-                s.send_client_raw(client_info["ip"], b"Last")
+                server.send_client_raw(last_ip_pair[0], b"First")
+                server.send_client_raw(client_info["ip"], b"Last")
                 x_or_o.append(["X", "O"])
 
         elif len(last_pair) == 2:  # Available client
@@ -94,7 +94,7 @@ def run():
             paired_clients.append([client_info["name"]])
             paired_clients_ip.append([client_info["ip"]])
 
-    @s.on("leave")
+    @server.on("leave")
     def player_leave(clt_info):
         print(paired_clients_ip)
         print(f"Client \"{clt_info['name']}\" disconnected")
@@ -108,11 +108,11 @@ def run():
                         cp_ip_pair = ip_pair[:]
                         cp_ip_pair.remove(ip)
                         other_ip = cp_ip_pair[0]
-                        s.send_client(other_ip, "opp_disc", clt_info["name"].encode())
+                        server.send_client(other_ip, "opp_disc", clt_info["name"].encode())
                         paired_clients_ip.remove(ip_pair)
         print(paired_clients_ip)
 
-    @s.on("player_turn")
+    @server.on("player_turn")
     def player_turn(clt_data, move: int):
         opponent_ip = None  # Suppressing Pycharm warnings
         opponent_letter = None
@@ -148,27 +148,27 @@ def run():
                 winner = "X" if winner == "O" else "O"
 
                 if winner == opponent_letter:
-                    s.send_client(opponent_ip, "win", str(move).encode())
-                    s.send_client(clt_data["ip"], "lose", str(move).encode())
+                    server.send_client(opponent_ip, "win", str(move).encode())
+                    server.send_client(clt_data["ip"], "lose", str(move).encode())
                 else:
-                    s.send_client(clt_data["ip"], "win", str(move).encode())
-                    s.send_client(opponent_ip, "lose", str(move).encode())
+                    server.send_client(clt_data["ip"], "win", str(move).encode())
+                    server.send_client(opponent_ip, "lose", str(move).encode())
 
         spaces = [i == " " for i in data.boards[idx[0]]]
 
         if not any(spaces):
             # No spaces and no winner - Tied
             no_winner = False  # Even though it's technically true
-            s.send_client(opponent_ip, "tie", str(move).encode())
-            s.send_client(clt_data["ip"], "tie", str(move).encode())
+            server.send_client(opponent_ip, "tie", str(move).encode())
+            server.send_client(clt_data["ip"], "tie", str(move).encode())
 
         if no_winner:
-            s.send_client(opponent_ip, "player_turn", str(move).encode())
+            server.send_client(opponent_ip, "player_turn", str(move).encode())
 
-    while True:
+    while not server.closed:
         try:
             # Runs server
-            s.run()
+            server.run()
         except utils.NoMessageException:
             pass
 
