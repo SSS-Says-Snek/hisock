@@ -40,6 +40,7 @@ try:
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
         _type_cast,
+        _str_type_to_type_annotations_dict,
         receive_message,
         make_header,
         validate_ipv4,
@@ -64,6 +65,7 @@ except ImportError:
         _dict_tupkey_lookup,
         _dict_tupkey_lookup_key,
         _type_cast,
+        _str_type_to_type_annotations_dict,
         receive_message,
         make_header,
         validate_ipv4,
@@ -163,7 +165,7 @@ class HiSockServer:
         self._reserved_functions_parameters_num = (
             1,  # join
             1,  # leave
-            1,  # message
+            2,  # message
             3,  # name_change
             3,  # group_change
         )
@@ -287,7 +289,7 @@ class HiSockServer:
         self.send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_info)}".encode())
 
         if "join" in self.funcs:
-            self._call_function("join", client_info)
+            self._call_function("join", False, client_info)
             return
 
         warnings.warn("join", FunctionNotFoundWarning)
@@ -314,7 +316,7 @@ class HiSockServer:
         self._update_clients_rev_dict()
 
         if "leave" in self.funcs:
-            self._call_function("leave", client_info)
+            self._call_function("leave", False, client_info)
             return
 
         warnings.warn("leave", FunctionNotFoundWarning)
@@ -360,30 +362,48 @@ class HiSockServer:
 
     # On decorator
 
-    def _call_function(self, func_name, *args, **kwargs):
+    def _call_function(self, func_name: str, sort_by_name: bool, *args, **kwargs):
         """
         Calls a function with the given arguments and returns the result.
 
         :param func_name: The name of the function to call.
         :type func_name: str
+        :param sort_by_name: Whether to sort the arguments by name or not.
+        :type sort_by_name: bool
         :param args: The arguments to pass to the function.
         :param kwargs: The keyword arguments to pass to the function.
 
         :raise FunctionNotFoundException: If the function is not found.
         """
 
-        # Check if the function exists
-        if func_name not in self.funcs:
-            raise FunctionNotFoundException(f'Function "{func_name}" was not found.')
+        func: dict
+
+        # Find the function by the function name
+        if sort_by_name:
+            for func_command, func_data in self.funcs.items():
+                if func_data["name"] == func_name:
+                    func = func_command
+                    break
+            else:
+                raise FunctionNotFoundException(
+                    f"Function with name {func_name} not found"
+                )
+        # Find the function by the function command
+        else:
+            if func_name not in self.funcs:
+                raise FunctionNotFoundException(
+                    f"Function with command {func_name} not found"
+                )
+            func = func_name
 
         # Normal
-        if not self.funcs[func_name]["threaded"]:
-            self.funcs[func_name]["func"](*args, **kwargs)
+        if not self.funcs[func]["threaded"]:
+            self.funcs[func]["func"](*args, **kwargs)
             return
 
         # Threaded
         function_thread = threading.Thread(
-            target=self.funcs[func_name]["func"],
+            target=self.funcs[func]["func"],
             args=args,
             kwargs=kwargs,
             daemon=True,
@@ -428,7 +448,9 @@ class HiSockServer:
             self._assert_num_func_args_valid(len(func_args))
 
             # Store annotations of function
-            annotations = inspect.getfullargspec(func).annotations  # {"param": type}
+            annotations = _str_type_to_type_annotations_dict(
+                inspect.getfullargspec(func).annotations
+            )  # {"param": type}
             parameter_annotations = {"client_data": None, "message": None}
 
             # Process unreserved commands and reserved `message` (only reserved
@@ -830,6 +852,7 @@ class HiSockServer:
 
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
+        print(f"{content_header=}, {data_to_send=}")
         self._get_client_from_name_or_ip_port(client).send(
             content_header + data_to_send
         )
@@ -983,14 +1006,18 @@ class HiSockServer:
                 self._update_clients_rev_dict()
 
                 # Call reserved function
-                reserved_func_name = f"{key}_changed"
+                reserved_func_name = f"{key}_change"
 
                 if reserved_func_name in self._reserved_functions:
                     old_value = client_info[key]
                     new_value = changed_client_info[key]
 
                     self._call_function(
-                        reserved_func_name, changed_client_info, old_value, new_value
+                        reserved_func_name,
+                        False,
+                        changed_client_info,
+                        old_value,
+                        new_value,
                     )
 
             ### Unreserved ###
@@ -1013,6 +1040,7 @@ class HiSockServer:
 
                 self._call_function(
                     command,
+                    False,
                     client_data,
                     _type_cast(func["type_hint"]["message"], content, func["name"]),
                 )
@@ -1046,6 +1074,7 @@ class HiSockServer:
 
             self._call_function(
                 "message",
+                False,
                 client_data,
                 _type_cast(
                     self.funcs["message"]["type_hint"]["message"],
@@ -1152,3 +1181,70 @@ def start_threaded_server(addr, blocking=True, max_connections=0, header_len=16)
     """
 
     return ThreadedHiSockServer(addr, blocking, max_connections, header_len)
+
+
+if __name__ == "__main__":
+    # Tests
+    print("Testing server!")
+    server = start_server(("127.0.0.1", int(input("Port: "))))
+
+    @server.on("join")
+    def on_join(client_data: dict):
+        print(
+            f'{client_data["name"]} has joined! '
+            f'Their IP is {":".join(map(str, client_data["ip"]))}. '
+            f'Their group is {client_data["group"]}.'
+        )
+
+    @server.on("leave")
+    def on_leave(client_data: dict):
+        print(f'{client_data["name"]} has left!')
+
+    @server.on("message")
+    def on_message(client_data: dict, message: str):
+        print(f'[MESSAGE CATCH-ALL] {client_data["name"]} says "{message}".')
+
+    @server.on("name_change")
+    def on_name_change(_: dict, old_name: str, new_name: str):  # Client data isn't used
+        print(f"{old_name} changed their name to {new_name}.")
+
+    @server.on("group_change")
+    def on_group_change(client_data: dict, old_group: str, new_group: str):
+        print(f"{client_data['name']} changed their group to {new_group}.")
+        # Alert clients of change
+        server.send_group(
+            old_group,
+            "message",
+            f'{client_data["name"]} has left to move to {new_group}.',
+        )
+        server.send_group(
+            new_group,
+            "message",
+            f'{client_data["name"]} has joined from {old_group}.',
+        )
+
+    @server.on("ping")
+    def on_ping(client_data: dict, _: bytes):
+        print(f"{client_data['name']} pinged!")
+        server.send_client_raw(client_data["ip"], "pong")
+
+    @server.on("all_clients")
+    def on_all_clients(client_data: dict, data: dict):
+        print(f"{client_data['name']} asked for all clients!")
+
+        server.send_client_raw(client_data["ip"], server.get_all_clients())
+
+    @server.on("broadcast_message")
+    def on_broadcast_message(client_data: dict, message: str):
+        print(f'{client_data["name"]} said "{message}"!')
+        server.send_all_clients("message", message)
+
+    @server.on("set_timer", threaded=True)
+    def on_set_timer(client_data: dict, seconds: int):
+        print(f'{client_data["name"]} set a timer for {seconds} seconds!')
+        __import__("time").sleep(seconds)
+        print(f'{client_data["name"]}\'s timer is done!')
+        server.send_client_raw(client_data["ip"], "timer_done")
+
+    while True:
+        server.run()

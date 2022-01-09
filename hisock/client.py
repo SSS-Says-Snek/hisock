@@ -40,6 +40,7 @@ try:
         Client,
         _removeprefix,
         _type_cast,
+        _str_type_to_type_annotations_dict,
         make_header,
         iptup_to_str,
         validate_ipv4,
@@ -59,6 +60,7 @@ except ImportError:
         Client,
         _removeprefix,
         _type_cast,
+        _str_type_to_type_annotations_dict,
         make_header,
         iptup_to_str,
         validate_ipv4,
@@ -146,7 +148,7 @@ class HiSockClient:
             ) from ConnectionRefusedError
 
         # Function related storage
-        # {"func_name": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
+        # {"command": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
         self.funcs = {}
         # Stores the names of the reserved functions
         # Used for the `on` decorator
@@ -174,6 +176,11 @@ class HiSockClient:
 
         # Flags
         self._closed = False
+        # If `update` is trying to receive while `recv_raw` is running, bad things happen.
+        self._receiving_data = False
+        # The data received by `update if this is set to `I NEED YOUR DATA`... see
+        # `update` and `recv_raw` for info
+        self._recv_data = ""
         self.connected = False
         self.connect_time = 0  # Unix timestamp
         self.sock.setblocking(blocking)
@@ -282,31 +289,48 @@ class HiSockClient:
 
     # On decorator
 
-    def _call_function(self, func_name, *args, **kwargs) -> Any:
+    def _call_function(self, func_name: str, sort_by_name: bool, *args, **kwargs):
         """
         Calls a function with the given arguments and returns the result.
 
         :param func_name: The name of the function to call.
         :type func_name: str
+        :param sort_by_name: Whether to sort the arguments by name or not.
+        :type sort_by_name: bool
         :param args: The arguments to pass to the function.
         :param kwargs: The keyword arguments to pass to the function.
-        :return: The result of the function call.
-        :rtype: Any
 
-        :raises FunctionNotFoundException: If the function is not found.
+        :raise FunctionNotFoundException: If the function is not found.
         """
 
-        # Check if the function exists
-        if func_name not in self.funcs:
-            raise FunctionNotFoundException(f"Function {func_name} not found")
+        func: dict
+
+        # Find the function by the function name
+        if sort_by_name:
+            for func_command, func_data in self.funcs.items():
+                if func_data["name"] == func_name:
+                    func = func_command
+                    break
+            else:
+                raise FunctionNotFoundException(
+                    f"Function with name {func_name} not found"
+                )
+        # Find the function by the function command
+        else:
+            if func_name not in self.funcs:
+                raise FunctionNotFoundException(
+                    f"Function with command {func_name} not found"
+                )
+            func = func_name
 
         # Normal
-        if not self.funcs[func_name]["threaded"]:
-            return self.funcs[func_name]["func"](*args, **kwargs)
+        if not self.funcs[func]["threaded"]:
+            self.funcs[func]["func"](*args, **kwargs)
+            return
 
         # Threaded
         function_thread = threading.Thread(
-            target=self.funcs[func_name]["func"],
+            target=self.funcs[func]["func"],
             args=args,
             kwargs=kwargs,
             daemon=True,
@@ -333,16 +357,18 @@ class HiSockClient:
 
             # Overriding a reserved command, remove it from reserved functions
             if self.override:
-                if self.command_activation in self.outer.reserved_commands.keys():
-                    self.outer.funcs.pop(self.command_activation)
+                if self.command in self.outer._reserved_functions:
+                    self.outer.funcs.pop(self.command)
 
-                index = self.outer._reserved_functions.index(self.command_activation)
+                index = self.outer._reserved_functions.index(self.command)
                 self.outer._reserved_functions.pop(index)
                 self.outer._reserved_functions_parameters_num.pop(index)
 
             self._assert_num_func_args_valid(len(func_args))
 
-            annotations = inspect.getfullargspec(func).annotations  # {"param": type}
+            annotations = _str_type_to_type_annotations_dict(
+                inspect.getfullargspec(func).annotations
+            )  # {"param": type}
             parameter_annotations = {"message": None}
 
             # Process unreserved commands
@@ -437,7 +463,7 @@ class HiSockClient:
             in order to not block the update() loop.
             Default is False.
         :type threaded: bool, optional
-                :param override: A boolean representing if the function should override the
+        :param override: A boolean representing if the function should override the
             reserved function with the same name and to treat it as an unreserved function.
             Default is False.
         :type override: bool, optional
@@ -537,9 +563,7 @@ class HiSockClient:
         :type content: Sendable
         """
 
-        data_to_send = (
-            command.encode() + b" $USRSENTDICT$" + self._send_type_cast(content)
-        )
+        data_to_send = command.encode() + b" " + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         self.sock.send(content_header + data_to_send)
 
@@ -569,9 +593,27 @@ class HiSockClient:
         :rtype: bytes
         """
 
+        # Sometimes, `update` can be running at the same time as this is running
+        # (e.x. if this is in a thread). In this case, `update` will receive the data
+        # and send it to us, as we cannot receive data at the same time as it receives
+        # data.
+
+        if self._receiving_data:
+            self._recv_data = "I NEED YOUR DATA"
+            # Wait until the data is received
+            while self._recv_data == "I NEED YOUR DATA":
+                "...waiting..."
+
+            # Data is received
+            data_received = self._recv_data
+            self._recv_data = ""
+            return data_received
+
         # Blocks depending on your blocking settings, until message
+        self._receiving_data = True
         message_len = int(self.sock.recv(self.header_len).decode())
         message = self.sock.recv(message_len)
+        self._receiving_data = False
 
         # Returns message
         return message
@@ -613,6 +655,7 @@ class HiSockClient:
             return
 
         try:
+            self._receiving_data = True
             # Receive header
             try:
                 content_header = self.sock.recv(self.header_len)
@@ -627,6 +670,18 @@ class HiSockClient:
                 raise SystemExit
 
             content = self.sock.recv(int(content_header.decode()))
+            self._receiving_data = False
+
+            # `update` can be called and run at the same time as `recv_raw`, so we need
+            # to make sure receiving data doesn't clash.
+            # If `recv_raw` would like the data, send it to them and don't process it.
+            # Okay, that's confusing. I will explain with an example with fake timestamps.
+            # `update` is called at time 0.5. `recv_raw` is called at time 1.5. The server
+            # sends data at time 2.5. Since `recv_raw` is called, then `update` will send
+            # the data to `recv_raw`.
+            if self._recv_data == "I NEED YOUR DATA":
+                self._recv_data = content
+                return
 
             ### Reserved ###
 
@@ -634,7 +689,7 @@ class HiSockClient:
             if content == b"$DISCONN$":
                 self.close()
                 if "force_disconnect" in self.funcs:
-                    self._call_function("force_disconnect")
+                    self._call_function("force_disconnect", False)
                 return
 
             # Handle new client connection
@@ -644,7 +699,7 @@ class HiSockClient:
                     return
 
                 client_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
-                self._call_function("client_connect", client_content)
+                self._call_function("client_connect", False, client_content)
                 return
 
             # Handle client disconnection
@@ -654,7 +709,7 @@ class HiSockClient:
                     return
 
                 client_content = json.loads(_removeprefix(content, b"$CLTDISCONN$ "))
-                self._call_function("client_disconnect", client_content)
+                self._call_function("client_disconnect", False, client_content)
 
             ### Unreserved ###
 
@@ -677,7 +732,7 @@ class HiSockClient:
                     )
 
                     # Call function
-                    self._call_function(func["name"], parse_content)
+                    self._call_function(func["name"], True, parse_content)
                     break  # only one command can be received at a time for now
 
             # No function found
@@ -761,7 +816,6 @@ class ThreadedHiSockClient(HiSockClient):
         super().__init__(addr, name, group, blocking, header_len, cache_size)
         self._thread = threading.Thread(target=self._run)
         self._stop_event = threading.Event()
-        del self.update
 
     def stop_client(self):
         """Stops the client"""
@@ -840,3 +894,71 @@ def threaded_connect(
     """
 
     return ThreadedHiSockClient(addr, name, group, blocking, header_len, cache_size)
+
+
+if __name__ == "__main__":
+    # Tests
+    client = connect(
+        ("127.0.0.1", int(input("Port: "))),
+        name=input("Name: "),
+        group=input("Group: "),
+    )
+
+    print(
+        "The HiSock police are on to you. "
+        "You must change your name and group before they catch you."
+    )
+    client.change_name(input("New name: "))
+    client.change_group(input("New group: "))
+
+    @client.on("client_connect")
+    def on_connect(client_data: dict):
+        print(
+            f'{client_data["name"]} has joined! '
+            f'Their IP is {iptup_to_str(client_data["ip"])}. '
+            f'Their group is {client_data["group"]}.'
+        )
+
+    @client.on("client_disconnect")
+    def on_disconnect(client_data: dict):
+        print(f'{client_data["name"]} disconnected from the server.')
+
+    @client.on("force_disconnect")
+    def on_force_disconnect():
+        print("You have been disconnected from the server.")
+        raise SystemExit
+
+    @client.on("message", threaded=True)
+    def on_message(message: str):
+        print(f"Message received:\n{message}")
+
+    def choices():
+        print(
+            "Your choices are:\n\tsend\n\tchange_name\n\tchange_group\n\tset_timer\n\tstop"
+        )
+        while True:
+            choice = input("What would you like to do? ")
+            if choice == "send":
+                client.send("broadcast_message", input("Message: "))
+            elif choice == "ping":
+                client.send("ping", b"")
+            elif choice == "change_name":
+                client.change_name(input("New name: "))
+            elif choice == "change_group":
+                client.change_group(input("New group: "))
+            elif choice == "set_timer":
+                client.send("set_timer", input("Seconds: "))
+                test = client.recv_raw()
+                print(test)
+                print("Timer done!")
+            elif choice == "stop":
+                client.close()
+                break
+            else:
+                print("Invalid choice.")
+
+    function_thread = threading.Thread(target=choices, daemon=True)
+    function_thread.start()
+
+    while True:
+        client.update()

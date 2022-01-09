@@ -19,6 +19,7 @@ import socket
 from typing import Union, Any, Optional
 from ipaddress import IPv4Address
 from re import search
+import builtins
 
 # Custom exceptions
 class ClientException(Exception):
@@ -218,6 +219,34 @@ def _dict_tupkey_lookup_key(
             yield key
 
 
+def _str_type_to_type_annotations_dict(annotations_dict: dict):
+    """
+    When getting the annotations, they return as a string representation of the type.
+    However, we need the actual type.
+    This function will take the annotations dict with the string type and turn it to
+    the type.
+
+    .. note::
+        If the type hint is the type already (no conversion needed), this won't
+        break anything.
+
+    :param annotations_dict: The annotations dict to convert.
+    :type annotations_dict: dict
+    :return: The converted dict.
+    :rtype: dict
+    """
+
+    fixed_annotations = {}
+    for argument, annotation in annotations_dict.items():
+        # This won't affect anything if the type is already the type
+        # Also, `isinstance(str, str)` == False
+        if not isinstance(annotation, str):
+            fixed_annotations[argument] = annotation
+            continue
+        fixed_annotations[argument] = getattr(builtins, annotation)
+    return fixed_annotations
+
+
 def _type_cast(
     type_cast: Sendable, content_to_type_cast: Sendable, func_name: str
 ) -> Sendable:
@@ -263,7 +292,7 @@ def _type_cast(
         elif type_cast in (list, dict):
             return json.loads(content_to_type_cast.decode())
         raise InvalidTypeCast(
-            f"Cannot type cast bytes to {type_cast.__name__}."
+            f"Cannot type cast bytes to {type(type_cast).__name__}."
             " See `HiSockServer.on` for available type hints."
         )
 
