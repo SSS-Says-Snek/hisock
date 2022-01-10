@@ -23,13 +23,8 @@ import builtins  # Builtins, to convert string methods into builtins
 from typing import Callable, Union  # Typing, for cool type hints
 from ipaddress import IPv4Address  # ipaddress, for conparisons with <, >, ==, etc
 
-# Utilities
-from hisock import constants
-
 try:
     from .utils import (
-        NoHeaderWarning,
-        NoMessageException,
         receive_message,
         _removeprefix,
         make_header,
@@ -37,13 +32,11 @@ try:
         _dict_tupkey_lookup_key,
         _type_cast,
         MessageCacheMember,
+        InvalidTypeCast
     )
-    from . import utils
 except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
-        NoHeaderWarning,
-        NoMessageException,
         receive_message,
         _removeprefix,
         make_header,
@@ -51,8 +44,8 @@ except ImportError:
         _dict_tupkey_lookup_key,
         _type_cast,
         MessageCacheMember,
+        InvalidTypeCast
     )
-    import utils
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -139,7 +132,7 @@ class HiSockServer:
         try:
             self.sock.bind(addr)
         except socket.gaierror:
-            raise TypeError("Connection failed (most likely due to invalid IP)")
+            raise TypeError("Connection failed (most likely due to invalid IP)") from None
         self.sock.listen(max_connections)
 
         # Function related storage
@@ -452,13 +445,13 @@ class HiSockServer:
             try:
                 reconstructed_client.append(map(int, split_client[0].split(".")))
             except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+                raise ValueError("IP is not numerical (only IPv4 currently supported)") from None
             try:
                 reconstructed_client.append(int(split_client[1]))
             except ValueError:
                 raise ValueError(
                     "Port is not numerical (only IPv4 currently supported)"
-                )
+                ) from None
 
             for subip in reconstructed_client[0]:
                 if not 0 <= subip < 255:
@@ -475,7 +468,7 @@ class HiSockServer:
                     )
                 )
             except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
+                raise TypeError(f"Client with IP {client} is not connected") from StopIteration
             client_sock.send(disconn_header + b"$DISCONN$")
         else:
             # Try name or group
@@ -571,16 +564,16 @@ class HiSockServer:
 
         if len(group_clients) == 0:
             raise TypeError(f"Group {group} does not exist")
-        else:
-            if isinstance(content, dict):
-                content = json.dumps(content).encode()
 
-            content_header = make_header(
-                command.encode() + b" " + content, self.header_len
-            )
-            # Send content and header to all clients in group
-            for clt_to_send in group_clients:
-                clt_to_send.send(content_header + command.encode() + b" " + content)
+        if isinstance(content, dict):
+            content = json.dumps(content).encode()
+
+        content_header = make_header(
+            command.encode() + b" " + content, self.header_len
+        )
+        # Send content and header to all clients in group
+        for clt_to_send in group_clients:
+            clt_to_send.send(content_header + command.encode() + b" " + content)
 
     def send_client(
         self,
@@ -650,13 +643,13 @@ class HiSockServer:
             try:
                 reconstructed_client.append(map(int, split_client[0].split(".")))
             except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+                raise ValueError("IP is not numerical (only IPv4 currently supported)") from None
             try:
                 reconstructed_client.append(int(split_client[1]))
             except ValueError:
                 raise ValueError(
                     "Port is not numerical (only IPv4 currently supported)"
-                )
+                ) from None
 
             for subip in reconstructed_client[0]:
                 if not 0 <= subip < 255:
@@ -673,7 +666,7 @@ class HiSockServer:
                     )
                 )
             except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
+                raise TypeError(f"Client with IP {client} is not connected") from StopIteration
 
             client_sock.send(content_header + command.encode() + b" " + content)
         else:
@@ -837,14 +830,14 @@ class HiSockServer:
 
         if len(group_clients) == 0:
             raise TypeError(f"Group {group} does not exist")
-        else:
-            if isinstance(content, dict):
-                content = json.dumps(content).encode()
 
-            content_header = make_header(content, self.header_len)
-            # Send content and header to all clients in group
-            for clt_to_send in group_clients:
-                clt_to_send.send(content_header + content)
+        if isinstance(content, dict):
+            content = json.dumps(content).encode()
+
+        content_header = make_header(content, self.header_len)
+        # Send content and header to all clients in group
+        for clt_to_send in group_clients:
+            clt_to_send.send(content_header + content)
 
     def get_cache(
         self,
@@ -863,8 +856,8 @@ class HiSockServer:
         """
         if idx is None:
             return self.cache
-        else:
-            return self.cache[idx]
+
+        return self.cache[idx]
 
     def run(self):
         """
@@ -876,7 +869,9 @@ class HiSockServer:
 
         if not self.closed:
             # gets all sockets from select.select
-            read_sock, write_sock, exception_sock = select.select(
+            # write_sock and exception_sock are the second and third return,
+            # but I've yet figured out how to use them
+            read_sock, _, _ = select.select(
                 self._sockets_list, [], self._sockets_list
             )
 
@@ -1067,7 +1062,7 @@ class HiSockServer:
                             elif temp_parse_content is not None:
                                 parse_content = temp_parse_content
                             elif temp_parse_content is None:
-                                raise utils.InvalidTypeCast(
+                                raise InvalidTypeCast(
                                     f"{self.funcs['message']['type_hint']['msg']} is an invalid "
                                     f"type cast!"
                                 )
@@ -1101,7 +1096,7 @@ class HiSockServer:
                                 elif temp_parse_content is not None:
                                     parse_content = temp_parse_content
                                 elif temp_parse_content is None:
-                                    raise utils.InvalidTypeCast(
+                                    raise InvalidTypeCast(
                                         f"{func['type_hint']['msg']} is an invalid "
                                         f"type cast!"
                                     )
@@ -1271,13 +1266,13 @@ class HiSockServer:
             try:
                 reconstructed_client.append(map(int, split_client[0].split(".")))
             except ValueError:
-                raise ValueError("IP is not numerical (only IPv4 currently supported)")
+                raise ValueError("IP is not numerical (only IPv4 currently supported)") from None
             try:
                 reconstructed_client.append(int(split_client[1]))
             except ValueError:
                 raise ValueError(
                     "Port is not numerical (only IPv4 currently supported)"
-                )
+                ) from None
 
             for subip in reconstructed_client[0]:
                 if not 0 <= subip < 255:
@@ -1304,7 +1299,7 @@ class HiSockServer:
 
                 return client_dict
             except StopIteration:
-                raise TypeError(f"Client with IP {client} is not connected")
+                raise TypeError(f"Client with IP {client} is not connected") from StopIteration
         else:
             mod_clients_rev = {}
             for key, value in self.clients_rev.items():
@@ -1317,7 +1312,8 @@ class HiSockServer:
 
             if len(client_sock) == 0:
                 raise TypeError(f'Client with name "{client}"does not exist')
-            elif len(client_sock) > 1:
+
+            if len(client_sock) > 1:
                 warnings.warn(
                     f'{len(client_sock)} clients with name "{client}" detected; getting info from '
                     f"Client with IP {':'.join(map(str, client_sock[0].getpeername()))}"

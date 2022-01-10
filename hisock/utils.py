@@ -17,7 +17,7 @@ import json
 import pathlib
 import re
 import socket
-from typing import Union, Optional, Any
+from typing import Union, Any
 
 
 # __all__ = [
@@ -148,8 +148,8 @@ def _removeprefix(
     """A backwards-compatible alternative of str.removeprefix"""
     if string.startswith(prefix):
         return string[len(prefix) :]
-    else:
-        return string[:]
+
+    return string[:]
 
 
 def _dict_tupkey_lookup(
@@ -200,7 +200,7 @@ def _type_cast(type_cast: Any, content_to_typecast: bytes, func_dict: dict) -> A
             raise TypeError(
                 f"Type casting from bytes to string failed for function "
                 f"\"{func_dict['name']}\"\n{str(e)}"
-            )
+            ) from UnicodeDecodeError
     elif type_cast == int:
         try:
             typecasted_content = int(content_to_typecast)
@@ -304,8 +304,8 @@ def get_local_ip(all_ips: bool = False) -> str:
     """
     if not all_ips:
         return socket.gethostbyname(socket.gethostname())
-    else:
-        return socket.gethostbyname_ex(socket.gethostname())[-1]
+
+    return socket.gethostbyname_ex(socket.gethostname())[-1]
 
 
 def input_server_config(
@@ -449,8 +449,8 @@ def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
     :rtype: tuple[str, int]
     """
     ip_split = formatted_ip.split(":")
-    recon_ip_split = [str(ip_split[0]), int(ip_split[1])]
-    return tuple(recon_ip_split)  # Convert list to tuple
+    recon_ip_split = (str(ip_split[0]), int(ip_split[1]))
+    return recon_ip_split
 
 
 def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:

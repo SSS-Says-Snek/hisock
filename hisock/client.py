@@ -24,7 +24,7 @@ import threading  # threading, for ThreadedHiSockClient and threaded decorator p
 import traceback  # traceback, for... tracebacks
 from ipaddress import IPv4Address  # ipaddress, for comparisons between IPs
 
-from typing import Union, Callable, Any
+from typing import Union, Callable
 
 # Utilities
 try:
@@ -33,24 +33,20 @@ try:
         make_header,
         _removeprefix,
         ServerNotRunning,
-        ClientDisconnected,
         iptup_to_str,
         _type_cast,
         MessageCacheMember,
     )
-    from . import utils  # Starting now, I'm too lazy to do from imports
 except ImportError:
     # relative import doesn't work for non-pip builds
     from utils import (
         make_header,
         _removeprefix,
         ServerNotRunning,
-        ClientDisconnected,
         iptup_to_str,
         _type_cast,
         MessageCacheMember,
     )
-    import utils  # Starting now, I'm too lazy to do from imports
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -326,141 +322,141 @@ class HiSockClient:
         This method must be called every iteration of a while loop, as to not lose valuable info. 
         This is also called underhood in :meth:`start`.
         """
-        self.called_update = True  # I forgot what this does
 
-        if not self.closed:  # Checks if client hasn't been closed with `close`
-            try:
-                while not self.closed:
-                    # Receives header - If doesn't exist, server error
-                    content_header = None
-                    try:
-                        content_header = self.sock.recv(self.header_len)
-                    except ConnectionResetError:
-                        # Raise ServerNotRunning exception FROM ConnectionResetError
-                        raise ServerNotRunning(
-                            "Server has stopped running, aborting..."
-                        ) from ConnectionResetError
-                    except ConnectionAbortedError:
-                        # Keepalive timeout reached
-                        self.closed = True
-                        continue
+        if self.closed:  # Checks if client hasn't been closed with `close`
+            return
 
-                    if not content_header:
-                        # Most likely server error; aborts
-                        print(
-                            "[SERVER] Connection forcibly closed by server, exiting..."
-                        )
-                        raise SystemExit
-                    content = self.sock.recv(int(content_header.decode()))
+        try:
+            while not self.closed:
+                # Receives header - If doesn't exist, server error
+                try:
+                    content_header = self.sock.recv(self.header_len)
+                except ConnectionResetError:
+                    # Raise ServerNotRunning exception FROM ConnectionResetError
+                    raise ServerNotRunning(
+                        "Server has stopped running, aborting..."
+                    ) from ConnectionResetError
+                except ConnectionAbortedError:
+                    # Keepalive timeout reached
+                    self.closed = True
+                    continue
 
-                    for matching in self.funcs.keys():
-                        if re.search(r"\$.+\$", matching):
-                            raise ValueError(
-                                'The format "$command$" is used for reserved functions - '
-                                "Consider using a different format\n"
-                                f'(Found with function "{matching}"'
-                            )
-
-                    # Handle "reserved functions"
-                    if content == b"$DISCONN$":
-                        self.close()
-
-                        if "force_disconnect" in self.funcs:
-                            self._call_function("force_disconnect")
-                    if content == b"$KEEPALIVE$":
-                        response = make_header(b"$KEEPACK$", self.header_len)
-                        self.sock.send(response + b"$KEEPACK$")
-                    if content == b"$DISCONNKEEP":
-                        print("AMOGUS")
-                    if (
-                        content.startswith(b"$CLTCONN$")
-                        and "client_connect" in self.funcs
-                    ):
-                        # Client connected to server; parse and call function
-                        clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
-                        self._call_function("client_connect", clt_content)
-                    elif (
-                        content.startswith(b"$CLTDISCONN$")
-                        and "client_disconnect" in self.funcs
-                    ):
-                        # Client disconnected from server; parse and call function
-                        clt_content = json.loads(
-                            _removeprefix(content, b"$CLTDISCONN$ ")
-                        )
-                        self._call_function("client_disconnect", clt_content)
-
-                    has_corresponding_function = False
-                    parse_content = None  # FINE pycharm
-                    command = None
-
-                    for matching_cmd, func in self.funcs.items():
-                        # Loop through functions and binded commands
-                        if (
-                            content.startswith(matching_cmd.encode())
-                            and matching_cmd not in self.reserved_functions
-                        ):
-                            has_corresponding_function = True
-                            command = matching_cmd
-                            parse_content = content[len(matching_cmd) + 1 :]
-
-                            # Type Hint -> Type Cast
-                            # (Exceptions need to have "From ValueError")
-                            parse_content = _type_cast(
-                                func["type_hint"], parse_content, func
-                            )
-
-                            # Call function
-                            if not func["threaded"]:
-                                func["func"](parse_content)
-                            else:
-                                function_thread = threading.Thread(
-                                    target=func["func"], args=(parse_content,)
-                                )
-                                function_thread.setDaemon(
-                                    True
-                                )  # FORGIVE ME PEP 8 FOR I HAVE SINNED
-                                function_thread.start()
-
-                            continue
-
-                    # Caching
-                    if self.cache_size >= 0:
-                        if has_corresponding_function:
-                            cache_content = parse_content  # Bruh pycharm it DOES exist if hcf is True
-                        else:
-                            cache_content = content
-                        self.cache.append(
-                            MessageCacheMember(
-                                {
-                                    "header": content_header,
-                                    "content": cache_content,
-                                    "called": has_corresponding_function,
-                                    "command": command,
-                                }
-                            )
-                        )
-
-                        if 0 < self.cache_size < len(self.cache):
-                            self.cache.pop(0)
-
-            except IOError as e:
-                # Normal, means message has ended
-                if (
-                    e.errno != errno.EAGAIN
-                    and e.errno != errno.EWOULDBLOCK
-                    and not self.closed
-                ):
-                    # Fatal Error, abort client (print exception, print log, exit python)
-                    traceback.print_exception(
-                        type(e), e, e.__traceback__, file=sys.stderr
-                    )
+                if not content_header:
+                    # Most likely server error; aborts
                     print(
-                        "\nServer Error encountered, aborting client...",
-                        file=sys.stderr,
+                        "[SERVER] Connection forcibly closed by server, exiting..."
                     )
+                    raise SystemExit
+                content = self.sock.recv(int(content_header.decode()))
+
+                for matching in self.funcs:
+                    if re.search(r"\$.+\$", matching):
+                        raise ValueError(
+                            'The format "$command$" is used for reserved functions - '
+                            "Consider using a different format\n"
+                            f'(Found with function "{matching}"'
+                        )
+
+                # Handle "reserved functions"
+                if content == b"$DISCONN$":
                     self.close()
 
-                    raise SystemExit
+                    if "force_disconnect" in self.funcs:
+                        self._call_function("force_disconnect")
+                if content == b"$KEEPALIVE$":
+                    response = make_header(b"$KEEPACK$", self.header_len)
+                    self.sock.send(response + b"$KEEPACK$")
+                if content == b"$DISCONNKEEP":
+                    print("AMOGUS")
+                if (
+                    content.startswith(b"$CLTCONN$")
+                    and "client_connect" in self.funcs
+                ):
+                    # Client connected to server; parse and call function
+                    clt_content = json.loads(_removeprefix(content, b"$CLTCONN$ "))
+                    self._call_function("client_connect", clt_content)
+                elif (
+                    content.startswith(b"$CLTDISCONN$")
+                    and "client_disconnect" in self.funcs
+                ):
+                    # Client disconnected from server; parse and call function
+                    clt_content = json.loads(
+                        _removeprefix(content, b"$CLTDISCONN$ ")
+                    )
+                    self._call_function("client_disconnect", clt_content)
+
+                has_corresponding_function = False
+                parse_content = None  # FINE pycharm
+                command = None
+
+                for matching_cmd, func in self.funcs.items():
+                    # Loop through functions and binded commands
+                    if (
+                        content.startswith(matching_cmd.encode())
+                        and matching_cmd not in self.reserved_functions
+                    ):
+                        has_corresponding_function = True
+                        command = matching_cmd
+                        parse_content = content[len(matching_cmd) + 1 :]
+
+                        # Type Hint -> Type Cast
+                        # (Exceptions need to have "From ValueError")
+                        parse_content = _type_cast(
+                            func["type_hint"], parse_content, func
+                        )
+
+                        # Call function
+                        if not func["threaded"]:
+                            func["func"](parse_content)
+                        else:
+                            function_thread = threading.Thread(
+                                target=func["func"], args=(parse_content,)
+                            )
+                            function_thread.setDaemon(
+                                True
+                            )  # FORGIVE ME PEP 8 FOR I HAVE SINNED
+                            function_thread.start()
+
+                        continue
+
+                # Caching
+                if self.cache_size >= 0:
+                    if has_corresponding_function:
+                        cache_content = parse_content  # Bruh pycharm it DOES exist if hcf is True
+                    else:
+                        cache_content = content
+                    self.cache.append(
+                        MessageCacheMember(
+                            {
+                                "header": content_header,
+                                "content": cache_content,
+                                "called": has_corresponding_function,
+                                "command": command,
+                            }
+                        )
+                    )
+
+                    if 0 < self.cache_size < len(self.cache):
+                        self.cache.pop(0)
+
+        except IOError as e:
+            # Normal, means message has ended
+            if (
+                e.errno != errno.EAGAIN
+                and e.errno != errno.EWOULDBLOCK
+                and not self.closed
+            ):
+                # Fatal Error, abort client (print exception, print log, exit python)
+                traceback.print_exception(
+                    type(e), e, e.__traceback__, file=sys.stderr
+                )
+                print(
+                    "\nServer Error encountered, aborting client...",
+                    file=sys.stderr,
+                )
+                self.close()
+
+                raise SystemExit
 
     def start(self):
         """
@@ -614,8 +610,8 @@ class HiSockClient:
         """
         if idx is None:
             return self.cache
-        else:
-            return self.cache[idx]
+
+        return self.cache[idx]
 
     def get_client(self, client: Union[str, tuple[str, int]]):
         """PROTOTYPE; DO NOT USE YET"""
@@ -683,16 +679,16 @@ class ThreadedHiSockClient(HiSockClient):
     """
 
     def __init__(
-        self, addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1
+        self, *args, **kwargs
     ):
-        super().__init__(addr, name, group, blocking, header_len, cache_size)
+        super().__init__(*args, **kwargs)
         self._thread = threading.Thread(target=self.run)
 
         self._stop_event = threading.Event()
 
     def stop_client(self):
         """Stops the client"""
-        self._closed = True
+        self.closed = True
         self._stop_event.set()
         self.sock.close()
 
