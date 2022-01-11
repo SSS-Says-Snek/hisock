@@ -10,8 +10,8 @@
 
 <img src="https://raw.githubusercontent.com/SSS-Says-Snek/SSS-Says-Snek.github.io/master/assets/logo.png" width=200 class="center">
 
-# hisock (highsock)
-A ***hi***gher level extension of Python's ***sock***et module, with simpler and more efficient usages (as you can see, that's how I got the name).
+# hisock (HiSock)
+A ***hi***gher level extension of Python's ***sock***et module, with simpler and more efficient usages.
 
 ## Documentation
 Documentation is located on 
@@ -27,7 +27,16 @@ $ python -m pip install hisock (WINDOWS)
   OR
 $ pip3 install hisock (MAC/LINUX)
 ```
-Of course, you'd need pip and python for this step.
+
+---
+
+To build the *bleeding-edge* version of hisock from GitHub, download the repository with your favorite way, `cd` into it, then type:
+```shell
+$ python -m pip install -e . (WINDOWS)
+  OR
+$ pip3 install -e . (MAC/LINUX)
+```
+Note that you **MUST** cd into the cloned directory for this to work.
 
 ## Examples
 hisock utilizes decorators as the core of receiving messages instead of having 
@@ -83,7 +92,7 @@ def process(client, process_request: str):
     server.send_client_raw(client['ip'], str(result).encode())
 
 
-while True:
+while not server.closed:
     server.run()
 ```
 
@@ -134,7 +143,7 @@ def handle_hello(msg):
 
     print(f"WHOAAA! The result is {result}! Thanks server!")
 
-while True:
+while not s.closed:
     s.update()
 
 ```

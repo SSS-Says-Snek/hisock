@@ -53,8 +53,12 @@ minimize lag time. So, our final server script looks like:
 
    server = start_server((utils.get_local_ip(), 36969))  # Haha funny
 
-   while True:
+   while not server.closed:
        server.run()
+
+Why did we include a ``not server.closed``? Well, if we only used ``while True``, then even if
+the server closed for some reason, the program won't exit because of that ``True``! So, because
+``.closed`` will be True if the server is closed, the while loop will stop running, which is what we want.
 
 That's basically it! Of course, this server is useless, but hey, it's a step
 in the right direction! We'll add on to this later on.
@@ -82,10 +86,11 @@ our final boilerplate client code is:
    # running the server, as it gets the same IP (unless you port forward)
    client = connect((utils.get_local_ip()), 36969)
 
-   while True:
+   while not client.closed:
        client.update()
 
-Like the server, this doesn't do anything at all yet, but soon, we'll
+As you can see, we also use ``while not client.closed:`` here for the same reason as the server.
+Also like the server, this doesn't do anything at all yet, but soon, we'll
 finally add some functionality to the server and client!
 
 .. _clearstuff:

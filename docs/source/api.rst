@@ -35,6 +35,7 @@ A module containing the main server classes and functions, including
    .. automethod:: send_client_raw
    .. automethod:: send_group
    .. automethod:: send_group_raw
+   .. automethod:: start
 
 .. autoclass:: hisock.server.ThreadedHiSockServer
 
@@ -62,6 +63,7 @@ A module containing the main client classes and functions, including
    .. automethod:: raw_send
    .. automethod:: recv_raw
    .. automethod:: send
+   .. automethod:: start
    .. automethod:: update
    .. note::
 

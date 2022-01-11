@@ -34,9 +34,7 @@ class TestServerTypeCast:
 
     def test_type_cast_int_raise(self):
         with pytest.raises(TypeError):
-            _type_cast(
-                int, b"This is not int, why???", self.__class__.dummy_func
-            )
+            _type_cast(int, b"This is not int, why???", self.__class__.dummy_func)
 
     def test_type_cast_float(self):
         _float = _type_cast(float, b"696969.696969", self.__class__.dummy_func)
@@ -45,14 +43,10 @@ class TestServerTypeCast:
 
     def test_type_cast_float_raise(self):
         with pytest.raises(TypeError):
-            _type_cast(
-                float, b"This is not float, why???", self.__class__.dummy_func
-            )
+            _type_cast(float, b"This is not float, why???", self.__class__.dummy_func)
 
     def test_type_cast_dict_list(self):
-        _dict = _type_cast(
-            dict, b'{"I like": "cheese"}', self.__class__.dummy_func
-        )
+        _dict = _type_cast(dict, b'{"I like": "cheese"}', self.__class__.dummy_func)
         _list = _type_cast(
             list, b'["Do", "you", "also", "like", "cheese?"]', self.__class__.dummy_func
         )
