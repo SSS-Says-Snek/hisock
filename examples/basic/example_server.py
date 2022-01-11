@@ -75,7 +75,7 @@ def run():
         # Here, we are sending the result back to the client
         server.send_client_raw(client["ip"], str(result).encode())
 
-    while True:
+    while not server.closed:
         server.run()
 
 

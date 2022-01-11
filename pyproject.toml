@@ -1,3 +1,6 @@
+# It is EXTREMELY HIGHLY RECOMMENDED to install it in editable mode (-e)
+# `pip install -e .` instead of `pip install .`
+
 [build-system]
 requires = [
     "setuptools>=42",
