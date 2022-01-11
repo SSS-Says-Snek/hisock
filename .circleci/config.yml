@@ -44,6 +44,6 @@ jobs:
           # This assumes pytest is installed via the install-package step above
           command: python3 -m pytest
       - discord/status:  # Discord webhook
-          fail_only: true
+          fail_only: false
           failure_mentions: "&914188304902139954" # Contributors Role in Hisock server
           webhook: $DISCORD_WEBHOOK_URL
