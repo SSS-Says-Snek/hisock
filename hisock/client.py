@@ -271,6 +271,11 @@ class HiSockClient:
         self.connected = True
         self.connect_time = time()
 
+    def _handle_keepalive(self):
+        """Handle a keepalive sent from the server."""
+
+        self.send_raw("$KEEPACK$")
+
     def _send_type_cast(self, content: Sendable) -> bytes:
         """
         Type casting content for the send methods.
@@ -581,17 +586,41 @@ class HiSockClient:
         header = make_header(data_to_send, self.header_len)
         self.sock.send(header + data_to_send)
 
-    def recv_raw(self) -> bytes:
+    def recv_raw(self, ignore_reserved: bool = False) -> bytes:
         """
         Waits (blocks) until a message is sent, and returns that message.
         This is not recommended for content with commands attached;
         it is meant to be used alongside with :func:`HiSockServer.send_client_raw` and
         :func:`HiSockServer.send_group_raw`
 
+        :param ignore_reserved: A boolean, representing if the function should ignore
+            reserved commands.
+            Default is False.
+        :type ignore_reserved: bool, optional
+
+        .. note::
+            If the message is a keepalive, the client will send an acknowledgement and
+            then ignore it, even if ``ignore_reserved`` is False.
+
         :return: A bytes-like object, containing the content/message
-          the client first receives
+            the client first receives
         :rtype: bytes
         """
+
+        def _handle_data(data: bytes):
+            # DEBUG PRINT PLEASE REMOVE LATER
+            print(f"Received data: {data}")
+
+            if validate_command_not_reserved(str(data)):
+                # Was there a keepalive?
+                if data == b"$KEEPALIVE$":
+                    self._handle_keepalive()
+                    return self.recv_raw()
+
+                if not ignore_reserved:
+                    return self.recv_raw()
+
+            return data
 
         # Sometimes, `update` can be running at the same time as this is running
         # (e.x. if this is in a thread). In this case, `update` will receive the data
@@ -600,6 +629,7 @@ class HiSockClient:
 
         if self._receiving_data:
             self._recv_data = "I NEED YOUR DATA"
+
             # Wait until the data is received
             while self._recv_data == "I NEED YOUR DATA":
                 "...waiting..."
@@ -607,16 +637,14 @@ class HiSockClient:
             # Data is received
             data_received = self._recv_data
             self._recv_data = ""
-            return data_received
+            return _handle_data(data_received)
 
-        # Blocks depending on your blocking settings, until message
         self._receiving_data = True
         message_len = int(self.sock.recv(self.header_len).decode())
-        message = self.sock.recv(message_len)
+        data_received = self.sock.recv(message_len)
         self._receiving_data = False
 
-        # Returns message
-        return message
+        return _handle_data(data_received)
 
     def change_name(self, new_name: Union[str, None]):
         """
@@ -663,6 +691,9 @@ class HiSockClient:
                 raise ServerNotRunning(
                     "Server has stopped running, aborting..."
                 ) from ConnectionResetError
+            except ConnectionAbortedError:
+                # Keepalive timeout reached
+                self._closed = True
 
             # Most likely server has stopped running
             if not content_header:
@@ -672,13 +703,14 @@ class HiSockClient:
             content = self.sock.recv(int(content_header.decode()))
             self._receiving_data = False
 
+            # Handle keepalive
+            if content == b"$KEEPALIVE$":
+                self._handle_keepalive()
+                return
+
             # `update` can be called and run at the same time as `recv_raw`, so we need
             # to make sure receiving data doesn't clash.
             # If `recv_raw` would like the data, send it to them and don't process it.
-            # Okay, that's confusing. I will explain with an example with fake timestamps.
-            # `update` is called at time 0.5. `recv_raw` is called at time 1.5. The server
-            # sends data at time 2.5. Since `recv_raw` is called, then `update` will send
-            # the data to `recv_raw`.
             if self._recv_data == "I NEED YOUR DATA":
                 self._recv_data = content
                 return

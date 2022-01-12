@@ -114,6 +114,12 @@ class HiSockServer:
     :param cache_size: The number of messages to cache.
         Default passed in by :meth:`start_server` is -1.
     :type cache_size: int, optional
+    :param keepalive: A bool indicating whether a keepalive signal should be sent or not.
+        If this is True, then a signal will be sent to every client every minute to prevent
+        hanging clients in the server. The clients have thirty seconds to send back an
+        acknowledge signal to show that they are still alive.
+        Default is True.
+    :type keepalive: bool, optional
 
     :ivar tuple addr: A two-element tuple containing the IP address and the port.
     :ivar int header_len: An integer storing the header length of each "message".
@@ -135,6 +141,7 @@ class HiSockServer:
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
+        keepalive: bool = True,
     ):
         self.addr = addr
         self.header_len = header_len
@@ -185,6 +192,17 @@ class HiSockServer:
 
         # Flags
         self._closed = False
+
+        # Keepalive
+        self._keepalive_event = threading.Event()
+        self._unresponsive_clients = []
+        self.keepalive = keepalive
+
+        if self.keepalive:
+            keepalive_thread = threading.Thread(
+                target=self._keepalive_thread, daemon=True
+            )
+            keepalive_thread.start()
 
     def __str__(self):
         """Example: <HiSockServer serving at 192.168.1.133:5000>"""
@@ -294,12 +312,14 @@ class HiSockServer:
 
         warnings.warn("join", FunctionNotFoundWarning)
 
-    def _client_disconnection(self, client: socket.socket):
+    def _client_disconnection(self, client: socket.socket, call_func: bool = True):
         """
         Handle a client disconnecting
 
         :param client: The client socket
         :type client: socket.socket
+        :param call_func: Whether to call the leave function
+        :type call_func: bool
 
         :raise ClientNotFound: The client wasn't connected to the server
         """
@@ -314,6 +334,9 @@ class HiSockServer:
         self._sockets_list.remove(client)
         del self.clients[client]
         self._update_clients_rev_dict()
+
+        if not call_func:
+            return
 
         if "leave" in self.funcs:
             self._call_function("leave", False, client_info)
@@ -359,6 +382,27 @@ class HiSockServer:
         """
 
         return _type_cast(bytes, content, "<server sending function>")
+
+    # Keepalive
+
+    def _keepalive_thread(self):
+        while not self._keepalive_event.is_set():
+            self._keepalive_event.wait(30)
+
+            # If statement is required, since if the event is set,
+            # wait() will finish itself and move on to the next code
+            if not self._keepalive_event.is_set():
+                for client in self.clients:
+                    self._unresponsive_clients.append(client)
+                    self.send_client_raw(self.clients[client]["ip"], "$KEEPALIVE$")
+
+            self._keepalive_event.wait(30)
+
+            # Keepalive wait is over, remove the unresponsive clients
+            if not self._keepalive_event.is_set():
+                for client in self._unresponsive_clients:
+                    self.disconnect_client(self.clients[client]["ip"], force=True)
+                self._unresponsive_clients.clear()
 
     # On decorator
 
@@ -899,27 +943,27 @@ class HiSockServer:
         client_socket = self._get_client_from_name_or_ip_port(client)
 
         if not force:
-            disconn_header = make_header(b"$DISCONN$", self.header_len)
-            client_socket.send(disconn_header)
+            self.send_client_raw(self.clients[client_socket]["ip"], b"$DISCONN$")
             return
 
         client_socket.close()
+        self._sockets_list.remove(client_socket)
         del self.clients[client_socket]
         self._update_clients_rev_dict()
+        # Note: ``self._unresponsive_clients`` should be handled by the keepalive
 
     def disconnect_all_clients(self, force=False):
         """Disconnect all clients."""
 
         if not force:
-            disconn_header = make_header(b"$DISCONN$", self.header_len)
-            for client in self.clients:
-                client.send(disconn_header + b"$DISCONN$")
+            self.send_all_clients_raw("$DISCONN$")
             return
 
         (conn.close() for conn in self._sockets_list)
         self._sockets_list.clear()
         self.clients.clear()
         self.clients_rev.clear()
+        self._unresponsive_clients.clear()
 
     def run(self):
         """
@@ -936,6 +980,11 @@ class HiSockServer:
         )
 
         for client_socket in read_sock:
+            # Handle bad client
+            if client_socket.fileno() == -1:
+                self._client_disconnection(client_socket, call_func=False)
+                continue
+
             ### Reserved ###
 
             # Handle new connection
@@ -944,9 +993,21 @@ class HiSockServer:
                 continue
 
             # Receiving data
+
             # "header" - The header of the message, mostly unneeded
             # "data" - The actual data/content of the message (type: bytes)
             message = receive_message(client_socket, self.header_len)
+
+            # DEBUG PRINT PLEASE REMOVE LATER
+            print(f"{message=}")
+
+            # Handle keepalive acknowledgement
+            if (
+                client_socket in self._unresponsive_clients
+                and message["data"] == b"$KEEPACK$"
+            ):
+                self._unresponsive_clients.remove(client_socket)
+                continue
 
             # Handle client disconnection
             if (
@@ -1092,6 +1153,7 @@ class HiSockServer:
         """
 
         self._closed = True
+        self._keepalive_event.set()
         self.disconnect_all_clients()
         self.sock.close()
 
