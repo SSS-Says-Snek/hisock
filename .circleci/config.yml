@@ -46,4 +46,4 @@ jobs:
       - discord/status:  # Discord webhook
           fail_only: true
           failure_mentions: "&914188304902139954" # Contributors Role in Hisock server
-          webhook: "https://discord.com/api/webhooks/914187123387666492/BgX2jel-tUiqbT4epWGDfmE3xwSjaBlPAcK6WcAbYmWUO2LP_4C9SOqEHPIj2-UxMC8H"
+          webhook: $DISCORD_WEBHOOK_URL
