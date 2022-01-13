@@ -32,7 +32,8 @@ try:
         _dict_tupkey_lookup_key,
         _type_cast,
         MessageCacheMember,
-        InvalidTypeCast
+        ClientInfo,
+        InvalidTypeCast,
     )
 except ImportError:
     # relative import doesn't work for non-pip builds
@@ -44,6 +45,7 @@ except ImportError:
         _dict_tupkey_lookup_key,
         _type_cast,
         MessageCacheMember,
+        ClientInfo,
         InvalidTypeCast
     )
 
@@ -403,7 +405,7 @@ class HiSockServer:
         self.sock.close()
 
     def disconnect_client(
-        self, client: str
+        self, client: Union[str, tuple, ClientInfo]
     ):  # TODO: WILL ADD MORE DIVERSE SUPPORT FOR ARGS
         """
         Disconnects a specific client
@@ -411,11 +413,19 @@ class HiSockServer:
 
         - An IP + Port format, written as "ip:port"
 
+        - A tuple of IP+Port, written as (ip, port)
+
         - A client name, if it exists
 
+        - A ``ClientInfo`` instance
+
         :param client: The client to disconnect. The format could be either by IP+Port,
-            or a client name
+            a client name, or a ``ClientInfo`` instance.
+        :type client: Union[str, tuple, ClientInfo]
         """
+        if isinstance(client, ClientInfo):
+            client = client.ip
+
         disconn_header = make_header(b"$DISCONN$", self.header_len)
         if isinstance(client, tuple):
             # Formats client IP tuple, and raises Exceptions if format's wrong
@@ -534,7 +544,7 @@ class HiSockServer:
 
     def send_group(
         self,
-        group: str,
+        group: Union[str, ClientInfo],
         command: str,
         content: Union[
             bytes,
@@ -549,15 +559,26 @@ class HiSockServer:
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
 
-        :param group: A string, representing the group to send data to
-        :type group: str
+        :param group: A string or a ClientInfo, representing the group to send data to.
+            If the group is a ClientInfo, and the client is in a group, the method will
+            send data to that group. If the client's not in a group, it will return a
+            ``TypeError``
+        :type group: Union[str, ClientInfo]
         :param command: A string, containing the command to send
         :type command: str
         :param content: A bytes-like object, with the content/message
             to send
         :type content: Union[bytes, dict]
-        :raise TypeError: The group does not exist
+        :raise TypeError: The group does not exist, or the client
+            is not in a group (``ClientInfo``)
         """
+        if isinstance(group, ClientInfo):
+            clt = group
+            group = clt.group  # Please don't confuse this
+
+            if group is None:
+                raise TypeError(f"Client {clt} does not belong to a group")
+
         # Identifies group
         group_clients = _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
         group_clients = list(group_clients)
@@ -577,7 +598,7 @@ class HiSockServer:
 
     def send_client(
         self,
-        client: Union[str, tuple[str, int]],
+        client: Union[str, tuple[str, int], ClientInfo],
         command: str,
         content: Union[
             bytes,
@@ -596,9 +617,11 @@ class HiSockServer:
 
         - A tuple with an (IP, Port) format
 
+        - A ``ClientInfo`` instance (passed automatically to hisock functions by its underhood)
+
         :param client: The client to send data to. The format could be either by IP+Port,
             or a client name
-        :type client: Union[str, tuple]
+        :type client: Union[str, tuple, ClientInfo]
         :param command: A string, containing the command to send
         :type command: str
         :param content: A bytes-like object, with the content/message
@@ -611,6 +634,8 @@ class HiSockServer:
         """
         if isinstance(content, dict):
             content = json.dumps(content).encode()
+        if isinstance(client, ClientInfo):
+            client = client.ip
 
         content_header = make_header(command.encode() + b" " + content, self.header_len)
         # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
@@ -699,7 +724,7 @@ class HiSockServer:
             client_sock[0].send(content_header + command.encode() + b" " + content)
 
     def send_client_raw(
-        self, client, content: bytes
+        self, client: Union[str, ClientInfo], content: bytes
     ):  # TODO: Add dict-sending support to this method
         """
         Sends data to a specific client, *without a command*
@@ -712,8 +737,8 @@ class HiSockServer:
         - A tuple with an (IP, Port) format
 
         :param client: The client to send data to. The format could be either by IP+Port,
-            or a client name
-        :type client: Union[str, tuple]
+            a client name, or a ``ClientInfo`` instance.
+        :type client: Union[str, tuple, ClientInfo]
         :param content: A bytes-like object, with the content/message
             to send
         :type content: Union[bytes, dict]
@@ -722,6 +747,9 @@ class HiSockServer:
         :raise Warning: Using client name and more than one client with
             the same name is detected
         """
+        if isinstance(client, ClientInfo):
+            client = client.ip
+
         content_header = make_header(content, self.header_len)
         # r"((\b(0*(?:[1-9]([0-9]?){2}|255))\b\.){3}\b(0*(?:[1-9][0-9]?[0-9]?|255))\b):(\b(0*(?:[1-9]([0-9]?){4}|65355))\b)"
 
@@ -902,7 +930,7 @@ class HiSockServer:
 
                     if "join" in self.funcs:
                         # Reserved function - Join
-                        self._call_function("join", clt_info)
+                        self._call_function("join", ClientInfo(**clt_info))
 
                     # Send reserved functions over to existing clients
                     clt_cnt_header = make_header(
@@ -937,11 +965,11 @@ class HiSockServer:
                             # Reserved function - Leave
                             self._call_function(
                                 "leave",
-                                {
-                                    "ip": client_disconnect,
-                                    "name": more_client_info["name"],
-                                    "group": more_client_info["group"],
-                                },
+                                ClientInfo(
+                                    client_disconnect,
+                                    more_client_info["name"],
+                                    more_client_info["group"],
+                                )
                             )
                         if notified_sock in self._unresponsive_clients:
                             self._unresponsive_clients.remove(notified_sock)
@@ -1028,7 +1056,7 @@ class HiSockServer:
                                     new_name = name_or_group
 
                                     self._call_function(
-                                        "name_change", clt_dict, old_name, new_name
+                                        "name_change", ClientInfo(**clt_dict), old_name, new_name
                                     )
                                 elif (
                                     "group_change" in self.funcs
@@ -1038,7 +1066,7 @@ class HiSockServer:
                                     new_group = name_or_group
 
                                     self._call_function(
-                                        "group_change", clt_dict, old_group, new_group
+                                        "group_change", ClientInfo(**clt_dict), old_group, new_group
                                     )
 
                         if "message" in self.funcs:
@@ -1068,7 +1096,7 @@ class HiSockServer:
                                 )
 
                             self._call_function(
-                                "message", inner_clt_data, parse_content
+                                "message", ClientInfo(**inner_clt_data), parse_content
                             )
 
                         has_corresponding_function = False
@@ -1101,13 +1129,16 @@ class HiSockServer:
                                         f"type cast!"
                                     )
 
+                                instantiated_clt_data = ClientInfo(
+                                    **clt_data
+                                )
                                 if not func["threaded"]:
-                                    func["func"](clt_data, parse_content)
+                                    func["func"](instantiated_clt_data, parse_content)
                                 else:
                                     function_thread = threading.Thread(
                                         target=func["func"],
                                         args=(
-                                            clt_data,
+                                            instantiated_clt_data,
                                             parse_content,
                                         ),
                                     )
@@ -1444,13 +1475,13 @@ if __name__ == "__main__":
 
     @s.on("join")
     def test_sussus(yum_data):
-        print("Whomst join, ahh it is", yum_data["name"])
+        print("Whomst join, ahh it is", yum_data.name)
         s.send_all_clients("Joe", b"Bidome")
-        s.send_client(f"{yum_data['ip'][0]}:{yum_data['ip'][1]}", "Bruh", b"E")
-        s.send_client(yum_data["ip"], "e", b"E")
+        s.send_client(f"{yum_data.ip[0]}:{yum_data.ip[1]}", "Bruh", b"E")
+        s.send_client(yum_data.ip, "e", b"E")
 
         s.send_group("Amogus", "Test", b"TTT")
-        s.send_client(yum_data["ip"], "dicttest", {"Does this": "dict also work?"})
+        s.send_client(yum_data, "dicttest", {"Does this": "dict also work?"})
 
     @s.on("leave")
     def bruh(yum_data):
@@ -1459,14 +1490,14 @@ if __name__ == "__main__":
     @s.on("name_change")
     def smth(clt_info, old_name, new_name):
         print(f"Bruh, {old_name} renamed to {new_name}!")
-        s.send_client(clt_info["ip"], "shrek", b"")
-        s.send_client(clt_info["ip"], "john", b"")
+        s.send_client(clt_info.ip, "shrek", b"")
+        s.send_client(clt_info.ip, "john", b"")
         # s.disconnect_all_clients()
 
     @s.on("lol")
     def lolol(clt_info, dict_stuff):
         print(
-            f"Cool, {clt_info['ip']} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}"
+            f"Cool, {clt_info.ip} sent out: {dict_stuff}. What's cool is that I am {dict_stuff['I am']}"
         )
 
     # @s.on("message")
