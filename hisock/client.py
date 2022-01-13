@@ -510,7 +510,7 @@ class HiSockClient:
             )
             self.sock.send(content_header + command.encode() + b" " + content)
 
-    def raw_send(
+    def send_raw(
         self,
         content: bytes,
     ):  # TODO: Add dict-sending support for this method

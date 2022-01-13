@@ -24,6 +24,7 @@ A module containing the main server classes and functions, including
    .. automethod:: get_client
    .. automethod:: get_group
    .. automethod:: on
+   .. automethod:: recv_raw
    .. automethod:: run
    .. note::
 
@@ -60,7 +61,7 @@ A module containing the main client classes and functions, including
    .. automethod:: change_name
    .. automethod:: close
    .. automethod:: on
-   .. automethod:: raw_send
+   .. automethod:: send_raw
    .. automethod:: recv_raw
    .. automethod:: send
    .. automethod:: start

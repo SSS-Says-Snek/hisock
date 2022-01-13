@@ -1148,6 +1148,23 @@ class HiSockServer:
         while not self.closed:
             self.run()
 
+    def recv_raw(self) -> bytes:
+        """
+        Waits (blocks) until a message is sent, and returns that message.
+        This is not recommended for content with commands attached;
+        it is meant to be used alongside with :func:`HiSockCerver.send_raw`
+
+        :return: A bytes-like object, containing the content/message
+          the client first receives
+        :rtype: bytes
+        """
+        # Blocks depending on your blocking settings, until message
+        msg_len = int(self.sock.recv(self.header_len).decode())
+        message = self.sock.recv(msg_len)
+
+        # Returns message
+        return message
+
     def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
         Gets all clients from a specific group
