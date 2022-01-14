@@ -162,17 +162,16 @@ Anyways, we can use the ``join`` reserved function to print the client's IP, lik
 .. code-block:: python
 
    # Server
-   from hisock import iptup_to_str
    ...
    server = ...
 
    @server.on("join")
    def clt_join(clt_data):  # Of course, no message on join
        print(
-           f"Cool, {iptup_to_str(clt_data['ip'])} joined!"
-       )  # the IP is stored in a tuple, with a (str IP, int Port) format
+           f"Cool, {clt_data.ip_as_str} joined!"
+       )  # ip_as_str holds the IP address of the client in a "ip:port" format
 
-   while True:
+   while not server.closed:
        server.run()
 
 *Now*, if we run the client on this updated server, we will see the IP address of
@@ -221,10 +220,10 @@ send it back to the client. This is perfectly doable, and is pretty straightforw
    @server.on("join")
    def clt_join(clt_data):  # Of course, no message on join
        print(
-           f"Cool, {iptup_to_str(clt_data['ip'])} joined!"
-       )  # the IP is stored in a tuple, with a (str IP, int Port) format
+           f"Cool, {clt_data.ip_as_str} joined!"
+       )  # ip_as_str holds the IP address of the client in a "ip:port" format
        randnum = random.randint(1, 10000)
-       server.send_client(clt_data['ip'], "random", str(randnum).encode())
+       server.send_client(clt_data, "random", str(randnum).encode())
 
    ...
 
@@ -281,14 +280,14 @@ and our server can be
    @server.on("join")
    def clt_join(clt_data):  # Of course, no message on join
        print(
-           f"Cool, {iptup_to_str(clt_data['ip'])} joined!"
-       )  # the IP is stored in a tuple, with a (str IP, int Port) format
+           f"Cool, {clt_data.ip_as_str} joined!"
+       )  # ip_as_str holds the IP address of the client in a "ip:port" format
        randnum = random.randint(1, 10000)
-       server.send_client(clt_data['ip'], "random", str(randnum).encode())
+       server.send_client(clt_data, "random", str(randnum).encode())
 
    @server.on("verif")
    def verif_msg(clt_data, message):
-       print(f"Successfully sent the number to {iptup_to_str(clt_data['ip'])}!")
+       print(f"Successfully sent the number to {clt_data.ip_as_str}!")
 
    ...
 
