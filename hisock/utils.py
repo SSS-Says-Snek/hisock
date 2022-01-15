@@ -73,6 +73,7 @@ Sendable = Union[
     str,
     int,
     float,
+    None,
     list[Union[str, int, float, bool, None, dict, list]],
     dict[
         Union[str, int, float, bool, None, dict, list],
@@ -275,6 +276,8 @@ def _type_cast(
         if not isinstance(content_to_type_cast, bytes):
             if isinstance(content_to_type_cast, str):
                 content_to_type_cast = content_to_type_cast.encode()
+            elif content_to_type_cast is None:
+                content_to_type_cast = b""
             elif type(content_to_type_cast) in (int, float):
                 content_to_type_cast = str(content_to_type_cast).encode()
             elif type(content_to_type_cast) in (list, dict):
@@ -287,9 +290,19 @@ def _type_cast(
         # Type cast content_to_type_cast to type_cast
         if type_cast == bytes:
             return content_to_type_cast
+        elif type_cast == None:
+            return None
         elif type_cast in (str, int, float):
+            # Handle no data
+            if not content_to_type_cast:
+                if type_cast == str:
+                    return ""
+                return type_cast(0)  # int or float
             return type_cast(content_to_type_cast.decode())
         elif type_cast in (list, dict):
+            # Handle no data
+            if not content_to_type_cast:
+                return {} if type_cast == dict else []
             return json.loads(content_to_type_cast.decode())
         raise InvalidTypeCast(
             f"Cannot type cast bytes to {type(type_cast).__name__}."

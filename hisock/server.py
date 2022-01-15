@@ -156,7 +156,7 @@ class HiSockServer:
         self.sock.listen(max_connections)
 
         # Function related storage
-        # {"func_name": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
+        # {"func_name": {"func": Callable, "name": str, "type_hint": {"arg": Any}, "threaded": bool}}
         self.funcs = {}
         # Stores the names of the reserved functions
         # Used for the `on` decorator
@@ -191,7 +191,7 @@ class HiSockServer:
         self.clients_rev = {}
 
         # Flags
-        self._closed = False
+        self.closed = False
 
         # Keepalive
         self._keepalive_event = threading.Event()
@@ -362,12 +362,16 @@ class HiSockServer:
         if idx is not None:
             clients = (self.clients[self._sockets_list[idx]],)
 
+        # There was a client removed
+        if len(self.clients_rev) > len(self._sockets_list) - 1:
+            self.clients_rev.clear()
+
         for client_socket, client_info in clients.items():
             self.clients_rev[
                 (client_info["ip"], client_info["name"], client_info["group"])
             ] = client_socket
 
-    def _send_type_cast(self, content: Sendable) -> bytes:
+    def _send_type_cast(self, content: Sendable = None) -> bytes:
         """
         Type casting content for the send methods.
         This method exists so type casting can easily be changed without changing
@@ -385,20 +389,34 @@ class HiSockServer:
 
     # Keepalive
 
+    def _handle_keepalive(self, client_socket: socket.socket):
+        """
+        Handles a keepalive acknowledgment sent by a client.
+
+        :param client_socket: The client socket that sent the acknowledgment.
+        :type client_socket: socket.socket
+        """
+
+        if client_socket in self._unresponsive_clients:
+            self._unresponsive_clients.remove(client_socket)
+
+        # DEBUG PRINT PLEASE REMOVE LATER
+        print(f"{self.clients[client_socket]['ip']} is alive.")
+
     def _keepalive_thread(self):
         while not self._keepalive_event.is_set():
             self._keepalive_event.wait(30)
 
-            # If statement is required, since if the event is set,
-            # wait() will finish itself and move on to the next code
+            # Send keepalive to all clients
             if not self._keepalive_event.is_set():
                 for client in self.clients:
                     self._unresponsive_clients.append(client)
                     self.send_client_raw(self.clients[client]["ip"], "$KEEPALIVE$")
 
+            # Keepalive acknowledgments will be handled in `_handle_keepalive`
             self._keepalive_event.wait(30)
 
-            # Keepalive wait is over, remove the unresponsive clients
+            # Keepalive response wait is over, remove the unresponsive clients
             if not self._keepalive_event.is_set():
                 for client in self._unresponsive_clients:
                     self.disconnect_client(self.clients[client]["ip"], force=True)
@@ -495,7 +513,7 @@ class HiSockServer:
             annotations = _str_type_to_type_annotations_dict(
                 inspect.getfullargspec(func).annotations
             )  # {"param": type}
-            parameter_annotations = {"client_data": None, "message": None}
+            parameter_annotations = {}
 
             # Process unreserved commands and reserved `message` (only reserved
             # command to have 2 arguments)
@@ -511,7 +529,7 @@ class HiSockServer:
                         continue
                     parameter_annotations[argument_name] = annotations[func_argument]
 
-            # Creates function dictionary to add to `outer.funcs`
+            # Add function
             self.outer.funcs[self.command] = {
                 "func": func,
                 "name": func.__name__,
@@ -522,34 +540,36 @@ class HiSockServer:
             # Decorator stuff
             return func
 
-        def _assert_num_func_args_valid(self, actual_num_func_args: int):
+        def _assert_num_func_args_valid(self, number_of_func_args: int):
             """
             Asserts the number of function arguments is valid.
 
             :raise ValueError: If the number of function arguments is invalid.
             """
 
-            number_of_func_args = 2  # Normal commands
+            valid = False
+            needed_number_of_args = "0-2"
 
             # Reserved commands
             try:
-                index_of_reserved_command = self.outer._reserved_functions.index(
-                    self.command
-                )
-                # Get the number of parameters for the reserved command
-                number_of_func_args = self.outer._reserved_functions_parameters_num[
-                    index_of_reserved_command
-                ]
+                index_of_reserved_command = (
+                    self.outer._reserved_functions.index(self.command),
+                )[0]
+                needed_number_of_args = (
+                    self.outer._reserved_functions_parameters_num[
+                        index_of_reserved_command
+                    ],
+                )[0]
+                valid = number_of_func_args == needed_number_of_args
 
+            # Unreserved commands
             except ValueError:
-                # Not a reserved command
-                pass
+                valid = not (number_of_func_args > 2)
 
-            # Check if the number of function arguments is valid
-            if actual_num_func_args != number_of_func_args:
+            if not valid:
                 raise ValueError(
-                    f"{self.command} command must have {number_of_func_args} "
-                    f"arguments, not {actual_num_func_args}."
+                    f"{self.command} command must have {needed_number_of_args} "
+                    f"arguments, not {number_of_func_args}."
                 )
 
     def on(
@@ -585,6 +605,7 @@ class HiSockServer:
         - ``int``
         - ``float``
         - ``bool``
+        - ``None``
         - ``list`` (with the types listed here)
         - ``dict`` (with the types listed here)
 
@@ -802,24 +823,26 @@ class HiSockServer:
 
         return self.addr
 
-    # Send
+    # Transmit data
 
-    def send_all_clients(self, command: str, content: Sendable):
+    def send_all_clients(self, command: str, content: Sendable = None):
         """
         Sends the command and content to *ALL* clients connected.
 
         :param command: A string, representing the command to send to every client.
         :type command: str
         :param content: The message / content to send
-        :type content: Sendable
+        :type content: Sendable, optional
         """
 
-        data_to_send = command.encode() + b" " + self._send_type_cast(content)
+        data_to_send = (
+            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
+        )
         content_header = make_header(data_to_send, self.header_len)
         for client in self.clients:
             client.send(content_header + data_to_send)
 
-    def send_all_clients_raw(self, content: Sendable):
+    def send_all_clients_raw(self, content: Sendable = None):
         """
         Sends the command and content to *ALL* clients connected *without a command*.
 
@@ -831,7 +854,7 @@ class HiSockServer:
         for client in self.clients:
             client.send(content_header + content)
 
-    def send_group(self, group: str, command: str, content: Sendable):
+    def send_group(self, group: str, command: str, content: Sendable = None):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
@@ -848,12 +871,14 @@ class HiSockServer:
         :raise GroupNotFound: The group does not exist.
         """
 
-        data_to_send = command.encode() + b" " + self._send_type_cast(content)
+        data_to_send = (
+            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
+        )
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_all_client_sockets_in_group(group):
             client.send(content_header + data_to_send)
 
-    def send_client(self, client: Client, command: str, content: Sendable):
+    def send_client(self, client: Client, command: str, content: Sendable = None):
         """
         Sends data to a specific client.
 
@@ -871,13 +896,15 @@ class HiSockServer:
             the same name is detected.
         """
 
-        data_to_send = command.encode() + b" " + self._send_type_cast(content)
+        data_to_send = (
+            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
+        )
         content_header = make_header(data_to_send, self.header_len)
         self._get_client_from_name_or_ip_port(client).send(
             content_header + data_to_send
         )
 
-    def send_client_raw(self, client: Client, content: Sendable):
+    def send_client_raw(self, client: Client, content: Sendable = None):
         """
         Sends data to a specific client, *without a command*
         Different formats of the client is supported. It can be:
@@ -901,7 +928,7 @@ class HiSockServer:
             content_header + data_to_send
         )
 
-    def send_group_raw(self, group: str, content: Sendable):
+    def send_group_raw(self, group: str, content: Sendable = None):
         """
         Sends data to a specific group, without commands.
         Groups are recommended for more complicated servers or multipurpose
@@ -923,6 +950,66 @@ class HiSockServer:
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_all_client_sockets_in_group(group):
             client.send(content_header + data_to_send)
+
+    def recv_raw(self, ignore_reserved: bool = False) -> bytes:
+        """
+        Waits (blocks) until a message is sent, and returns that message.
+        This is not recommended for content with commands attached;
+        it is meant to be used alongside with :func:`HiSockClient.send_raw`.
+
+        :param ignore_reserved: A boolean, representing if the function should ignore
+            reserved commands.
+            Default is False.
+        :type ignore_reserved: bool, optional
+
+        .. note::
+            If the message is a keepalive, the client will send an acknowledgement and
+            then ignore it, even if ``ignore_reserved`` is False.
+
+        :return: A bytes-like object, containing the content/message
+            the client first receives
+        :rtype: bytes
+        """
+
+        def _handle_data(data: bytes):
+            # DEBUG PRINT PLEASE REMOVE LATER
+            print(f"Received data: {data}")
+
+            # Reserved commands
+            reserved_command = True
+            try:
+                validate_command_not_reserved(str(data))
+            except ValueError:
+                reserved_command = False
+
+            if reserved_command and not ignore_reserved:
+                return self.recv_raw()
+
+            return data
+
+        # Sometimes, `update` can be running at the same time as this is running
+        # (e.x. if this is in a thread). In this case, `update` will receive the data
+        # and send it to us, as we cannot receive data at the same time as it receives
+        # data.
+
+        if self._receiving_data:
+            self._recv_data = "I NEED YOUR DATA"
+
+            # Wait until the data is received
+            while self._recv_data == "I NEED YOUR DATA":
+                "...waiting..."
+
+            # Data is received
+            data_received = self._recv_data
+            self._recv_data = ""
+            return _handle_data(data_received)
+
+        self._receiving_data = True
+        message_len = int(self.sock.recv(self.header_len).decode())
+        data_received = self.sock.recv(message_len)
+        self._receiving_data = False
+
+        return _handle_data(data_received)
 
     # Disconnect
 
@@ -972,7 +1059,7 @@ class HiSockServer:
         lose valuable information.
         """
 
-        if self._closed:
+        if self.closed:
             return
 
         read_sock, write_sock, exception_sock = select.select(
@@ -996,35 +1083,32 @@ class HiSockServer:
 
             # "header" - The header of the message, mostly unneeded
             # "data" - The actual data/content of the message (type: bytes)
-            message = receive_message(client_socket, self.header_len)
+            data = receive_message(client_socket, self.header_len)
 
             # DEBUG PRINT PLEASE REMOVE LATER
-            print(f"{message=}")
-
-            # Handle keepalive acknowledgement
-            if (
-                client_socket in self._unresponsive_clients
-                and message["data"] == b"$KEEPACK$"
-            ):
-                self._unresponsive_clients.remove(client_socket)
-                continue
+            print(f"{data=}")
 
             # Handle client disconnection
             if (
-                not message  # Most likely client disconnect, could be client error
-                or message["data"] == b"$USRCLOSE$"
+                not data  # Most likely client disconnect, could be client error
+                or data["data"] == b"$USRCLOSE$"
             ):
                 self._client_disconnection(client_socket)
+                continue
+
+            # Handle keepalive acknowledgement
+            if data["data"].startswith(b"$KEEPACK$"):
+                self._handle_keepalive(client_socket)
                 continue
 
             # Actual client message received
             client_data = self.clients[client_socket]
 
             # Get client
-            if message["data"].startswith(b"$GETCLT$"):
+            if data["data"].startswith(b"$GETCLT$"):
                 try:
                     client_identifier = _removeprefix(
-                        message["data"], b"$GETCLT$ "
+                        data["data"], b"$GETCLT$ "
                     ).decode()
 
                     # Determine if the client identifier is a name or an IP+port
@@ -1047,15 +1131,15 @@ class HiSockServer:
             for matching_reserve, key in zip(
                 (b"$CHNAME$", b"$CHGROUP$"), ("name", "group")
             ):
-                if not message["data"].startswith(matching_reserve):
+                if not data["data"].startswith(matching_reserve):
                     continue
 
                 change_to = _removeprefix(
-                    message["data"], matching_reserve + b" "
+                    data["data"], matching_reserve + b" "
                 ).decode()
 
                 # Resetting
-                if change_to == message["data"].decode():
+                if change_to == data["data"].decode():
                     change_to = None
 
                 client_info = self.clients[client_socket]
@@ -1083,47 +1167,63 @@ class HiSockServer:
 
             ### Unreserved ###
 
-            # Declaring these here for cache after this
-            has_corresponding_function = False
-            content = None
-            command = None
+            has_corresponding_function = False  # For cache
 
-            for matching_command, func in self.funcs.items():
-                if not message["data"].startswith(matching_command.encode()):
-                    continue
+            decoded_data = data["data"].decode()
+            if decoded_data.startswith("$CMD$"):
+                command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
+                content = _removeprefix(decoded_data, "$CMD$" + command + "$MSG$")
+                # No content? (_removeprefix didn't do anything)
+                if not content or content == decoded_data:
+                    content = None
 
-                has_corresponding_function = True  # For cache
-                command = matching_command
+                for matching_command, func in self.funcs.items():
+                    if not command == matching_command:
+                        continue
 
-                content = _removeprefix(
-                    message["data"], matching_command.encode() + b" "
-                )
+                    # Call function with dynamic args
 
-                self._call_function(
-                    command,
-                    False,
-                    client_data,
-                    _type_cast(func["type_hint"]["message"], content, func["name"]),
-                )
+                    arguments = ()
+                    # client_data
+                    if len(func["type_hint"].keys()) == 1:
+                        arguments = (client_data,)
+                    # client_data, message
+                    elif len(func["type_hint"].keys()) >= 2:
+                        arguments = (
+                            client_data,
+                            _type_cast(
+                                func["type_hint"]["message"], content, func["name"]
+                            ),
+                        )
+
+                    # DEBUG PRINT PLEASE REMOVE LATER
+                    print(
+                        f"{command=} {arguments=} len: {len(arguments)} {arguments}"
+                        f"list of type hints: {tuple(func['type_hint'].keys())}"
+                    )
+
+                    self._call_function(func["name"], True, *arguments)
+            else:
+                # Not a reserved or unreserved message??
+                # Should it be handled by `recv_raw`?
+                print(f'Unhandled message: {data["data"]}')
 
             # Caching
             if self.cache_size >= 0:
-                if has_corresponding_function:
-                    cache_content = content
-                else:
-                    cache_content = message["data"]
+                cache_content = content if has_corresponding_function else data["data"]
                 self.cache.append(
                     MessageCacheMember(
                         {
-                            "header": message["header"],
+                            "header": data["header"],
+                            "command": command,
                             "content": cache_content,
                             "called": has_corresponding_function,
-                            "command": command,
                         }
                     )
                 )
 
-                if 0 < self.cache_size < len(self.cache):
+                # Pop oldest from stack
+                if len(self.cache) > self.cache_size:
                     self.cache.pop(0)
 
             # Extra special case! Message reserved (listens on every command)
@@ -1131,7 +1231,7 @@ class HiSockServer:
                 continue
 
             client_data = self.clients[client_socket]
-            content = message["data"]
+            content = data["data"]
 
             self._call_function(
                 "message",
@@ -1152,7 +1252,7 @@ class HiSockServer:
         Running `server.run()` won't do anything now.
         """
 
-        self._closed = True
+        self.closed = True
         self._keepalive_event.set()
         self.disconnect_all_clients()
         self.sock.close()
@@ -1184,7 +1284,7 @@ class ThreadedHiSockServer(HiSockServer):
         self._stop_event = threading.Event()
 
         # This class shouldn't be able to be called through :meth:`HiSockServer.run`,
-        # so we will kindly exterminate it
+        # so we will kindly "exterminate" it
         # If you want to run it manually, you need to call :meth:`_run`
         del self.run
 
@@ -1286,14 +1386,13 @@ if __name__ == "__main__":
         )
 
     @server.on("ping")
-    def on_ping(client_data: dict, _: bytes):
+    def on_ping(client_data: dict):
         print(f"{client_data['name']} pinged!")
         server.send_client_raw(client_data["ip"], "pong")
 
     @server.on("all_clients")
-    def on_all_clients(client_data: dict, data: dict):
+    def on_all_clients(client_data: dict):
         print(f"{client_data['name']} asked for all clients!")
-
         server.send_client_raw(client_data["ip"], server.get_all_clients())
 
     @server.on("broadcast_message")
@@ -1307,6 +1406,11 @@ if __name__ == "__main__":
         __import__("time").sleep(seconds)
         print(f'{client_data["name"]}\'s timer is done!')
         server.send_client_raw(client_data["ip"], "timer_done")
+
+    @server.on("commit_genocide")
+    def on_commit_genocide():
+        print("It's time to genocide the connected clients.")
+        server.send_all_clients("genocide", None)
 
     while True:
         server.run()
