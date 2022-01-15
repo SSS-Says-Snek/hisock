@@ -16,27 +16,36 @@ This tutorial also relies on you having basic networking knowledge (client/serve
 Lastly, if you don't have :mod:`HiSock` installed, do that now! Read :doc:`/quickstart/installation`.
 
 This tutorial will focus on:
-  - Creating a server
-  - Creating a client
-  - Sending and receiving data
-  - Acting upon the data
-  - An example of a client sending data that a server writes to a text file and the server broadcasts to all clients connected.
+
+- Creating a server
+- Creating a client
+- Sending and receiving data
+- Acting upon the data
+- An example of a client sending data that a server writes to a text file and the server broadcasts to all clients connected.
 
 .. note::
    For this tutorial, I will be referring the IP addresses as ``hisock.utils.get_local_ip()``. In reality, you will most likely use a hard-coded IP address from a user input.
 
 .. note::
-    When I refer to "a way to identify the client", I am talking about either:
-     - a tuple of the IP address and port of the client,
-     - a string of the IP address and port of the client, or
-     - a string of the client's name (this will cause confusion if two clients share the same name)
+   When I refer to "a way to identify the client", I am talking about either:
+
+   - a tuple of the IP address and port of the client or
+   - a string of the client's name (this will have ambiguity if multiple clients share the same name)
+
+.. note::
+   There are a few terms that are used interchangeably here.
+
+   - Message, content, and data mean the same thing.
+   - Command and event mean the same thing.
+
+Now, without further ado, let's begin!
 
 Creating our first server
 -------------------------
 
-In :mod:`HiSock`, there is a function to create a :class:`HiSockServer` instance which is :meth:``start_server()``. This function is called with one parameter, which is a tuple. The tuple will contain the IP address to start the server on (most likely the local IP address) and the port to start the server on. To find the local IP address, there is a function called :meth:``utils.get_local_ip()``. For the port, a number between 1024 and 65535 *should* be fine.
+In :mod:`HiSock`, there is a function to create a :class:`HiSockServer` instance, which is :func:`start_server`. This function is called with one parameter, which is a tuple. The tuple will contain the IP address to start the server on (most likely the local IP address) and the port to start the server on. To find the local IP address, there is a function called :func:`utils.get_local_ip`. For the port, a number between 1024 and 65535 *should* be fine.
 
-:class:`HiSockServer` instances have a ``run()`` method to them, which should be called constantly. This allows the server to listen for commands and data being sent.
+:class:`HiSockServer` instances have a :meth:`run` method to them, which should be called constantly. This allows the server to listen for commands and data being sent.
 
 .. code-block:: python
 
@@ -49,11 +58,11 @@ In :mod:`HiSock`, there is a function to create a :class:`HiSockServer` instance
 
 That's basically it! Of course, this server is useless, but hey, it's a step in the right direction! We'll add on to this later on.
 
-Obviously, without a client, a server is kind of pointless. So, let's spice things up, with some client code!
+Obviously, without a client, a server is kind of pointless. So, let's spice things up with some client code!
 
 Creating our first client
 -------------------------
-In :mod:`HiSock`, there is a function to create a :class:`HiSockClient` instance which is :meth:`hisock.connect`. This needs to be called with two parameters. The first parameter is a tuple of the IP address of the server to connect to and the port is the port that the server is running on. The second parameter is the name of the client. :mod:`HiSock` uses IP addresses and names to identify clients.
+In :mod:`HiSock`, there is a function to create a :class:`HiSockClient` instance, which is :meth:`hisock.connect`. This needs to be called with a maximum of two parameters. The first parameter is a tuple of the IP address of the server to connect to and the port is the port that the server is running on. The second parameter is the name of the client. :mod:`HiSock` uses IP addresses and names to identify clients. The third parameter (optional) is the group of the client. This tutorial won't mention groups.
 
 Like :class:`HiSockServer`, :class:`HiSockClient` needs to be run constantly to listen to receive data. However, in :class:`HiSockClient`, instead of the :meth:`run()` method, it is called :meth:`update()`. So, our final starter client code is:
 
@@ -76,19 +85,19 @@ Transmitting Data
 
 Let's explore transmitting data for :mod:`HiSock`!
 
-:mod:`HiSock` is an event-driven module, and as such, has an ``on`` decorator and a :meth:`send` method for both :class:`HiSockClient` and :class:`HiSockServer`.
+:mod:`HiSock` is an event-driven module, and as such, has an ``on`` decorator and :meth:`send` methods for both :class:`HiSockClient` and :class:`HiSockServer`.
 
 ==============
 Receiving data
 ==============
 
-When a function is prefaced with the ``on`` decorator, it will run on something. It will "listen" for a command and run when that command is broadcasted.
+When a function is prefaced with the ``on`` decorator, it will run on something. It will listen for a command and run when that command is received.
 
-The ``on`` decorator takes two parameters. One of the parameters is the command to listen on. The second (optional) parameter is whether to run the listener in its own thread or not.
+The ``on`` decorator takes a maximum of three parameters. One of the parameters is the command to listen on. The second (optional) parameter is whether to run the listener in its own thread or not. The third (optional) parameter is whether to override a reserved command, and this tutorial won't be covering it.
 
-For the server: The ``on`` decorator will send two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client data. It is a dictionary that includes the client's name, client IP address, and the group the client is in (we won't cover groups in this tutorial).
+For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client data. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in. The second parameter is the data that is being received.
 
-For the client: the ``on`` decorator will send a single parameter to the function it is decorating, which will be the message the client sends (in most cases).
+For the client: the ``on`` decorator will send a maximum of one parameter to the function it is decorating, which will be the message or content the client receives (in most cases).
 
 Here's an example with the ``on`` decorator in use in a server. Here, the server has a command, ``print_message_name``, and will print the message that it gets and who sent it.
 
@@ -97,8 +106,8 @@ Here's an example with the ``on`` decorator in use in a server. Here, the server
    server = ...
 
    @server.on("print_message_name")
-   def on_print_message_name(client_data: dict, message: str):
-       print(f'{client_data["name"]} sent "{message}"')
+   def on_print_message_name(client_data, message: str):
+       print(f'{client_data.name} sent "{message}"')
 
    while True:
        ...
@@ -116,7 +125,7 @@ Here's another example with receiving data, this time on the client-side. The cl
    while True:
        ...
 
-If the ``threaded`` parameter for the ``on`` decorator is true, then the function being decorated will run in a separate thread. This allows blocking code to run while still listening for updates.
+If the ``threaded`` parameter for the ``on`` decorator is True, then the function being decorated will run in a separate thread. This allows blocking code to run while still listening for updates.
 
 It is useful if you want to get user input but also want to have the user receive other data.
 
@@ -126,13 +135,13 @@ It is useful if you want to get user input but also want to have the user receiv
 
    @client.on("ask_question", threaded=True)
    def on_ask_question(question: str):
+       """Contains blocking code with ``input()``."""
        answer = input(f"Please answer this question: {question}\n>")
-       answer_bytes = answer.encode()
        # ... send answer to server ...
     
    @client.on("important")
    def on_important(message: str):
-       """ This is important and cannot be missed! """
+       """This is important and cannot be missed!"""
        ...
     
    while True:
@@ -141,57 +150,111 @@ It is useful if you want to get user input but also want to have the user receiv
 ============
 Sending data
 ============
-.. note::
-    This is likely going to be updated soon. Due to complications with having different :meth:`send` methods, it is likely to be put in one big ``send`` class. However, for now, this is correct.
 
-:mod:`HiSock` has multiple send functions. For now, we will be talking about sending to the server from the client or to one client from the server.
+:mod:`HiSock` has multiple send methods. For now, we will be talking about sending to the server from one client or to one client from the server.
 
-For the server:
+For the server: Sending data from the server to one client in :mod:`HiSock` uses the :meth:`send_client` method. This method takes in a maximum of three parameters. The three parameters (in order) are a way to identify the client, the command to send, and the message being sent (optional). Although we won't be talking about it here, :meth:`send_all_clients` does exactly what it says. It will do :meth:`send_client` to all the clients that are connected, and only takes in the command and optional message
 
-Sending data from the server to a client in :mod:`HiSock` uses the :meth:`send_client` method. This method takes in three parameters. The three parameters (in order) are a way to identify the client, the command to send, and the message being sent.
+For the client: Sending data to the server in :mod:`HiSock` uses the :meth:`send` method. This method takes a maximum of two parameters. The first parameter is the command to send, and the second parameter is the message being sent (optional).
 
-Although we won't be talking about it here, :meth:`send_all_clients` does exactly what it says. It will do :meth:`send_client` to all the clients that are connected.
+Here is an example of sending data with a server-side code block:
 
-.. _sending-data-data-must-be:
-As touched on a little in :doc:`/quickstart/understanding_hisock`, the message being sent **must** be either:
- - a dictionary or
- - a bytes-like object
+.. code-block:: python
+   
+   server = ...
 
-We will learn more about how datatypes work in :mod:`HiSock` later on.
+   @server.on("join")
+   def on_client_join(client_data):
+       server.send_client(client_data.ip, "ask_question", "Do you like sheep?")
+
+   @server.on("question_response")
+   def on_question_response(client_data, response: str):
+       server.send_client(client_data.ip, "grade", 100)
+
+   while True:
+       ...
+
+And here is an example on the client-side:
+
+.. code-block:: python
+   
+   client = ...
+
+   @client.on("ask_question")
+   def on_ask_question(question: str):
+       answer = input(f"Please answer this question: {question}\n>")
+       client.send("question_response", answer)
+
+   @client.on("grade")
+   def on_grade(grade: int):
+       print(f"You got a {grade:>3}%.")
+
+   while True:
+       ...
 
 ===============
 Reserved events
 ===============
 
-As I stated before, not every receiver has two parameters passed to it. Here are the cases where that is the case. Wow, I said case twice in a row. I'm so original.
+As I stated before, not every receiver has a maximum of two parameters passed to it. Here are the cases where that is the case.
 
 :mod:`HiSock` has reserved events. These events shouldn't be sent by the client or server explicitly as it is currently unsupported.
 
 .. note::
-    All of these events work like normal events with type-casting.
+   Besides for ``string`` and ``bytes`` for ``message``, these reserved events do not have type casting.
 
 Here is a list of the reserved events:
- - ``join``
+
+Server:
+
+- ``join``
   
-    The client sends the event ``join`` when they connect to the server. The only parameter sent to the function being decorated is the client data.
- - ``leave``
+   The client sends the event ``join`` when they connect to the server. The only parameter sent to the function being decorated is the client data.
+- ``leave``
 
-    The client sends the event ``leave`` when they disconnect from the server. The only parameter sent to the function being decorated is the client data.
- - ``force_disconnect``
+   The client sends the event ``leave`` when they disconnect from the server. The only parameter sent to the function being decorated is the client data.
+- ``name_change``
 
-    The server sends the event ``force_disconnect`` to a client when they kick the client. There are *no* parameters sent with the function that is being decorated with this.
- - ``message``
+   The client sends the event ``name_change`` when they change their name. The parameters sent to the listening function are (in order) the client data, the old name, and the new name.
+- ``group_change``
 
-    When the *server* receives a command with data, it'll send an event to itself called ``message`` which will have three parameters. The three parameters (in order) are the client data who sent it, the command that was received, and the message.
+   The client sends the event ``group_change`` when they change their group. The parameters sent to the listening function are (in order) the client data, the old group, and the new group.
+- ``message``
+
+   When the server receives a command, it'll send an event to itself called ``message`` which will have two parameters. The two parameters are the client data who sent it and the raw data which was received.
+
+Client:
+
+- ``client_connect``
+ 
+   When a client connects to the server, all the clients will have this event called. The only parameter for this is the client data for the client which joined.
+- ``client_disconnect``
+
+   When a client disconnects from the server, all the clients will have this event called. The only parameter for this is the client data for the client which left.
+- ``force_disconnect``
+
+   The server sends the event ``force_disconnect`` to a client when they kick the client. There are *no* parameters sent with the function that is being decorated with this.
 
 ============
 Type-casting
 ============
 :mod:`HiSock` has a system called "type-casting" when transmitting data.
 
-Data sent must be the types listed in :ref:`Sending Data <sending-data-data-must-be>`, however, when it is received, it can be a different type.
+Data sent and received can be one of the following types:
 
-The type that the data gets received as depends on the type hint of the message argument for the function being decorated for the decorator for the event.
+- ``bytes``
+- ``str``
+- ``int``
+- ``float``
+- ``bool``
+- ``None``
+- ``list`` (with the types listed here)
+- ``dict`` (with the types listed here)
+
+.. note::
+   There is a type hint in ``hisock.utils`` called ``Sendable`` which has these.
+
+The type that the data gets type-casted to depends on the type hint for the message argument for the function for the event receiving the data. If there is no type hint for the argument, the data received will be bytes.
 
 Here are a few examples this server-side code block:
 
@@ -199,43 +262,77 @@ Here are a few examples this server-side code block:
     
    @server.on("string_sent")
    def on_string_sent(client_data, message: str):
-       """ `message` will be of type `string` """
+       """``message`` will be of type ``string``"""
        ... 
 
    @server.on("integer_sent")
    def on_integer_sent(client_data, integer: int):
-      """ `integer` will be of type `int` """
+      """``integer`` will be of type ``int``"""
       ...
 
    @server.on("dictionary_sent")
    def on_dictionary_sent(client_data, dictionary: dict):
-      """ `dictionary` will be of type `dict` """
+      """``dictionary`` will be of type ``dict``"""
       ...
 
 .. note::
    Although these examples are on the server-side, they work the exact same for the client-side.
 
-Here are a list of the currently supported type-casts.
- - ``bytes`` -> ``bytes``
- - ``bytes`` -> ``str``
- - ``bytes`` -> ``int``
- - ``bytes`` -> ``dict``
- - ``dict`` -> ``dict``
- - ``dict`` -> ``bytes``
+Of course, you need to be careful that the type-casting will work. Turning ``b"hello there"`` to ``int`` will fail.
 
-This means that if the first type is sent and the second type is type-hinted, the second type will be what it receives.
+=================
+Dynamic arguments
+=================
+Remember where I said the ``on`` decorator will call the function with a *maximum* number of parameters?
 
-Of course, you need to be careful that the type-casting will work. Turning ``b"hello"`` to ``int`` will fail.
+In :mod:`HiSock` with an unreserved event, the function to handle it can be called with the maximum number of parameters *or less*.
+
+As an example, for the server, if the function for an event has 1 argument, it will only be called with the client data. If it has 2 arguments, it will be called with the client data and the message. If it has 0 arguments, it'll be called as a void.
+
+Here are a few examples of this with a server-side code block.
+
+.. code-block:: python
+    
+   @server.on("event1")
+   def on_event1(client_data, message: str):
+       print(f"I have {client_data=} and {message=} as a string!")
+       
+   @server.on("event2")
+   def on_event2(client_data, message: int):
+       print(f"I have {client_data=} and {message=} as an integer! {message+1=}")
+
+   @server.on("event3")
+   def on_event3(client_data):
+       print(f"I only have {client_data=}!")
+   
+   @server.on("event4")
+   def on_event4():
+       print("I have nothing.")
+
+Likewise, data sent can have a message or no message.
+
+Here is an example with a client-side code block.
+
+.. code-block:: python
+   
+   client.send("event1", "Hello")  # Server will receive "Hello"
+   client.send("event1")  # Server will receive an empty string
+   client.send("event2", b"123")  # Server will receive 123 and output 124
+   client.send("event2")  # Server will receive 0 and output 1
+   client.send("event3", "there")  # Server won't receive "there"
+   client.send("event4", "Hi")  # Server won't receive anything
 
 Conclusion
 ----------
 
 Now, you know how to:
- - Create a server
- - Create a client
- - Transmit data
- - Handle datatypes transmitted
- - Doing stuff with the data
+
+- Create a server
+- Create a client
+- Transmit data
+- Work with dynamic arguments
+- Handle datatypes transmitted
+- Do stuff with the data
 
 ========
 Exercise
@@ -243,6 +340,6 @@ Exercise
 
 Here is an exercise for you, the reader!
 
-Create a :mod:`HiSock` client and server. Three clients can connect to the server. Once three clients have connected, the server will allow each client to transmit user input to it, which it will write in a text file. Each client can talk to the server one after another. The server will broadcast the message to every other client and they will display it.
+Create a :mod:`HiSock` client and server. Three clients can connect to the server. Once three clients have connected, the server will allow each client to transmit user input to it, which it will write in a text file. Each client can talk to the server one after another. The server will broadcast the message to every other client, and they will display it.
 
 :doc:`Here</examples/beginner-tutorial-exercise>` is how I completed the exercise.

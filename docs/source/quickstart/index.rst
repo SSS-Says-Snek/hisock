@@ -1,7 +1,7 @@
 Quickstart
 ==========
 
-These pages provide you with information to start your hisock journey!
+These pages provide you with information to start your HiSock journey!
 
 .. toctree::
 
