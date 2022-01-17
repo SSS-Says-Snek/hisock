@@ -1303,71 +1303,6 @@ class HiSockServer:
         loop_thread.start()
 
 
-class ThreadedHiSockServer(HiSockServer):
-    """
-    A downside of :class:`HiSockServer` is that you need to constantly
-    :meth:`run` it in a while loop, which may block the program. Fortunately,
-    in Python, you can use threads to do two different things at once. Using
-    :class:`ThreadedHiSockServer`, you would be able to run another
-    blocking program, without ever fearing about blocking and all that stuff.
-
-    .. note::
-       In some cases though, :class:`HiSockServer` offers more control than
-       :class:`ThreadedHiSockServer`, so be careful about when to use
-       :class:`ThreadedHiSockServer` over :class:`HiSockServer`
-
-    .. note::
-        For documentation, see :class:`HiSockServer`.
-    """
-
-    def __init__(
-        self, addr, *args, blocking=True, max_connections=0, header_len=16, **kwargs
-    ):
-        super().__init__(addr, blocking, max_connections, header_len, *args, **kwargs)
-        self._thread = threading.Thread(target=self._run)
-
-        self._stop_event = threading.Event()
-
-        # This class shouldn't be able to be called through :meth:`HiSockServer.run`,
-        # so we will kindly "exterminate" it
-        # If you want to run it manually, you need to call :meth:`_run`
-        del self._run
-
-    def start_server(self):
-        """Starts the main server loop"""
-
-        self._thread.start()
-
-    def stop_server(self):
-        """Stops the server"""
-
-        self._stop_event.set()
-        self.sock.close()
-
-    def _run(self):
-        """
-        The main while loop to run the thread
-
-        Refer to :class:`HiSockServer` for more details
-
-        .. warning::
-           This method is **NOT** recommended to be used in an actual
-           production environment. This is used internally for the thread, and should
-           not be interacted with the user.
-        """
-
-        while not self._stop_event.is_set():
-            try:
-                HiSockServer._run(self)  # We deleted :meth:`self.run`
-            except (OSError, ValueError):
-                break
-
-    def _join(self):
-        """Waits for the thread to be killed"""
-
-        self._thread.join()
-
-
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
     Creates a :class:`HiSockServer` instance. See :class:`HiSockServer` for
@@ -1377,17 +1312,6 @@ def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
 
     return HiSockServer(addr, blocking, max_connections, header_len)
-
-
-def start_threaded_server(addr, blocking=True, max_connections=0, header_len=16):
-    """
-    Creates a :class:`ThreadedHiSockServer` instance. See :class:`HiSockServer`
-    for more details and documentation.
-
-    :return: A :class:`ThreadedHiSockServer` instance.
-    """
-
-    return ThreadedHiSockServer(addr, blocking, max_connections, header_len)
 
 
 if __name__ == "__main__":
@@ -1459,5 +1383,4 @@ if __name__ == "__main__":
         print("It's time to genocide the connected clients.")
         server.send_all_clients("genocide", None)
 
-    while True:
-        server._run()
+    server.start()
