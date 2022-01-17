@@ -312,7 +312,7 @@ def _type_cast(
     except Exception as e:
         raise InvalidTypeCast(
             f"Type casting from {type(content_to_type_cast).__name__} "
-            f"to {type(type_cast).__name__} failed for function "
+            f"to {type_cast.__name__} failed for function "
             f'"{func_name}":\n{e}'
         ) from e
 
