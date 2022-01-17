@@ -21,7 +21,7 @@ import warnings  # Non-severe errors
 import sys  # Utilize stderr
 import threading  # Threaded client and decorators
 import traceback  # Error handling
-from typing import Callable, Union, Any  # Type hints
+from typing import Callable, Union  # Type hints
 from ipaddress import IPv4Address  # Comparisons
 from time import time  # Unix timestamp support
 
@@ -183,6 +183,7 @@ class HiSockClient:
         self.closed = False
         self.connected = False
         self.connect_time = 0  # Unix timestamp
+        self._receiving_data = False
 
         # Send client hello
         self._send_client_hello()
@@ -435,7 +436,7 @@ class HiSockClient:
 
             # Unreserved commands
             except ValueError:
-                valid = not (number_of_func_args > 1)
+                valid = not number_of_func_args > 1
 
             if not valid:
                 raise TypeError(
@@ -510,10 +511,10 @@ class HiSockClient:
         :return: A list of dictionaries, representing the cache
         :rtype: list[dict]
         """
+
         if idx is None:
             return self.cache
-        else:
-            return self.cache[idx]
+        return self.cache[idx]
 
     def get_client(self, client: Client):
         """
@@ -631,9 +632,9 @@ class HiSockClient:
         else:
             # Get the highest number of catch-all listeners
             catch_all_listener_max = 0
-            for listener in self._recv_on_events.keys():
+            for listener in self._recv_on_events:
                 if listener.startswith("$") and listener.endswith("$"):
-                    catch_all_listener_max = listener.replace("$", "")
+                    catch_all_listener_max = int(listener.replace("$", ""))
 
             listen_on = f"${catch_all_listener_max + 1}$"
 
@@ -802,7 +803,7 @@ class HiSockClient:
                 break
 
             # Handle data needed for `recv`
-            for listener in self._recv_on_events.keys():
+            for listener in self._recv_on_events:
                 # Catch-all listeners
                 # `listener` transverses in-order, so the first will be the minimum
                 should_continue = True
@@ -867,7 +868,7 @@ class HiSockClient:
             )
             self.close()
 
-            raise SystemExit
+            raise SystemExit from e
 
     # Stop
 
@@ -973,7 +974,7 @@ if __name__ == "__main__":
     @client.on("genocide")
     def on_genocide():
         print("It's time to die!")
-        exit(69)
+        raise SystemExit(69)
 
     def choices():
         print(
@@ -1012,8 +1013,5 @@ if __name__ == "__main__":
                 client.send("commit_genocide")
             else:
                 print("Invalid choice.")
-
-    function_thread = threading.Thread(target=choices, daemon=True)
-    function_thread.start()
 
     client.start()

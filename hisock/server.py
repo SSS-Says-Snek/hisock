@@ -18,16 +18,12 @@ import select  # Handle multiple clients at once
 import json  # Handle sending dictionaries
 import threading  # Threaded server and decorators
 import warnings  # Non-severe errors
-from typing import Callable, Union, Any  # Type hints
+from typing import Callable, Union, Iterable  # Type hints
 from ipaddress import IPv4Address  # Comparisons
-from hisock import constants
 
 try:
     # Pip builds require relative import
     from .utils import (
-        NoHeaderWarning,
-        NoMessageException,
-        InvalidTypeCast,
         ServerException,
         FunctionNotFoundException,
         FunctionNotFoundWarning,
@@ -38,7 +34,6 @@ try:
         Client,
         _removeprefix,
         _dict_tupkey_lookup,
-        _dict_tupkey_lookup_key,
         _type_cast,
         _str_type_to_type_annotations_dict,
         receive_message,
@@ -50,9 +45,6 @@ try:
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
-        NoHeaderWarning,
-        NoMessageException,
-        InvalidTypeCast,
         ServerException,
         FunctionNotFoundException,
         FunctionNotFoundWarning,
@@ -63,7 +55,6 @@ except ImportError:
         Client,
         _removeprefix,
         _dict_tupkey_lookup,
-        _dict_tupkey_lookup_key,
         _type_cast,
         _str_type_to_type_annotations_dict,
         receive_message,
@@ -151,8 +142,8 @@ class HiSockServer:
         self.sock.setblocking(blocking)
         try:
             self.sock.bind(addr)
-        except socket.gaierror:  # getaddrinfo error
-            raise TypeError("The IP address and/or port are invalid.")
+        except socket.gaierror as e:  # getaddrinfo error
+            raise TypeError("The IP address and/or port are invalid.") from e
         self.sock.listen(max_connections)
 
         # Function related storage
@@ -197,6 +188,7 @@ class HiSockServer:
 
         # Flags
         self.closed = False
+        self._receiving_data = False
 
         # Keepalive
         self._keepalive_event = threading.Event()
@@ -418,9 +410,9 @@ class HiSockServer:
 
             # Send keepalive to all clients
             if not self._keepalive_event.is_set():
-                for client in self.clients:
+                for client, client_data in self.clients.items():
                     self._unresponsive_clients.append(client)
-                    self._send_client_raw(self.clients[client]["ip"], "$KEEPALIVE$")
+                    self._send_client_raw(client_data["ip"], "$KEEPALIVE$")
 
             # Keepalive acknowledgments will be handled in `_handle_keepalive`
             self._keepalive_event.wait(30)
@@ -575,7 +567,7 @@ class HiSockServer:
 
             # Unreserved commands
             except ValueError:
-                valid = not (number_of_func_args > 2)
+                valid = not number_of_func_args > 2
 
             if not valid:
                 raise ValueError(
@@ -673,7 +665,9 @@ class HiSockServer:
                     )
                 )
             except StopIteration:
-                raise ClientNotFound(f'Client with IP "{client}" is not connected.')
+                raise ClientNotFound(
+                    f'Client with IP "{client}" is not connected.'
+                ) from None
 
             ret_client_socket = client_socket
 
@@ -701,7 +695,9 @@ class HiSockServer:
                     )
 
             except StopIteration:
-                raise TypeError(f'Client with name "{client}" does not exist.')
+                raise TypeError(
+                    f'Client with name "{client}" does not exist.'
+                ) from None
 
             if len(client_sockets) > 1:
                 warnings.warn(
@@ -711,21 +707,23 @@ class HiSockServer:
             ret_client_socket = client_sockets[0]
 
         else:
-            raise ValueError("Client format is wrong (must be of type tuple or str).")
+            raise ValueError(
+                "Client format is wrong (must be of type tuple or str)."
+            ) from None
 
         if ret_client_socket is None:
             raise ValueError("Client socket does not exist.")
 
         return ret_client_socket
 
-    def _get_all_client_sockets_in_group(self, group: str) -> iter[socket.socket]:
+    def _get_all_client_sockets_in_group(self, group: str) -> Iterable[socket.socket]:
         """
         An iterable that returns all client sockets in a group
 
         :param group: The group to get the sockets from.
         :type group: str
         :return: An iterable of client sockets in the group.
-        :rtype: iter[socket.socket]
+        :rtype: Iterable[socket.socket]
 
         .. note::
            If the group does not exist, an empty iterable is returned.
@@ -754,12 +752,12 @@ class HiSockServer:
         mod_group_clients = []  # Will be a list of dicts
 
         for client in self._get_all_client_sockets_in_group(group):
-            socket = self.clients_rev[client]
+            client_socket = self.clients_rev[client]
             mod_dict = {
                 "ip": client[0],
                 "name": client[1],
                 "group": client[2],
-                "socket": socket,
+                "socket": client_socket,
             }
             mod_group_clients.append(mod_dict)
 
@@ -768,9 +766,7 @@ class HiSockServer:
 
         return mod_group_clients
 
-    def get_all_clients(
-        self, key: Union[Callable, str] = None
-    ) -> list[dict[str, str]]:  # TODO: Add socket output as well
+    def get_all_clients(self, key: Union[Callable, str] = None) -> list[dict[str, str]]:
         """
         Get all clients currently connected to the server.
         This is recommended over the class attribute :ivar:`self._clients` or
@@ -986,9 +982,9 @@ class HiSockServer:
         else:
             # Get the highest number of catch-all listeners
             catch_all_listener_max = 0
-            for listener in self._recv_on_events.keys():
+            for listener in self._recv_on_events:
                 if listener.startswith("$") and listener.endswith("$"):
-                    catch_all_listener_max = listener.replace("$", "")
+                    catch_all_listener_max = int(listener.replace("$", ""))
 
             listen_on = f"${catch_all_listener_max + 1}$"
 
@@ -1121,7 +1117,7 @@ class HiSockServer:
 
                     client = self.get_client(client_identifier)
                 except ValueError as e:
-                    client = {"traceback": f"{e!s}"}
+                    client = {"traceback": str(e)}
                 except ClientNotFound:
                     client = {"traceback": f"$NOEXIST$"}
 
@@ -1206,7 +1202,7 @@ class HiSockServer:
                 break
 
             # Handle data needed for `recv`
-            for listener in self._recv_on_events.keys():
+            for listener in self._recv_on_events:
                 # Catch-all listeners
                 # `listener` transverses in-order, so the first will be the minimum
                 should_continue = False
@@ -1253,7 +1249,7 @@ class HiSockServer:
                     self.cache.pop(0)
 
             # Call `message` function
-            if "message" not in self.funcs.keys():
+            if "message" not in self.funcs:
                 continue
 
             self._call_function(
@@ -1295,7 +1291,7 @@ class HiSockServer:
         def _loop():
             while not self.closed:
                 try:
-                    self.run()
+                    self._run()
                 except BrokenPipeError:
                     pass
 

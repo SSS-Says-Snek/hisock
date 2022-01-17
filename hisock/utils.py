@@ -159,21 +159,19 @@ def receive_message(
     :return: A dictionary, with two key-value pairs;
         The first key-value pair refers to the header,
         while the second one refers to the actual data
-    :rtype: dict["header": bytes, "data": bytes]
+    :rtype: Union[dict["header": bytes, "data": bytes], False
     """
 
     try:
         header_message = connection.recv(header_len)
-
         if header_message:
             message_len = int(header_message)
             data = connection.recv(message_len)
-
             return {"header": header_message, "data": data}
-        return False
     except ConnectionResetError:
         # This is most likely where clients will disconnect
         pass
+    return False
 
 
 def _removeprefix(
@@ -184,8 +182,7 @@ def _removeprefix(
 
     if string.startswith(prefix):
         return string[len(prefix) :]
-    else:
-        return string[:]
+    return string[:]
 
 
 def _dict_tupkey_lookup(
@@ -288,21 +285,21 @@ def _type_cast(
                 )
 
         # Type cast content_to_type_cast to type_cast
-        if type_cast == bytes:
+        if type_cast is bytes:
             return content_to_type_cast
-        elif type_cast == None:
+        if type_cast is None:
             return None
-        elif type_cast in (str, int, float):
+        if type_cast in (str, int, float):
             # Handle no data
             if not content_to_type_cast:
-                if type_cast == str:
+                if type_cast is str:
                     return ""
                 return type_cast(0)  # int or float
             return type_cast(content_to_type_cast.decode())
-        elif type_cast in (list, dict):
+        if type_cast in (list, dict):
             # Handle no data
             if not content_to_type_cast:
-                return {} if type_cast == dict else []
+                return {} if type_cast is dict else []
             return json.loads(content_to_type_cast.decode())
         raise InvalidTypeCast(
             f"Cannot type cast bytes to {type(type_cast).__name__}."
@@ -334,7 +331,7 @@ def validate_command_not_reserved(command: str):
         )
 
 
-def validate_ipv4(
+def validate_ipv4(  # NOSONAR (always will return True, but will raise exceptions)
     ip: Union[str, tuple], require_ip: bool = True, require_port: bool = True
 ) -> bool:
     """
@@ -342,7 +339,7 @@ def validate_ipv4(
     If the address isn't valid, it will raise an exception.
     Otherwise, it'll return True
     :param ip: The IPv4 address to validate.
-    :type ip: Union[str, tuple]
+    :param
     :param require_ip: Whether or not to require an IP address.
         If True, it will raise an exception if no IP address is given.
         If False, this will only check the port.
@@ -377,12 +374,10 @@ def validate_ipv4(
         port = deconstructed_ip[-1]
         if isinstance(port, str) and not port.isdigit():
             raise ValueError(f"Port must be a number, not {port}")
-
-        elif int(port) < 0 or int(port) > 65535:
+        if int(port) < 0 or int(port) > 65535:
             raise ValueError(f"{port} is not a valid port (0-65535)")
-        else:
-            if not require_ip:
-                return True
+        if not require_ip:
+            return True
 
     # IP checking
     ip = deconstructed_ip[0]
@@ -390,6 +385,8 @@ def validate_ipv4(
         ip = IPv4Address(ip)
     except ValueError:
         raise ValueError(f"{ip} is not a valid IPv4 address")
+
+    return True
 
 
 def get_local_ip(all_ips: bool = False) -> str:
@@ -409,8 +406,7 @@ def get_local_ip(all_ips: bool = False) -> str:
 
     if not all_ips:
         return socket.gethostbyname(socket.gethostname())
-    else:
-        return socket.gethostbyname_ex(socket.gethostname())[-1]
+    return socket.gethostbyname_ex(socket.gethostname())[-1]
 
 
 def _input_ip_address(question: str) -> str:
@@ -427,7 +423,7 @@ def _input_ip_address(question: str) -> str:
     ip_address = input(question)
     try:
         validate_ipv4(ip_address, require_port=False)
-    except Exception as error:
+    except ValueError as error:
         print(f"\033[91mInvalid IP: {error}\033[0m\n")
         return _input_ip_address(question)
     return ip_address
@@ -558,4 +554,4 @@ def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
     try:
         return f"{formatted_tuple[0]}:{formatted_tuple[1]}"
     except IndexError:
-        raise ValueError(f"{formatted_tuple} is not a valid IP address")
+        raise ValueError(f"{formatted_tuple} is not a valid IP address") from None
