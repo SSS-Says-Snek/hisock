@@ -1421,6 +1421,7 @@ class ThreadedHiSockServer(_BaseThreadServer):
     def stop_server(self):
         """Stops the server"""
         self._stop_event.set()
+        self.closed = True
         self.sock.close()
 
     def run(self):
@@ -1434,7 +1435,7 @@ class ThreadedHiSockServer(_BaseThreadServer):
            production enviroment. This is used internally for the thread, and should
            not be interacted with the user
         """
-        while not self._stop_event.is_set():
+        while not (self._stop_event.is_set() or self.closed):
             try:
                 self._run()
             except (OSError, ValueError):
