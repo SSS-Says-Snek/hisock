@@ -150,20 +150,15 @@ class HiSockClient:
         # Function related storage
         # {"command": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
         self.funcs = {}
-        # Stores the names of the reserved functions
+
+        # Stores the names of the reserved functions, as well as the
+        # number of arguments each reserved function accepts
         # Used for the `on` decorator
-        self._reserved_functions = (
-            "client_connect",
-            "client_disconnect",
-            "force_disconnect",
-        )
-        # Stores the number of parameters each reserved function takes
-        # Used for the `on` decorator
-        self._reserved_functions_parameters_num = (
-            1,  # client_connect
-            1,  # client_disconnect
-            0,  # force_disconnect
-        )
+        self._reserved_functions = {
+            "client_connect": 1,
+            "client_disconnect": 1,
+            "force_disconnect": 0,
+        }
         # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
         # If catching all, then event_name will be a number sandwiched by dollar signs
         # Then `update` will handle the event with the lowest number
@@ -251,6 +246,28 @@ class HiSockClient:
 
     # Internal methods
 
+    @staticmethod
+    def _send_type_cast(content: Sendable) -> bytes:
+        """
+        Type casting content for the send methods.
+        This method exists so type casting can easily be changed without changing
+        all the send methods.
+
+        :param content: The content to type cast
+        :type content: Sendable
+
+        :return: The type casted content
+        :rtype: bytes
+
+        :raises InvalidTypeCast: If the content cannot be type casted
+        """
+
+        return _type_cast(
+            type_cast=bytes,
+            content_to_type_cast=content,
+            func_name="<client sending function>",
+        )
+
     def _send_client_hello(self):
         """
         Sends a hello to the server for the first connection.
@@ -274,27 +291,6 @@ class HiSockClient:
 
         self._send_raw("$KEEPACK$")
 
-    def _send_type_cast(self, content: Sendable) -> bytes:
-        """
-        Type casting content for the send methods.
-        This method exists so type casting can easily be changed without changing
-        all the send methods.
-
-        :param content: The content to type cast
-        :type content: Sendable
-
-        :return: The type casted content
-        :rtype: bytes
-
-        :raises InvalidTypeCast: If the content cannot be type casted
-        """
-
-        return _type_cast(
-            type_cast=bytes,
-            content_to_type_cast=content,
-            func_name="<client sending function>",
-        )
-
     # On decorator
 
     def _call_function(self, func_name: str, sort_by_name: bool, *args, **kwargs):
@@ -311,7 +307,7 @@ class HiSockClient:
         :raises FunctionNotFoundException: If the function is not found.
         """
 
-        func: dict
+        func: str
 
         # Find the function by the function name
         if sort_by_name:
@@ -370,14 +366,14 @@ class HiSockClient:
             if self.override:
                 if self.command in self.outer._reserved_functions:
                     self.outer.funcs.pop(self.command)
+
+                    del self.outer._reserved_functions[
+                        self.command
+                    ]
                 else:
                     warnings.warn(
                         f"Unnecessary override for {self.command}.", UserWarning
                     )
-
-                index = self.outer._reserved_functions.index(self.command)
-                self.outer._reserved_functions.pop(index)
-                self.outer._reserved_functions_parameters_num.pop(index)
 
             self._assert_num_func_args_valid(len(func_args))
 
@@ -423,17 +419,12 @@ class HiSockClient:
 
             # Reserved commands
             try:
-                index_of_reserved_command = (
-                    self.outer._reserved_functions.index(self.command),
-                )[0]
-                needed_number_of_args = (
-                    self.outer._reserved_functions_parameters_num[
-                        index_of_reserved_command
-                    ],
-                )[0]
+                needed_number_of_args = self.outer._reserved_functions[
+                    self.command
+                ]
                 valid = number_of_func_args == needed_number_of_args
             # Unreserved commands
-            except ValueError:
+            except KeyError:
                 valid = not number_of_func_args > 1
 
             if not valid:
@@ -680,7 +671,7 @@ class HiSockClient:
         :type new_group: Union[str, None]
         """
 
-        data_to_send = "$CHGROUP$" + (f" {new_group}" if new_group is not None else "")
+        data_to_send = "$CHGROUP$" + (f" {new_group}" if bool(new_group) else "")
         self._send_raw(data_to_send)
 
     # Update
@@ -703,6 +694,8 @@ class HiSockClient:
             ### Receiving data ###
 
             self._receiving_data = True
+
+            content_header = False
             # Receive header
             try:
                 content_header = self.sock.recv(self.header_len)
@@ -964,7 +957,8 @@ if __name__ == "__main__":
     @client.on("force_disconnect")
     def on_force_disconnect():
         print("You have been disconnected from the server.")
-        raise SystemExit
+        client.close()
+        __import__('os')._exit(0)
 
     @client.on("message", threaded=True)
     def on_message(message: str):
@@ -973,7 +967,8 @@ if __name__ == "__main__":
     @client.on("genocide")
     def on_genocide():
         print("It's time to die!")
-        raise SystemExit(69)
+        client.close()
+        __import__('os')._exit(0)
 
     def choices():
         print(
@@ -1013,7 +1008,7 @@ if __name__ == "__main__":
             else:
                 print("Invalid choice.")
 
-    choices_thread = threading.Thread(target=choices, daemon=True)
+    choices_thread = threading.Thread(target=choices, daemon=False)
     choices_thread.start()
 
     client.start()

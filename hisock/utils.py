@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import pathlib
 import socket
-from typing import Union, Any, Optional
+from typing import Union, Any, Optional, Type
 from ipaddress import IPv4Address
 from re import search
 import builtins
@@ -67,26 +67,6 @@ class FunctionNotFoundWarning(UserWarning):
     pass
 
 
-# Custom type hints
-Sendable = Union[
-    bytes,
-    str,
-    int,
-    float,
-    None,
-    list[Union[str, int, float, bool, None, dict, list]],
-    dict[
-        Union[str, int, float, bool, None, dict, list],
-        Union[str, int, float, bool, None, dict, list],
-    ],
-]
-
-Client = Union[
-    str,  # Name
-    tuple[str, int],  # Port
-]
-
-
 # Custom classes
 class _Sentinel:
     pass
@@ -112,10 +92,50 @@ class MessageCacheMember:
         return self.__str__()
 
 
+class ClientInfo:
+    def __init__(self, ip, name, group):
+        self.client_dict = {"ip": ip, "name": name, "group": group}
+
+        self.ip = ip
+        self.name = name
+        self.group = group
+
+        self.ip_as_str = f"{self.ip[0]}:{self.ip[1]}"
+
+    def __getitem__(self, item):
+        return self.client_dict[item]
+
+    def __str__(self):
+        return f"<ClientInfo: IP: {self.ip_as_str}, Name: {self.name}, Group: {self.group}>"
+
+
 class File:
     def __init__(self, file_path: Union[str, pathlib.Path]):
         # TODO: implement this!
         self.file_path = file_path
+
+
+# Custom type hints
+Sendable = Union[
+    bytes,
+    str,
+    int,
+    float,
+    None,
+    list[Union[str, int, float, bool, None, dict, list]],
+    dict[
+        Union[str, int, float, bool, None, dict, list],
+        Union[str, int, float, bool, None, dict, list],
+    ],
+]
+
+SendableTypes = Type[Sendable]
+
+Client = Union[
+    str,  # Name
+    tuple[str, int],  # Port
+    ClientInfo,  # Returned by function, etc
+]
 
 
 def make_header(
@@ -246,7 +266,7 @@ def _str_type_to_type_annotations_dict(annotations_dict: dict):
 
 
 def _type_cast(
-    type_cast: Sendable, content_to_type_cast: Sendable, func_name: str
+    type_cast: SendableTypes, content_to_type_cast: Sendable, func_name: str
 ) -> Sendable:
     """
     Type casts data to be sent.
@@ -504,7 +524,7 @@ def input_client_config(
     if group_prompt:
         group = input(group_prompt)
 
-    return tuple(filter(None, ((ip, port), name, group)))
+    return (ip, port), name, group
 
 
 def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
