@@ -288,9 +288,6 @@ class HiSockServer:
 
         self._sockets_list.append(connection)
 
-        # debug
-        print("Receiving client hello thing")
-
         # Receive the client hello
         client_hello = receive_message(connection, self.header_len)
         if not client_hello:
@@ -308,9 +305,6 @@ class HiSockServer:
         }
         self.clients[connection] = client_data
         self._update_clients_rev_dict()
-
-        # debug
-        print("done with that, now gotta send $cltconn$")
 
         # Send reserved command to existing clients
         self._send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_data)}".encode())
@@ -402,9 +396,6 @@ class HiSockServer:
         if client_socket in self._unresponsive_clients:
             self._unresponsive_clients.remove(client_socket)
 
-        # DEBUG PRINT PLEASE REMOVE LATER
-        print(f"{self.clients[client_socket]['ip']} is alive.")
-
     def _keepalive_thread(self):
         while not self._keepalive_event.is_set():
             self._keepalive_event.wait(30)
@@ -461,8 +452,6 @@ class HiSockServer:
             func = func_name
 
         # Normal
-        # debug
-        print("calling function")
         if not self.funcs[func]["threaded"]:
             self.funcs[func]["func"](*args, **kwargs)
             return
@@ -940,8 +929,6 @@ class HiSockServer:
 
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
-        # debug
-        print(f"{content_header=}, {data_to_send=}")
         self._get_client_from_name_or_ip_port(client).send(
             content_header + data_to_send
         )
@@ -1080,29 +1067,19 @@ class HiSockServer:
             self._sockets_list, [], self._sockets_list
         )
 
-        # debug
-        print(f"{read_socket=}")
-
         client_socket: socket.socket
         for client_socket in read_socket:
             ### Reserved commands ###
 
             # Handle bad client
             if client_socket.fileno() == -1:
-                # debug
-                print("bad")
                 self.disconnect_client(client_socket, force=True, call_func=False)
                 continue
 
             # Handle new connection
             if client_socket == self.socket:
-                # debug
-                print("new")
                 self._new_client_connection(*self.socket.accept())
                 continue
-
-            # debug
-            print("Hello there! I will now receive data")
 
             ### Receiving data ###
 
@@ -1119,9 +1096,6 @@ class HiSockServer:
                     raise ClientNotFound(
                         "Client data not found, but is not a new client."
                     )
-
-            # DEBUG PRINT PLEASE REMOVE LATER
-            print(f"{raw_data=}")
 
             ### Reserved commands ###
 
@@ -1301,9 +1275,6 @@ class HiSockServer:
                 ),
             )
 
-        # debug
-        print("done")
-
     # Stop
 
     def close(self):
@@ -1326,8 +1297,6 @@ class HiSockServer:
 
         def loop():
             while not self.closed:
-                # debug
-                print("running")
                 try:
                     self._run()
                 except KeyboardInterrupt:

@@ -397,9 +397,6 @@ class HiSockClient:
                         continue
                     parameter_annotations[argument_name] = annotations[func_argument]
 
-            # DEBUG PRINT PLEASE REMOVE LATER
-            print(f"{self.command=} {parameter_annotations=}")
-
             # Add function
             self.outer.funcs[self.command] = {
                 "func": func,
@@ -651,8 +648,6 @@ class HiSockClient:
 
         # Wait for `update` to retreive the data
         self._recv_on_events[listen_on]["thread_event"].wait()
-        # debug
-        print("done waiting", flush=True)
 
         # Clean up
         data = self._recv_on_events[listen_on]["data"]
@@ -728,9 +723,6 @@ class HiSockClient:
             data = self.sock.recv(int(content_header.decode()))
             self._receiving_data = False
             decoded_data = data.decode()
-
-            # DEBUG PRINT PLEASE REMOVE LATER
-            print(f"{data=}")
 
             ### Reserved commands ###
 
@@ -828,8 +820,6 @@ class HiSockClient:
 
                 self._recv_on_events[listener]["data"] = content
                 self._recv_on_events[listener]["thread_event"].set()
-                # debug
-                print("aaaaaaaaaaaaaaaaaaaaaa", listener)
                 has_listener = True
                 break
 
@@ -901,8 +891,6 @@ class HiSockClient:
 
         def loop():
             while not self.closed:
-                # debug
-                print("running")
                 try:
                     self._update()
                 except KeyboardInterrupt:
