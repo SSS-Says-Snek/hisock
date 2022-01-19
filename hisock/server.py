@@ -1164,6 +1164,14 @@ class HiSockServer:
                 changed_client_data = client_data.copy()
                 changed_client_data[key] = change_to
                 self.clients[client_socket] = changed_client_data
+                
+                del self.clients_rev[
+                    (
+                        client_data["ip"],
+                        client_data["name"],
+                        client_data["group"],
+                    )
+                ]
                 self.clients_rev[
                     (
                         changed_client_data["ip"],
