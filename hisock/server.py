@@ -330,7 +330,11 @@ class HiSockServer:
         if client_socket not in self._sockets_list:
             raise ClientNotFound(f'Client "{client_socket}" is not connected.')
 
-        client_socket.close()
+        try:
+            client_socket.close()
+        except OSError:
+            # Already closed
+            pass
         self._sockets_list.remove(client_socket)
         del self.clients[client_socket]
         self._update_clients_rev_dict()
@@ -402,8 +406,8 @@ class HiSockServer:
 
             # Send keepalive to all clients
             if not self._keepalive_event.is_set():
-                for client, client_data in self.clients.items():
-                    self._unresponsive_clients.append(client)
+                for client_socket, client_data in self.clients.items():
+                    self._unresponsive_clients.append(client_socket)
                     self._send_client_raw(client_data["ip"], "$KEEPALIVE$")
 
             # Keepalive acknowledgments will be handled in `_handle_keepalive`
@@ -411,8 +415,10 @@ class HiSockServer:
 
             # Keepalive response wait is over, remove the unresponsive clients
             if not self._keepalive_event.is_set():
-                for client in self._unresponsive_clients:
-                    self.disconnect_client(self.clients[client]["ip"], force=True)
+                for client_socket in self._unresponsive_clients:
+                    self.disconnect_client(
+                        self.clients[client_socket]["ip"], force=True, call_func=True
+                    )
                 self._unresponsive_clients.clear()
 
     # On decorator
@@ -1026,9 +1032,12 @@ class HiSockServer:
         client_data = self.clients[client_socket]
 
         if not force:
-            self._send_client_raw(self.clients[client_socket]["ip"], "$DISCONN$")
-        else:
-            self._client_disconnection(client_socket)
+            try:
+                self._send_client_raw(client, "$DISCONN$")
+            except BrokenPipeError:
+                # Client is already gone
+                pass
+        self._client_disconnection(client_socket)
 
         if call_func:
             if "leave" in self.funcs:
@@ -1073,7 +1082,9 @@ class HiSockServer:
 
             # Handle bad client
             if client_socket.fileno() == -1:
-                self.disconnect_client(client_socket, force=True, call_func=False)
+                self.disconnect_client(
+                    self.clients[client_socket]["ip"], force=True, call_func=False
+                )
                 continue
 
             # Handle new connection
@@ -1090,12 +1101,11 @@ class HiSockServer:
             if isinstance(raw_data, dict):
                 data = raw_data["data"]
                 decoded_data = data.decode()
-                try:
-                    client_data = self.clients[client_socket]
-                except KeyError:
-                    raise ClientNotFound(
-                        "Client data not found, but is not a new client."
-                    )
+
+            try:
+                client_data = self.clients[client_socket]
+            except KeyError:
+                raise ClientNotFound("Client data not found, but is not a new client.")
 
             ### Reserved commands ###
 
@@ -1104,7 +1114,13 @@ class HiSockServer:
                 not raw_data  # Most likely client disconnect, could be client error
                 or decoded_data.startswith("$USRCLOSE$")
             ):
-                self.disconnect_client(client_socket, force=False, call_func=False)
+                try:
+                    self.disconnect_client(
+                        client_data["ip"], force=False, call_func=True
+                    )
+                except BrokenPipeError:
+                    # Client is already gone
+                    pass
                 continue
 
             # Handle keepalive acknowledgement
@@ -1178,7 +1194,7 @@ class HiSockServer:
             command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
             content = _removeprefix(decoded_data, "$CMD$" + command + "$MSG$")
 
-            # No content? (_removeprefix didn't do anything)
+            # No content? (`_removeprefix` didn't do anything)
             if not content or content == decoded_data:
                 content = None
 

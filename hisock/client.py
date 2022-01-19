@@ -733,7 +733,7 @@ class HiSockClient:
 
             # Handle force disconnection
             if decoded_data == "$DISCONN$":
-                self.close()
+                self.close(emit_leave=False)  # The server already knows we're gone
                 if "force_disconnect" in self.funcs:
                     self._call_function("force_disconnect", False)
                 return
