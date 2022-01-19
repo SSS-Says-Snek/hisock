@@ -25,6 +25,7 @@ try:
     # Pip builds require relative import
     from .utils import (
         ServerException,
+        ClientException,
         FunctionNotFoundException,
         FunctionNotFoundWarning,
         ClientNotFound,
@@ -46,6 +47,7 @@ except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
         ServerException,
+        ClientException,
         FunctionNotFoundException,
         FunctionNotFoundWarning,
         ClientNotFound,
@@ -122,7 +124,7 @@ class HiSockServer:
     :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
         **This is mainly used for under-the-hood-code.**
 
-    :raise TypeError: If the address is not a tuple.
+    :raises TypeError: If the address is not a tuple.
     """
 
     def __init__(
@@ -138,13 +140,13 @@ class HiSockServer:
         self.header_len = header_len
 
         # Socket initialization
-        self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.sock.setblocking(blocking)
+        self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        self.socket.setblocking(blocking)
         try:
-            self.sock.bind(addr)
+            self.socket.bind(addr)
         except socket.gaierror as e:  # getaddrinfo error
             raise TypeError("The IP address and/or port are invalid.") from e
-        self.sock.listen(max_connections)
+        self.socket.listen(max_connections)
 
         # Function related storage
         # {"command": {"func": Callable, "name": str, "type_hint": {"arg": Any}, "threaded": bool}}
@@ -170,7 +172,6 @@ class HiSockServer:
         # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
         # If catching all, then event_name will be a number sandwiched by dollar signs
         # Then `update` will handle the event with the lowest number
-        # NEEDSWORK: there is probably a better way of doing this
         self._recv_on_events = {}
 
         # Cache
@@ -180,11 +181,11 @@ class HiSockServer:
             self.cache = []
 
         # Dictionaries and lists for client lookup
-        self._sockets_list = [self.sock]  # Our socket will always be the first
+        self._sockets_list = [self.socket]  # Our socket will always be the first
         # socket: {"ip": (ip, port), "name": str, "group": str}
-        self.clients = {}
+        self.clients: dict[socket.socket, dict] = {}
         # ((ip: str, port: int), name: str, group: str): socket
-        self.clients_rev = {}
+        self.clients_rev: dict[tuple, socket.socket] = {}
 
         # Flags
         self.closed = False
@@ -218,7 +219,7 @@ class HiSockServer:
     def __gt__(self, other: Union[HiSockServer, str]):
         """Example: HiSockServer(...) > "192.168.1.133:5000" """
 
-        if type(other) not in [self.__class__, str]:
+        if type(other) not in (self.__class__, str):
             raise TypeError("Type not supported for > comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) > IPv4Address(other.addr[0])
@@ -228,7 +229,7 @@ class HiSockServer:
     def __ge__(self, other: Union[HiSockServer, str]):
         """Example: HiSockServer(...) >= "192.168.1.133:5000" """
 
-        if type(other) not in [self.__class__, str]:
+        if type(other) not in (self.__class__, str):
             raise TypeError("Type not supported for >= comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) >= IPv4Address(other.addr[0])
@@ -238,7 +239,7 @@ class HiSockServer:
     def __lt__(self, other: Union[HiSockServer, str]):
         """Example: HiSockServer(...) < "192.168.1.133:5000" """
 
-        if type(other) not in [self.__class__, str]:
+        if type(other) not in (self.__class__, str):
             raise TypeError("Type not supported for < comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) < IPv4Address(other.addr[0])
@@ -248,7 +249,7 @@ class HiSockServer:
     def __le__(self, other: Union[HiSockServer, str]):
         """Example: HiSockServer(...) <= "192.168.1.133:5000" """
 
-        if type(other) not in [self.__class__, str]:
+        if type(other) not in (self.__class__, str):
             raise TypeError("Type not supported for <= comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) <= IPv4Address(other.addr[0])
@@ -258,7 +259,7 @@ class HiSockServer:
     def __eq__(self, other: Union[HiSockServer, str]):
         """Example: HiSockServer(...) == "192.168.1.133:5000" """
 
-        if type(other) not in [self.__class__, str]:
+        if type(other) not in (self.__class__, str):
             raise TypeError("Type not supported for == comparison.")
         if isinstance(other, HiSockServer):
             return IPv4Address(self.addr[0]) == IPv4Address(other.addr[0])
@@ -271,14 +272,15 @@ class HiSockServer:
         self, connection: socket.socket, address: tuple[str, int]
     ):
         """
-        Handle the client hello handshake
+        Handle the client hello handshake.
 
-        :param connection: The client socket
+        :param connection: The client socket.
         :type connection: socket.socket
-        :param address: The client address
+        :param address: The client address.
         :type address: tuple[str, int]
 
-        :raise ServerException: If the client is already connected
+        :raises ServerException: If the client is already connected.
+        :raises ClientException: If the client disconnected or had an error.
         """
 
         if connection in self._sockets_list:
@@ -286,86 +288,85 @@ class HiSockServer:
 
         self._sockets_list.append(connection)
 
+        # debug
+        print("Receiving client hello thing")
+
         # Receive the client hello
         client_hello = receive_message(connection, self.header_len)
+        if not client_hello:
+            raise ClientException("Client disconnected or had an error.")
+        client_hello = _removeprefix(client_hello["data"].decode(), "$CLTHELLO$")
+        try:
+            client_hello = json.loads(client_hello)
+        except json.JSONDecodeError:
+            raise ClientException("Client sent an invalid hello.") from None
 
-        client_hello = _removeprefix(client_hello["data"].decode(), "$CLTHELLO$ ")
-        client_hello = json.loads(client_hello)
-
-        client_info = {
+        client_data = {
             "ip": address,
             "name": client_hello["name"],
             "group": client_hello["group"],
         }
-        self.clients[connection] = client_info
+        self.clients[connection] = client_data
         self._update_clients_rev_dict()
 
+        # debug
+        print("done with that, now gotta send $cltconn$")
+
         # Send reserved command to existing clients
-        self._send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_info)}".encode())
+        self._send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_data)}".encode())
 
         if "join" in self.funcs:
-            self._call_function("join", False, client_info)
+            self._call_function("join", False, client_data)
             return
 
         warnings.warn("join", FunctionNotFoundWarning)
 
-    def _client_disconnection(self, client: socket.socket, call_func: bool = True):
+    def _client_disconnection(self, client_socket: socket.socket):
         """
-        Handle a client disconnecting
+        Handle a client disconnection.
 
-        :param client: The client socket
+        :param client: The client socket.
         :type client: socket.socket
-        :param call_func: Whether to call the leave function
+        :param call_func: Whether to call the leave function.
         :type call_func: bool
 
-        :raise ClientNotFound: The client wasn't connected to the server
+        :raises ClientNotFound: The client wasn't connected to the server.
         """
 
-        if client not in self._sockets_list:
-            raise ClientNotFound(f'Client "{client}" is not connected.')
+        if client_socket not in self._sockets_list:
+            raise ClientNotFound(f'Client "{client_socket}" is not connected.')
 
-        # Save the client info for leave command
-        client_info = self.clients[client]
-
-        # Remove socket from lists and dictionaries
-        self._sockets_list.remove(client)
-        del self.clients[client]
+        client_socket.close()
+        self._sockets_list.remove(client_socket)
+        del self.clients[client_socket]
         self._update_clients_rev_dict()
-
-        if not call_func:
-            return
-
-        if "leave" in self.funcs:
-            self._call_function("leave", False, client_info)
-            return
-
-        warnings.warn("leave", FunctionNotFoundWarning)
+        # Note: ``self._unresponsive_clients`` should be handled by the keepalive
 
     def _update_clients_rev_dict(self, idx: int = None):
         """
-        Updates the reversed clients dictionary to the normal dictionary
+        Updates the reversed clients dictionary to the normal dictionary.
 
         :param idx: Index of the client to update if known. If not known,
             the whole dictionary will be updated.
         :type idx: int
 
-        :raise IndexError: If the client idx doesn't exist.
-        :raise TypeError: If the client idx is not an integer.
-        :raise KeyError: If the client doesn't exist in :ivar:`self.clients`
-        :raise KeyError: If the client isn't a valid client.
+        :raises IndexError: If the client idx doesn't exist.
+        :raises TypeError: If the client idx is not an integer.
+        :raises KeyError: If the client doesn't exist in :ivar:`self.clients`.
+        :raises KeyError: If the client isn't a valid client.
         """
 
         clients = self.clients
         if idx is not None:
-            clients = (self.clients[self._sockets_list[idx]],)
+            clients = (self.clients[self._sockets_list[idx - 1]],)
 
         # There was a client removed
         if len(self.clients_rev) > len(self._sockets_list) - 1:
             self.clients_rev.clear()
 
-        for client_socket, client_info in clients.items():
+        for client_socket, client_data in clients.items():
             self.clients_rev[
-                (client_info["ip"], client_info["name"], client_info["group"])
+                (client_data["ip"], client_data["name"], client_data["group"])
             ] = client_socket
 
     def _send_type_cast(self, content: Sendable = None) -> bytes:
@@ -379,7 +380,7 @@ class HiSockServer:
         :return: The type casted content
         :rtype: bytes
 
-        :raise InvalidTypeCast: If the content cannot be type casted
+        :raises InvalidTypeCast: If the content cannot be type casted
         """
 
         return _type_cast(
@@ -436,7 +437,7 @@ class HiSockServer:
         :param args: The arguments to pass to the function.
         :param kwargs: The keyword arguments to pass to the function.
 
-        :raise FunctionNotFoundException: If the function is not found.
+        :raises FunctionNotFoundException: If the function is not found.
         """
 
         func: dict
@@ -460,6 +461,8 @@ class HiSockServer:
             func = func_name
 
         # Normal
+        # debug
+        print("calling function")
         if not self.funcs[func]["threaded"]:
             self.funcs[func]["func"](*args, **kwargs)
             return
@@ -474,7 +477,7 @@ class HiSockServer:
         function_thread.start()
 
     class _on:
-        """Decorator used to handle something when receiving command"""
+        """Decorator used to handle something when receiving command."""
 
         def __init__(
             self,
@@ -494,7 +497,7 @@ class HiSockServer:
             """
             Adds a function that gets called when the server receives a matching command.
 
-            :raise ValueError: If the number of function arguments is invalid.
+            :raises ValueError: If the number of function arguments is invalid.
             """
 
             func_args = inspect.getfullargspec(func).args
@@ -547,7 +550,7 @@ class HiSockServer:
             """
             Asserts the number of function arguments is valid.
 
-            :raise ValueError: If the number of function arguments is invalid.
+            :raises ValueError: If the number of function arguments is invalid.
             """
 
             valid = False
@@ -580,7 +583,7 @@ class HiSockServer:
     ) -> Callable:
         """
         A decorator that adds a function that gets called when the server
-        receives a matching command
+        receives a matching command.
 
         Reserved functions are functions that get activated on
         specific events, and they are:
@@ -612,26 +615,26 @@ class HiSockServer:
         - ``list`` (with the types listed here)
         - ``dict`` (with the types listed here)
 
-        For more information, read the wiki for type casting.
+        For more information, read the documentation for type casting.
 
-        :param command: A string representing the command the function should activate
+        :param command: A string, representing the command the function should activate
             when receiving it.
         :type command: str
-        :param threaded: A boolean representing if the function should be run in a thread
-            in order to not block the run() loop.
+        :param threaded: A boolean, representing if the function should be run in a thread
+            in order to not block the run loop.
             Default is False.
-        :type threaded: bool
+        :type threaded: bool, optional
         :param override: A boolean representing if the function should override the
             reserved function with the same name and to treat it as an unreserved function.
             Default is False.
-        :type override: bool
+        :type override: bool, optional
+
         :return: The same function (the decorator just appended the function to a stack).
         :rtype: function
 
-        :raise ValueError: If the number of function arguments is invalid.
+        :raises TypeError: If the number of function arguments is invalid.
         """
 
-        # Passes in outer to _on decorator/class
         return self._on(self, command, threaded, override)
 
     # Getters
@@ -642,21 +645,22 @@ class HiSockServer:
 
         :param client: The name or tuple of the client.
         :type client: Client
+
         :return: The socket of the client.
         :rtype: socket.socket
 
-        :raise ValueError: Client format is wrong.
-        :raise ClientNotFound: Client does not exist.
-        :raise UserWarning: Using client name, and more than one client with
+        :raises ValueError: Client format is wrong.
+        :raises ClientNotFound: Client does not exist.
+        :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
 
-        ret_client_socket = None
+        ret_client_socket: socket.socket
 
         # Search by IPv4
         if isinstance(client, tuple):
+            validate_ipv4(client)  # Raises ValueError if invalid
             try:
-                validate_ipv4(client)  # Raises ValueError if invalid
                 client_socket: socket.socket = next(
                     _dict_tupkey_lookup(
                         client,
@@ -668,7 +672,6 @@ class HiSockServer:
                 raise ClientNotFound(
                     f'Client with IP "{client}" is not connected.'
                 ) from None
-
             ret_client_socket = client_socket
 
         # Search by name
@@ -705,11 +708,8 @@ class HiSockServer:
                     f"Client with IP {':'.join(map(str, client_sockets[0].getpeername()))}"
                 )
             ret_client_socket = client_sockets[0]
-
         else:
-            raise ValueError(
-                "Client format is wrong (must be of type tuple or str)."
-            ) from None
+            raise ValueError("Client format is wrong (must be of type tuple or str).")
 
         if ret_client_socket is None:
             raise ValueError("Client socket does not exist.")
@@ -722,6 +722,7 @@ class HiSockServer:
 
         :param group: The group to get the sockets from.
         :type group: str
+
         :return: An iterable of client sockets in the group.
         :rtype: Iterable[socket.socket]
 
@@ -733,20 +734,20 @@ class HiSockServer:
 
     def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
-        Gets all clients from a specific group
-
-        :param group: A string, representing the group to look up
-        :type group: str
-
-        :raise GroupNotFound: Group does not exist
-
-        :return: A list of dictionaries of clients in that group, containing
-          the address, name, group, and socket
-        :rtype: list
+        Gets all clients from a specific group.
 
         .. note::
             If you want to get them from :ivar:`clients_rev` directly, use
             :meth:`_get_all_client_sockets_in_group` instead.
+
+        :param group: A string, representing the group to look up
+        :type group: str
+
+        :raises GroupNotFound: Group does not exist
+
+        :return: A list of dictionaries of clients in that group, containing
+          the address, name, group, and socket
+        :rtype: list
         """
 
         mod_group_clients = []  # Will be a list of dicts
@@ -778,6 +779,7 @@ class HiSockServer:
             If it is a callable, it will try to integrate the callable
             into the output with the :meth:`filter` function.
         :type key: Union[Callable, str], optional
+
         :return: A list of dictionaries, with the clients
         :rtype: list[dict, ...]
         """
@@ -812,9 +814,9 @@ class HiSockServer:
         :return: The client data without the socket.
         :rtype: dict
 
-        :raise ValueError: Client format is wrong.
-        :raise ClientNotFound: Client does not exist.
-        :raise UserWarning: Using client name, and more than one client with
+        :raises ValueError: Client format is wrong.
+        :raises ClientNotFound: Client does not exist.
+        :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
 
@@ -853,6 +855,14 @@ class HiSockServer:
         """
         Sends the command and content to *ALL* clients connected *without a command*.
 
+        .. note::
+           This has been deprecated for dynamic arguments.
+           Use :meth:`send_all_clients` instead.
+
+        .. warning::
+           The server will throw out any data that is not an unreserved
+           or reserved command.
+
         :param content: The message / content to send
         :type content: Sendable
         """
@@ -875,7 +885,7 @@ class HiSockServer:
         :param content: The message / content to send
         :type content: Sendable
 
-        :raise GroupNotFound: The group does not exist.
+        :raises GroupNotFound: The group does not exist.
         """
 
         data_to_send = (
@@ -897,9 +907,9 @@ class HiSockServer:
         :param content: The message / content to send
         :type content: Sendable
 
-        :raise ValueError: Client format is wrong.
-        :raise ClientNotFound: Client does not exist.
-        :raise UserWarning: Using client name, and more than one client with
+        :raises ValueError: Client format is wrong.
+        :raises ClientNotFound: Client does not exist.
+        :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
 
@@ -922,20 +932,21 @@ class HiSockServer:
         :param content: The message / content to send.
         :type content: Sendable
 
-        :raise ValueError: Client format is wrong.
-        :raise TypeError: Client does not exist.
-        :raise UserWarning: Using client name, and more than one client with
+        :raises ValueError: Client format is wrong.
+        :raises TypeError: Client does not exist.
+        :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
 
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
+        # debug
         print(f"{content_header=}, {data_to_send=}")
         self._get_client_from_name_or_ip_port(client).send(
             content_header + data_to_send
         )
 
-    def send_group_raw(self, group: str, content: Sendable = None):
+    def _send_group_raw(self, group: str, content: Sendable = None):
         """
         Sends data to a specific group, without commands.
         Groups are recommended for more complicated servers or multipurpose
@@ -950,7 +961,7 @@ class HiSockServer:
         :param content: The message / content to send
         :type content: Sendable
 
-        :raise GroupNotFound: The group does not exist.
+        :raises GroupNotFound: The group does not exist.
         """
 
         data_to_send = self._send_type_cast(content)
@@ -1008,7 +1019,9 @@ class HiSockServer:
 
     # Disconnect
 
-    def disconnect_client(self, client: Client, force: bool = False):
+    def disconnect_client(
+        self, client: Client, force: bool = False, call_func: bool = False
+    ):
         """
         Disconnects a specific client.
 
@@ -1016,23 +1029,25 @@ class HiSockServer:
             or a client name.
         :type client: Client
 
-        :raise ValueError: If the client format is wrong.
-        :raise ClientNotFound: If the client does not exist.
-        :raise UserWarning: Using client name, and more than one client with
+        :raises ValueError: If the client format is wrong.
+        :raises ClientNotFound: If the client does not exist.
+        :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
 
         client_socket = self._get_client_from_name_or_ip_port(client)
+        client_data = self.clients[client_socket]
 
         if not force:
-            self._send_client_raw(self.clients[client_socket]["ip"], b"$DISCONN$")
-            return
+            self._send_client_raw(self.clients[client_socket]["ip"], "$DISCONN$")
+        else:
+            self._client_disconnection(client_socket)
 
-        client_socket.close()
-        self._sockets_list.remove(client_socket)
-        del self.clients[client_socket]
-        self._update_clients_rev_dict()
-        # Note: ``self._unresponsive_clients`` should be handled by the keepalive
+        if call_func:
+            if "leave" in self.funcs:
+                self._call_function("leave", False, client_data)
+                return
+            warnings.warn("leave", FunctionNotFoundWarning)
 
     def disconnect_all_clients(self, force=False):
         """Disconnect all clients."""
@@ -1041,11 +1056,13 @@ class HiSockServer:
             self._send_all_clients_raw("$DISCONN$")
             return
 
+        # pylint: disable=expression-not-assigned
         (conn.close() for conn in self._sockets_list)
         self._sockets_list.clear()
+        self._sockets_list.append(self.socket)  # Server socket must be first
         self.clients.clear()
         self.clients_rev.clear()
-        self._unresponsive_clients.clear()
+        self._unresponsive_clients.clear()  # BrokenPipeError with keepalive w/out clear
 
     # Run
 
@@ -1059,20 +1076,33 @@ class HiSockServer:
         if self.closed:
             return
 
-        read_sock, write_sock, exception_sock = select.select(
+        read_socket, write_socket, exception_socket = select.select(
             self._sockets_list, [], self._sockets_list
         )
 
-        for client_socket in read_sock:
+        # debug
+        print(f"{read_socket=}")
+
+        client_socket: socket.socket
+        for client_socket in read_socket:
+            ### Reserved commands ###
+
             # Handle bad client
             if client_socket.fileno() == -1:
-                self._client_disconnection(client_socket, call_func=False)
+                # debug
+                print("bad")
+                self.disconnect_client(client_socket, force=True, call_func=False)
                 continue
 
             # Handle new connection
-            if client_socket == self.sock:
-                self._new_client_connection(*self.sock.accept())
+            if client_socket == self.socket:
+                # debug
+                print("new")
+                self._new_client_connection(*self.socket.accept())
                 continue
+
+            # debug
+            print("Hello there! I will now receive data")
 
             ### Receiving data ###
 
@@ -1083,7 +1113,12 @@ class HiSockServer:
             if isinstance(raw_data, dict):
                 data = raw_data["data"]
                 decoded_data = data.decode()
-                client_data = self.clients[client_socket]
+                try:
+                    client_data = self.clients[client_socket]
+                except KeyError:
+                    raise ClientNotFound(
+                        "Client data not found, but is not a new client."
+                    )
 
             # DEBUG PRINT PLEASE REMOVE LATER
             print(f"{raw_data=}")
@@ -1093,9 +1128,9 @@ class HiSockServer:
             # Handle client disconnection
             if (
                 not raw_data  # Most likely client disconnect, could be client error
-                or data == b"$USRCLOSE$"
+                or decoded_data.startswith("$USRCLOSE$")
             ):
-                self._client_disconnection(client_socket)
+                self.disconnect_client(client_socket, force=False, call_func=False)
                 continue
 
             # Handle keepalive acknowledgement
@@ -1106,7 +1141,7 @@ class HiSockServer:
             # Get client
             if decoded_data.startswith("$GETCLT$"):
                 try:
-                    client_identifier = _removeprefix(decoded_data, "$GETCLT$ ")
+                    client_identifier = _removeprefix(decoded_data, "$GETCLT$")
 
                     # Determine if the client identifier is a name or an IP+port
                     try:
@@ -1121,7 +1156,7 @@ class HiSockServer:
                 except ClientNotFound:
                     client = {"traceback": f"$NOEXIST$"}
 
-                self._send_client_raw(self.clients[client_socket]["ip"], client)
+                self._send_client_raw(client_data["ip"], client)
                 continue
 
             # Change name or group
@@ -1131,31 +1166,29 @@ class HiSockServer:
                 if not decoded_data.startswith(matching_reserve):
                     continue
 
-                change_to = _removeprefix(decoded_data, matching_reserve + " ")
+                change_to = _removeprefix(decoded_data, matching_reserve)
 
                 # Resetting
-                if change_to == decoded_data:
+                if change_to == "":
                     change_to = None
 
-                client_info = self.clients[client_socket]
-
                 # Change it
-                changed_client_info = client_info.copy()
-                changed_client_info[key] = change_to
-                self.clients[client_socket] = changed_client_info
+                changed_client_data = client_data.copy()
+                changed_client_data[key] = change_to
+                self.clients[client_socket] = changed_client_data
                 self._update_clients_rev_dict()
 
                 # Call reserved function
                 reserved_func_name = f"{key}_change"
 
                 if reserved_func_name in self._reserved_functions:
-                    old_value = client_info[key]
-                    new_value = changed_client_info[key]
+                    old_value = client_data[key]
+                    new_value = changed_client_data[key]
 
                     self._call_function(
                         reserved_func_name,
                         False,
-                        changed_client_info,
+                        changed_client_data,
                         old_value,
                         new_value,
                     )
@@ -1268,6 +1301,9 @@ class HiSockServer:
                 ),
             )
 
+        # debug
+        print("done")
+
     # Stop
 
     def close(self):
@@ -1281,21 +1317,23 @@ class HiSockServer:
         self.closed = True
         self._keepalive_event.set()
         self.disconnect_all_clients()
-        self.sock.close()
+        self.socket.close()
 
     # Main loop
 
     def start(self):
         """Start the main loop for the server."""
 
-        def _loop():
+        def loop():
             while not self.closed:
+                # debug
+                print("running")
                 try:
                     self._run()
-                except BrokenPipeError:
-                    pass
+                except KeyboardInterrupt:
+                    self.close()
 
-        loop_thread = threading.Thread(target=_loop, daemon=False)
+        loop_thread = threading.Thread(target=loop, daemon=False)
         loop_thread.start()
 
 

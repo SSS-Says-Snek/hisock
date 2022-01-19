@@ -262,7 +262,7 @@ def _type_cast(
     :return: The type casted content (will be the same type as :param:`type_cast`).
     :rtype: Sendable
 
-    :raise InvalidTypeCast: If the type cast is invalid.
+    :raises InvalidTypeCast: If the type cast is invalid.
     """
 
     if type_cast is None:
@@ -321,7 +321,7 @@ def validate_command_not_reserved(command: str):
     :param command: The command to check.
     :type command: str
 
-    :raise ValueError: If the command is reserved.
+    :raises ValueError: If the command is reserved.
     """
 
     if search(r"\$.+\$", command):
@@ -351,7 +351,7 @@ def validate_ipv4(  # NOSONAR (always will return True, but will raise exception
     :return: If the address is valid
     :rtype: bool
 
-    :raise ValueError: IP address is not valid
+    :raises ValueError: IP address is not valid
     """
 
     if not (require_ip or require_port):
@@ -423,8 +423,8 @@ def _input_ip_address(question: str) -> str:
     ip_address = input(question)
     try:
         validate_ipv4(ip_address, require_port=False)
-    except ValueError as error:
-        print(f"\033[91mInvalid IP: {error}\033[0m\n")
+    except ValueError as e:
+        print(f"\033[91mInvalid IP: {e}\033[0m\n")
         return _input_ip_address(question)
     return ip_address
 
@@ -443,8 +443,8 @@ def _input_port(question: str) -> int:
     port = input(question)
     try:
         validate_ipv4(port, require_ip=False)
-    except (TypeError, ValueError) as error:
-        print(f"\033[91mInvalid port: {error}\033[0m\n")
+    except (TypeError, ValueError) as e:
+        print(f"\033[91mInvalid port: {e}\033[0m\n")
         return _input_port(question)
     return int(port)
 
@@ -518,7 +518,7 @@ def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
         an INTEGER port as the second element
     :rtype: tuple[str, int]
 
-    :raise ValueError: If the IP address isn't in the "ip:port" format.
+    :raises ValueError: If the IP address isn't in the "ip:port" format.
     """
 
     try:
@@ -548,7 +548,7 @@ def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
     :return: A string, with the format "ip:port"
     :rtype: str
 
-    :raise ValueError: If the IP address isn't in the "ip:port" format.
+    :raises ValueError: If the IP address isn't in the "ip:port" format.
     """
 
     try:
