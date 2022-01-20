@@ -702,7 +702,7 @@ class HiSockServer:
         Gets all clients from a specific group.
 
         .. note::
-            If you want to get them from :ivar:`clients_rev` directly, use
+            If you want to get them from ``clients_rev`` directly, use
             :meth:`_get_all_client_sockets_in_group` instead.
 
         :param group: A string, representing the group to look up
@@ -735,8 +735,8 @@ class HiSockServer:
     def get_all_clients(self, key: Union[Callable, str] = None) -> list[dict[str, str]]:
         """
         Get all clients currently connected to the server.
-        This is recommended over the class attribute :ivar:`self._clients` or
-        :ivar:`self.clients_rev`, as it is in a dictionary-like format.
+        This is recommended over the class attribute ``self._clients`` or
+        ``self.clients_rev``, as it is in a dictionary-like format.
 
         :param key: If specified, there are two outcomes: If it is a string,
             it will search for the dictionary for the key, and output it to a list
@@ -836,18 +836,17 @@ class HiSockServer:
         Groups are recommended for more complicated servers or multipurpose
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
+        
         :param group: A string or a ClientInfo, representing the group to send data to.
             If the group is a ClientInfo, and the client is in a group, the method will
-            send data to that group. If the client's not in a group, it will return a
-            ``TypeError``
+            send data to that group. If the client's not in a group, raise ``TypeError``.
         :type group: Union[str, ClientInfo]
         :param command: A string, containing the command to send
         :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send
+        :param content: A bytes-like object, with the content/message to send
         :type content: Union[bytes, dict]
-        :raise TypeError: The group does not exist, or the client
-            is not in a group (``ClientInfo``)
+        
+        :raises TypeError: The group does not exist or the client is not in a group (``ClientInfo``)
         """
 
         if isinstance(group, ClientInfo):
@@ -962,7 +961,7 @@ class HiSockServer:
         :param recv_as: The type to receive the data as.
         :type recv_as: Sendable, optional
 
-        :return: The data received type casted as :param:`recv_as`.
+        :return: The data received type casted as ``recv_as``.
         :rtype: Sendable
         """
 
