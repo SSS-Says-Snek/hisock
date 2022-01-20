@@ -20,6 +20,7 @@ from typing import Union, Any, Optional, Type
 from ipaddress import IPv4Address
 from re import search
 import builtins
+import sys
 
 # Custom exceptions
 class ClientException(Exception):
@@ -94,12 +95,11 @@ class MessageCacheMember:
 
 class ClientInfo:
     def __init__(self, ip, name, group):
-        self.client_dict = {"ip": ip, "name": name, "group": group}
-
-        self.ip = ip
+        self.ip = tuple(ip)  # _type_cast converts tuple to list to be JSON-serializable
         self.name = name
         self.group = group
 
+        self.client_dict = {"ip": self.ip, "name": self.name, "group": self.group}
         self.ip_as_str = f"{self.ip[0]}:{self.ip[1]}"
 
     def __getitem__(self, item):
@@ -122,6 +122,7 @@ Sendable = Union[
     int,
     float,
     None,
+    ClientInfo,
     list[Union[str, int, float, bool, None, dict, list]],
     dict[
         Union[str, int, float, bool, None, dict, list],
@@ -261,7 +262,10 @@ def _str_type_to_type_annotations_dict(annotations_dict: dict):
         if not isinstance(annotation, str):
             fixed_annotations[argument] = annotation
             continue
-        fixed_annotations[argument] = getattr(builtins, annotation)
+        try:
+            fixed_annotations[argument] = getattr(builtins, annotation)
+        except AttributeError:
+            fixed_annotations[argument] = getattr(sys.modules[__name__], annotation)
     return fixed_annotations
 
 
@@ -307,20 +311,31 @@ def _type_cast(
         # Type cast content_to_type_cast to type_cast
         if type_cast is bytes:
             return content_to_type_cast
-        if type_cast is None:
+        elif type_cast is None:
             return None
-        if type_cast in (str, int, float):
+        elif type_cast is ClientInfo:
+            return ClientInfo(**_type_cast(dict, content_to_type_cast, func_name))
+        elif type_cast in (str, int, float):
             # Handle no data
             if not content_to_type_cast:
                 if type_cast is str:
                     return ""
                 return type_cast(0)  # int or float
             return type_cast(content_to_type_cast.decode())
-        if type_cast in (list, dict):
+        elif type_cast in (list, dict):
             # Handle no data
             if not content_to_type_cast:
                 return {} if type_cast is dict else []
-            return json.loads(content_to_type_cast.decode())
+
+            result = json.loads(content_to_type_cast.decode())
+
+            if type(result) != type_cast:
+                raise InvalidTypeCast(
+                    f"Tried to convert from {type(result)} to {type_cast}."
+                )
+            return result
+
+
         raise InvalidTypeCast(
             f"Cannot type cast bytes to {type(type_cast).__name__}."
             " See `HiSockServer.on` for available type hints."

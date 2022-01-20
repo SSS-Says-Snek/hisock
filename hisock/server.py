@@ -502,6 +502,7 @@ class HiSockServer:
                 )
                 for func_argument, argument_name in zip(func_args, arguments):
                     if func_argument not in annotations:
+                        parameter_annotations[argument_name] = None
                         continue
                     parameter_annotations[argument_name] = annotations[func_argument]
 
@@ -1219,13 +1220,20 @@ class HiSockServer:
 
                 # Call function with dynamic args
                 arguments = ()
-                # client_data
-                if len(func["type_hint"].keys()) == 1:
+                if len(func["type_hint"].keys()) == 1:  # client_data
                     arguments = (client_data,)
-                # client_data, message
-                elif len(func["type_hint"].keys()) >= 2:
+                elif len(func["type_hint"].keys()) >= 2:  # client_data, message
+                    clt_info = _type_cast(
+                        type_cast=func["type_hint"]["client_data"],
+                        content_to_type_cast=client_data,
+                        func_name=func["name"],
+                    )
+
+                    if clt_info is None:
+                        clt_info = ClientInfo(**client_data)
+
                     arguments = (
-                        ClientInfo(**client_data),
+                        clt_info,
                         _type_cast(
                             type_cast=func["type_hint"]["message"],
                             content_to_type_cast=content,
@@ -1402,7 +1410,7 @@ if __name__ == "__main__":
         server.send_all_clients("message", message)
 
     @server.on("set_timer", threaded=True)
-    def on_set_timer(client_data: dict, seconds: int):
+    def on_set_timer(client_data: ClientInfo, seconds: int):
         print(f'{client_data["name"]} set a timer for {seconds} seconds!')
         __import__("time").sleep(seconds)
         print(f'{client_data["name"]}\'s timer is done!')
