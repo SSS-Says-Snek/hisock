@@ -35,6 +35,7 @@ try:
         FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
+        ClientInfo,
         Sendable,
         Client,
         _removeprefix,
@@ -55,6 +56,7 @@ except ImportError:
         FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
+        ClientInfo,
         Sendable,
         Client,
         _removeprefix,
@@ -151,13 +153,20 @@ class HiSockClient:
         # {"command": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
         self.funcs = {}
 
-        # Stores the names of the reserved functions, as well as the
-        # number of arguments each reserved function accepts
-        # Used for the `on` decorator
+        # Stores the names of the reserved functions and information about them
         self._reserved_functions = {
-            "client_connect": 1,
-            "client_disconnect": 1,
-            "force_disconnect": 0,
+            "client_connect": {
+                "number_arguments": 1,
+                "type_cast_arguments": ("client_data",),
+            },
+            "client_disconnect": {
+                "number_arguments": 1,
+                "type_cast_arguments": ("client_data",),
+            },
+            "force_disconnect": {
+                "number_arguments": 0,
+                "type_cast_arguments": tuple(),
+            },
         }
         # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
         # If catching all, then event_name will be a number sandwiched by dollar signs
@@ -268,6 +277,30 @@ class HiSockClient:
             func_name="<client sending function>",
         )
 
+    def _type_cast_client_data(
+        self, command: str, client_data: dict
+    ) -> Union[ClientInfo, dict]:
+        """
+        Type cast client info accordingly.
+        If the type hint is None, then the client info is returned as is (a dict).
+
+        :param command: The name of the function that called this method.
+        :type command: str
+        :param client_data: The client data to type cast.
+        :type client_data: dict
+
+        :return: The type casted client data from the type hint.
+        :rtype: Union[ClientInfo, dict]
+        """
+
+        type_cast_to = self.funcs[command]["type_hint"]["client_data"]
+        if type_cast_to is None:
+            type_cast_to = ClientInfo
+
+        if type_cast_to is ClientInfo:
+            return ClientInfo(**client_data)
+        return client_data
+
     def _send_client_hello(self):
         """
         Sends a hello to the server for the first connection.
@@ -293,48 +326,31 @@ class HiSockClient:
 
     # On decorator
 
-    def _call_function(self, func_name: str, sort_by_name: bool, *args, **kwargs):
+    def _call_function(self, func_name: str, *args, **kwargs):
         """
         Calls a function with the given arguments and returns the result.
 
         :param func_name: The name of the function to call.
         :type func_name: str
-        :param sort_by_name: Whether to sort the arguments by name or not.
-        :type sort_by_name: bool
         :param args: The arguments to pass to the function.
         :param kwargs: The keyword arguments to pass to the function.
 
         :raises FunctionNotFoundException: If the function is not found.
         """
 
-        func: str
-
-        # Find the function by the function name
-        if sort_by_name:
-            for func_command, func_data in self.funcs.items():
-                if func_data["name"] == func_name:
-                    func = func_command
-                    break
-            else:
-                raise FunctionNotFoundException(
-                    f"Function with name {func_name} not found"
-                )
-        # Find the function by the function command
-        else:
-            if func_name not in self.funcs:
-                raise FunctionNotFoundException(
-                    f"Function with command {func_name} not found"
-                )
-            func = func_name
+        if func_name not in self.funcs:
+            raise FunctionNotFoundException(
+                f"Function with command {func_name} not found"
+            )
 
         # Normal
-        if not self.funcs[func]["threaded"]:
-            self.funcs[func]["func"](*args, **kwargs)
+        if not self.funcs[func_name]["threaded"]:
+            self.funcs[func_name]["func"](*args, **kwargs)
             return
 
         # Threaded
         function_thread = threading.Thread(
-            target=self.funcs[func]["func"],
+            target=self.funcs[func_name]["func"],
             args=args,
             kwargs=kwargs,
             daemon=True,
@@ -345,7 +361,11 @@ class HiSockClient:
         """Decorator used to handle something when receiving command."""
 
         def __init__(
-            self, outer: HiSockClient, command: str, threaded: bool, override: bool
+            self,
+            outer: HiSockClient,
+            command: str,
+            threaded: bool,
+            override: bool,
         ):
             self.outer = outer
             self.command = command
@@ -356,42 +376,39 @@ class HiSockClient:
 
         def __call__(self, func: Callable) -> Callable:
             """
-            Adds a function that gets called when the client receives a
-            matching command.
+            Adds a function that gets called when the server receives a matching command.
+
+            :raises ValueError: If the number of function arguments is invalid.
             """
 
             func_args = inspect.getfullargspec(func).args
 
             # Overriding a reserved command, remove it from reserved functions
-            if self.override:
-                if self.command in self.outer._reserved_functions:
-                    self.outer.funcs.pop(self.command)
-
-                    del self.outer._reserved_functions[
-                        self.command
-                    ]
-                else:
-                    warnings.warn(
-                        f"Unnecessary override for {self.command}.", UserWarning
-                    )
+            if self.override and self.command in self.outer._reserved_functions:
+                self.outer.funcs.pop(self.command, None)
+                del self.outer._reserved_functions[self.command]
 
             self._assert_num_func_args_valid(len(func_args))
 
+            # Store annotations of function
             annotations = _str_type_to_type_annotations_dict(
                 inspect.getfullargspec(func).annotations
             )  # {"param": type}
             parameter_annotations = {}
 
-            # Process unreserved commands
-            if self.command not in self.outer._reserved_functions:
-                # Map function arguments into type hint compliant ones
-                # Note: this is the same code as in `HiSockServer` which is why
-                # this could support multiple arguments. However, for now, the
-                # only argument is `message`.
-                for func_argument, argument_name in zip(func_args, ("message",)):
-                    if func_argument not in annotations:
-                        continue
-                    parameter_annotations[argument_name] = annotations[func_argument]
+            # Map function arguments into type hint compliant ones
+            type_cast_arguments: tuple
+            if self.command in self.outer._reserved_functions:
+                type_cast_arguments = (
+                    self.outer._reserved_functions[self.command]["type_cast_arguments"],
+                )[0]
+            else:
+                type_cast_arguments = ("message",)
+
+            for func_argument, argument_name in zip(func_args, type_cast_arguments):
+                parameter_annotations[argument_name] = annotations.get(
+                    func_argument, None
+                )
 
             # Add function
             self.outer.funcs[self.command] = {
@@ -418,13 +435,14 @@ class HiSockClient:
             needed_number_of_args = "0-1"
 
             # Reserved commands
-            try:
-                needed_number_of_args = self.outer._reserved_functions[
-                    self.command
-                ]
+            if self.command in self.outer._reserved_functions:
+                needed_number_of_args = (
+                    self.outer._reserved_functions[self.command]["number_arguments"],
+                )[0]
                 valid = number_of_func_args == needed_number_of_args
+
             # Unreserved commands
-            except KeyError:
+            else:
                 valid = not number_of_func_args > 1
 
             if not valid:
@@ -495,8 +513,7 @@ class HiSockClient:
         Gets the message cache.
 
         :param idx: An integer or ``slice``, specifying what specific message caches to return.
-
-            Default is None (Retrieves the entire cache)
+            Default is None (retrieves the entire cache).
         :type idx: Union[int, slice], optional
 
         :return: A list of dictionaries, representing the cache
@@ -507,15 +524,22 @@ class HiSockClient:
             return self.cache
         return self.cache[idx]
 
-    def get_client(self, client: Client):
+    def get_client(
+        self, client: Client, get_as_dict: bool = False
+    ) -> Union[ClientInfo, dict]:
         """
         Gets the client data for a client.
 
         :param client: The client name or IP+port to get.
         :type client: Client
+        :param get_as_dict: A boolean representing if the client data should be
+            returned as a dictionary. Otherwise, it'll be returned as an
+            instance of :class:`ClientInfo`.
+            Default is False.
+        :type get_as_dict: bool, optional
 
         :return: The client data.
-        :rtype: dict
+        :rtype: Union[ClientInfo, dict]
 
         :raises ValueError: If the client IP is invalid.
         :raises ClientNotFound: If the client couldn't be found.
@@ -538,18 +562,21 @@ class HiSockClient:
         )
 
         # Validate response
-        if "traceback" not in response:
+        if "traceback" in response:
+            if response["traceback"] == "$NOEXIST$":
+                raise ClientNotFound(f"Client {client} not connected to the server.")
+            raise ServerException(
+                f"Failed to get client from server: {response['traceback']}"
+            )
+
+        # Type cast
+        if get_as_dict:
             return response
-        if response["traceback"] == "$NOEXIST$":
-            raise ClientNotFound(f"Client {client} not connected to the server.")
-        raise ServerException(
-            f"Failed to get client from server: {response['traceback']}"
-        )
+        return ClientInfo(**response)
 
     def get_server_addr(self) -> tuple[str, int]:
         """
-        Gets the address of where the hisock client is connected
-        at.
+        Gets the address of where the client is connected to.
 
         :return: A tuple, with the format (str IP, int port)
         :rtype: tuple[str, int]
@@ -559,10 +586,9 @@ class HiSockClient:
 
     def get_client_addr(self) -> tuple[str, int]:
         """
-        Gets the address of the hisock client that is connected
-        to the server.
+        Gets the address of the client.
 
-        :return: A tuple, with the format (str IP, int port)
+        :return: A tuple, with the format (IP, port).
         :rtype: tuple[str, int]
         """
 
@@ -671,14 +697,14 @@ class HiSockClient:
         :type new_group: Union[str, None]
         """
 
-        data_to_send = "$CHGROUP$" + (f" {new_group}" if bool(new_group) else "")
+        data_to_send = "$CHGROUP$" + (new_group if bool(new_group) else "")
         self._send_raw(data_to_send)
 
     # Update
 
     def _update(self):
         """
-        Handles new messages, and sends them to the appropriate functions. This method
+        Handles new messages and sends them to the appropriate functions. This method
         should be called in a while loop in a thread. If this function isn't in its
         own thread, then :meth:`recv` won't work.
 
@@ -728,7 +754,7 @@ class HiSockClient:
             if decoded_data == "$DISCONN$":
                 self.close(emit_leave=False)  # The server already knows we're gone
                 if "force_disconnect" in self.funcs:
-                    self._call_function("force_disconnect", False)
+                    self._call_function("force_disconnect")
                 return
 
             # Handle new client connection
@@ -737,12 +763,15 @@ class HiSockClient:
                     warnings.warn("client_connect", FunctionNotFoundWarning)
                     return
 
-                client_content = _type_cast(
-                    type_cast=dict,
-                    content_to_type_cast=_removeprefix(decoded_data, "$CLTCONN$"),
-                    func_name="<client connect in update>",
+                client_data = self._type_cast_client_data(
+                    "client_connect",
+                    _type_cast(
+                        type_cast=dict,
+                        content_to_type_cast=_removeprefix(decoded_data, "$CLTCONN$"),
+                        func_name="<client connect in update>",
+                    ),
                 )
-                self._call_function("client_connect", False, client_content)
+                self._call_function("client_connect", client_data)
                 return
 
             # Handle client disconnection
@@ -751,12 +780,17 @@ class HiSockClient:
                     warnings.warn("client_disconnect", FunctionNotFoundWarning)
                     return
 
-                client_content = _type_cast(
-                    type_cast=dict,
-                    content_to_type_cast=_removeprefix(decoded_data, "$CLTDISCONN$"),
-                    func_name="<client disconnect in update>",
+                client_data = self._type_cast_client_data(
+                    "client_disconnect",
+                    _type_cast(
+                        type_cast=dict,
+                        content_to_type_cast=_removeprefix(
+                            decoded_data, "$CLTDISCONN$"
+                        ),
+                        func_name="<client disconnect in update>",
+                    ),
                 )
-                self._call_function("client_disconnect", False, client_content)
+                self._call_function("client_disconnect", client_data)
                 return
 
             ### Unreserved commands ###
@@ -793,7 +827,7 @@ class HiSockClient:
                             func_name=func["name"],
                         ),
                     )
-                self._call_function(func["name"], True, *arguments)
+                self._call_function(matching_command, *arguments)
                 break
 
             # Handle data needed for `recv`
@@ -958,7 +992,7 @@ if __name__ == "__main__":
     def on_force_disconnect():
         print("You have been disconnected from the server.")
         client.close()
-        __import__('os')._exit(0)
+        __import__("os")._exit(0)
 
     @client.on("message", threaded=True)
     def on_message(message: str):
@@ -968,7 +1002,7 @@ if __name__ == "__main__":
     def on_genocide():
         print("It's time to die!")
         client.close()
-        __import__('os')._exit(0)
+        __import__("os")._exit(0)
 
     def choices():
         print(

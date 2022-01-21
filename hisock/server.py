@@ -154,15 +154,29 @@ class HiSockServer:
         # {"command": {"func": Callable, "name": str, "type_hint": {"arg": Any}, "threaded": bool}}
         self.funcs = {}
 
-        # Stores the names of the reserved functions, as well as the
-        # number of arguments each reserved function accepts
+        # Stores the names of the reserved functions and information about them
         # Used for the `on` decorator
         self._reserved_functions = {
-            "join": 1,
-            "leave": 1,
-            "message": 3,
-            "name_change": 3,
-            "group_change": 3,
+            "join": {
+                "number_arguments": 1,
+                "type_cast_arguments": ("client_data",),
+            },
+            "leave": {
+                "number_arguments": 1,
+                "type_cast_arguments": ("client_data",),
+            },
+            "message": {
+                "number_arguments": 3,
+                "type_cast_arguments": ("client_data", "command", "message"),
+            },
+            "name_change": {
+                "number_arguments": 3,
+                "type_cast_arguments": ("client_data",),
+            },
+            "group_change": {
+                "number_arguments": 3,
+                "type_cast_arguments": ("client_data",),
+            },
         }
         # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
         # If catching all, then event_name will be a number sandwiched by dollar signs
@@ -284,6 +298,30 @@ class HiSockServer:
             func_name="<server sending function>",
         )
 
+    def _type_cast_client_data(
+        self, command: str, client_data: dict
+    ) -> Union[ClientInfo, dict]:
+        """
+        Type cast client info accordingly.
+        If the type hint is None, then the client info is returned as is (a dict).
+
+        :param command: The name of the function that called this method.
+        :type command: str
+        :param client_data: The client data to type cast.
+        :type client_data: dict
+
+        :return: The type casted client data from the type hint.
+        :rtype: Union[ClientInfo, dict]
+        """
+
+        type_cast_to = self.funcs[command]["type_hint"]["client_data"]
+        if type_cast_to is None:
+            type_cast_to = ClientInfo
+
+        if type_cast_to is ClientInfo:
+            return ClientInfo(**client_data)
+        return client_data
+
     def _new_client_connection(
         self, connection: socket.socket, address: tuple[str, int]
     ):
@@ -332,7 +370,10 @@ class HiSockServer:
         self._send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_data)}".encode())
 
         if "join" in self.funcs:
-            self._call_function("join", False, ClientInfo(**client_data))
+            self._call_function(
+                "join",
+                self._type_cast_client_data(command="join", client_data=client_data),
+            )
             return
 
         warnings.warn("join", FunctionNotFoundWarning)
@@ -344,7 +385,7 @@ class HiSockServer:
         :raises ClientNotFound: The client wasn't connected to the server.
         """
 
-        clt_info = self.clients[client_socket]
+        client_data = self.clients[client_socket]
 
         if client_socket not in self._sockets_list:
             raise ClientNotFound(f'Client "{client_socket}" is not connected.')
@@ -357,11 +398,7 @@ class HiSockServer:
         self._sockets_list.remove(client_socket)
         del self.clients[client_socket]
         del self.clients_rev[
-            (
-                clt_info["ip"],
-                clt_info["name"],
-                clt_info["group"]
-            )
+            (client_data["ip"], client_data["name"], client_data["group"])
         ]
         # Note: ``self._unresponsive_clients`` should be handled by the keepalive
 
@@ -399,48 +436,31 @@ class HiSockServer:
                     )
                 self._unresponsive_clients.clear()
 
-    def _call_function(self, func_name: str, sort_by_name: bool, *args, **kwargs):
+    def _call_function(self, func_name: str, *args, **kwargs):
         """
         Calls a function with the given arguments and returns the result.
 
         :param func_name: The name of the function to call.
         :type func_name: str
-        :param sort_by_name: Whether to sort the arguments by name or not.
-        :type sort_by_name: bool
         :param args: The arguments to pass to the function.
         :param kwargs: The keyword arguments to pass to the function.
 
         :raises FunctionNotFoundException: If the function is not found.
         """
 
-        func: str
-
-        # Find the function by the function name
-        if sort_by_name:
-            for func_command, func_data in self.funcs.items():
-                if func_data["name"] == func_name:
-                    func = func_command
-                    break
-            else:
-                raise FunctionNotFoundException(
-                    f"Function with name {func_name} not found"
-                )
-        # Find the function by the function command
-        else:
-            if func_name not in self.funcs:
-                raise FunctionNotFoundException(
-                    f"Function with command {func_name} not found"
-                )
-            func = func_name
+        if func_name not in self.funcs:
+            raise FunctionNotFoundException(
+                f"Function with command {func_name} not found"
+            )
 
         # Normal
-        if not self.funcs[func]["threaded"]:
-            self.funcs[func]["func"](*args, **kwargs)
+        if not self.funcs[func_name]["threaded"]:
+            self.funcs[func_name]["func"](*args, **kwargs)
             return
 
         # Threaded
         function_thread = threading.Thread(
-            target=self.funcs[func]["func"],
+            target=self.funcs[func_name]["func"],
             args=args,
             kwargs=kwargs,
             daemon=True,
@@ -476,9 +496,8 @@ class HiSockServer:
             func_args = inspect.getfullargspec(func).args
 
             # Overriding a reserved command, remove it from reserved functions
-            if self.override and self.command in self.outer._reserved_commands_dict:
-                self.outer.funcs.pop(self.command)
-
+            if self.override and self.command in self.outer._reserved_functions:
+                self.outer.funcs.pop(self.command, None)
                 del self.outer._reserved_functions[self.command]
 
             self._assert_num_func_args_valid(len(func_args))
@@ -489,22 +508,19 @@ class HiSockServer:
             )  # {"param": type}
             parameter_annotations = {}
 
-            # Process unreserved commands and reserved `message`
-            if (
-                self.command not in self.outer._reserved_functions
-                or self.command == "message"
-            ):
-                # Map function arguments into type hint compliant ones
-                arguments = (
-                    ("client_data", "message")  # Unreserved
-                    if self.command != "message"
-                    else ("client_data", "command", "message")  # Message
+            # Map function arguments into type hint compliant ones
+            type_cast_arguments: tuple
+            if self.command in self.outer._reserved_functions:
+                type_cast_arguments = (
+                    self.outer._reserved_functions[self.command]["type_cast_arguments"],
+                )[0]
+            else:
+                type_cast_arguments = ("client_data", "message")
+
+            for func_argument, argument_name in zip(func_args, type_cast_arguments):
+                parameter_annotations[argument_name] = annotations.get(
+                    func_argument, None
                 )
-                for func_argument, argument_name in zip(func_args, arguments):
-                    if func_argument not in annotations:
-                        parameter_annotations[argument_name] = None
-                        continue
-                    parameter_annotations[argument_name] = annotations[func_argument]
 
             # Add function
             self.outer.funcs[self.command] = {
@@ -529,9 +545,9 @@ class HiSockServer:
 
             # Reserved commands
             try:
-                needed_number_of_args = self.outer._reserved_functions[
-                    self.command
-                ]
+                needed_number_of_args = (
+                    self.outer._reserved_functions[self.command]["number_arguments"],
+                )[0]
                 valid = number_of_func_args == needed_number_of_args
 
             # Unreserved commands
@@ -750,7 +766,7 @@ class HiSockServer:
         :rtype: list[dict, ...]
         """
 
-        clients = [client for client in self.clients.values()]
+        clients = list(self.clients.values())
 
         if key is None:
             return clients
@@ -831,31 +847,34 @@ class HiSockServer:
         for client in self.clients:
             client.send(content_header + content)
 
-    def send_group(self, group: Union[str, ClientInfo], command: str, content: Sendable = None):
+    def send_group(
+        self, group: Union[str, ClientInfo], command: str, content: Sendable = None
+    ):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
-        
+
         :param group: A string or a ClientInfo, representing the group to send data to.
             If the group is a ClientInfo, and the client is in a group, the method will
-            send data to that group. If the client's not in a group, raise ``TypeError``.
+            send data to that group.
         :type group: Union[str, ClientInfo]
         :param command: A string, containing the command to send
         :type command: str
         :param content: A bytes-like object, with the content/message to send
         :type content: Union[bytes, dict]
-        
-        :raises TypeError: The group does not exist or the client is not in a group (``ClientInfo``)
+
+        :raises TypeError: If the group does not exist, or the client
+            is not in a group (``ClientInfo``).
         """
 
         if isinstance(group, ClientInfo):
-            clt = group
-            group = clt.group  # Please don't confuse this
+            client = group
+            group = client.group  # Please don't confuse this
 
             if group is None:
-                raise TypeError(f"Client {clt} does not belong to a group")
+                raise TypeError(f"Client {client} does not belong to a group")
 
         data_to_send = (
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
@@ -938,11 +957,11 @@ class HiSockServer:
         """
 
         if isinstance(group, ClientInfo):
-            clt = group
-            group = clt.group  # Please don't confuse this
+            client = group
+            group = client.group  # Please don't confuse this
 
             if group is None:
-                raise TypeError(f"Client {clt} does not belong to a group")
+                raise TypeError(f"Client {client} does not belong to a group")
 
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
@@ -1036,7 +1055,12 @@ class HiSockServer:
 
         if call_func:
             if "leave" in self.funcs:
-                self._call_function("leave", False, ClientInfo(**client_data))
+                self._call_function(
+                    "leave",
+                    self._type_cast_client_data(
+                        command="leave", client_data=client_data
+                    ),
+                )
                 return
             warnings.warn("leave", FunctionNotFoundWarning)
 
@@ -1060,9 +1084,12 @@ class HiSockServer:
 
     def _run(self):
         """
-        Runs the server. This method handles the sending and receiving of data,
-        so it should be run once every iteration of a while loop, as to not
-        lose valuable information.
+        Handles new messages and sends them to the appropriate functions. This method
+        should be called in a while loop in a thread. If this function isn't in its
+        own thread, then :meth:`recv` won't work.
+
+        .. warning::
+           Don't call this method on its own; instead use :meth:`start`.
         """
 
         if self.closed:
@@ -1103,7 +1130,9 @@ class HiSockServer:
             try:
                 client_data = self.clients[client_socket]
             except KeyError:
-                raise ClientNotFound("Client data not found, but is not a new client.")
+                raise ClientNotFound(
+                    "Client data not found, but is not a new client."
+                ) from KeyError
 
             ### Reserved commands ###
 
@@ -1142,7 +1171,7 @@ class HiSockServer:
                 except ValueError as e:
                     client = {"traceback": str(e)}
                 except ClientNotFound:
-                    client = {"traceback": f"$NOEXIST$"}
+                    client = {"traceback": "$NOEXIST$"}
 
                 self._send_client_raw(client_data["ip"], client)
                 continue
@@ -1158,13 +1187,13 @@ class HiSockServer:
 
                 # Resetting
                 if change_to == "":
-                    change_to = None
+                    change_to = client_data[key]
 
                 # Change it
                 changed_client_data = client_data.copy()
                 changed_client_data[key] = change_to
                 self.clients[client_socket] = changed_client_data
-                
+
                 del self.clients_rev[
                     (
                         client_data["ip"],
@@ -1189,8 +1218,10 @@ class HiSockServer:
 
                     self._call_function(
                         reserved_func_name,
-                        False,
-                        ClientInfo(**changed_client_data),
+                        self._type_cast_client_data(
+                            command=reserved_func_name,
+                            client_data=changed_client_data,
+                        ),
                         old_value,
                         new_value,
                     )
@@ -1220,27 +1251,24 @@ class HiSockServer:
 
                 # Call function with dynamic args
                 arguments = ()
-                if len(func["type_hint"].keys()) == 1:  # client_data
-                    arguments = (client_data,)
-                elif len(func["type_hint"].keys()) >= 2:  # client_data, message
-                    clt_info = _type_cast(
-                        type_cast=func["type_hint"]["client_data"],
-                        content_to_type_cast=client_data,
-                        func_name=func["name"],
+                if len(func["type_hint"]) != 0:
+                    type_casted_client_data = self._type_cast_client_data(
+                        command=matching_command, client_data=client_data
                     )
-
-                    if clt_info is None:
-                        clt_info = ClientInfo(**client_data)
-
+                # client_data
+                if len(func["type_hint"].keys()) == 1:
+                    arguments = (type_casted_client_data,)
+                # client_data, message
+                elif len(func["type_hint"].keys()) >= 2:
                     arguments = (
-                        clt_info,
+                        type_casted_client_data,
                         _type_cast(
                             type_cast=func["type_hint"]["message"],
                             content_to_type_cast=content,
                             func_name=func["name"],
                         ),
                     )
-                self._call_function(func["name"], True, *arguments)
+                self._call_function(matching_command, *arguments)
                 break
 
             # Handle data needed for `recv`
@@ -1296,8 +1324,7 @@ class HiSockServer:
 
             self._call_function(
                 "message",
-                False,
-                client_data,
+                self._type_cast_client_data(command="message", client_data=client_data),
                 _type_cast(
                     type_cast=self.funcs["message"]["type_hint"]["command"],
                     content_to_type_cast=command,
