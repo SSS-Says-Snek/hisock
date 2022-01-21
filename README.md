@@ -148,4 +148,7 @@ while not s.closed:
 
 ```
 
+## Contributors
+@sheepy0125 @SSS-Says-Snek
+
 ###### Copyright SSS-Says-Snek, 2021-present
