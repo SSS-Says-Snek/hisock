@@ -630,7 +630,7 @@ class HiSockClient:
         """
         Receive data from the server while blocking.
         Can receive on a command, which is used as like one-time on decorator.
-        
+
         .. note::
            Reserved functions will be ignored and not caught by this method.
 
