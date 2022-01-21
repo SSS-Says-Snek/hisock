@@ -2,13 +2,8 @@ Installation
 ============
 
 To install hisock, you will need to make sure you have PIP and Python3.7 or later installed and added to your PATH (ensure ``pip`` and ``python`` works).
-There are two main ways to install HiSock. You can install it through `PyPi <https://pypi.org/project/hisock/>`_ (recommended) or you can install it from the GitHub.
-
-.. warning::
-    hisock is the first project I ever published to PyPI, so there might be some
-    quirks on PyPI here and there, like the sudden burst of version post-releases.
-    However, I will try to keep this at the bare minimum, and hopefully figure out
-    PyPI good enough
+There are two main ways to install Hisock. You can install it through
+`PyPi <https://pypi.org/project/hisock/>`_ (recommended), or you can install it from the GitHub.
 
 Installing via PyPI
 -------------------
@@ -55,7 +50,7 @@ After you're now in the working directory of the repo, install it in editable mo
     $ pip install -e .
 
 You should now have successfully installed the latest version of hisock! 
-If this doesn't work, then try one of the alternatives in  Method 1, but replace ``hisock`` with ``-e .`` (E.g ``python3 -m pip install -e .``)
+If this doesn't work, then try one of the alternatives in Method 1, but replace ``hisock`` with ``-e .`` (E.g ``python3 -m pip install -e .``)
 
 .. note::
    

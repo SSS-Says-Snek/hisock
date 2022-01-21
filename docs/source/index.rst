@@ -12,8 +12,8 @@ utilizes decorators to maintain a good code structure.
 
 .. note::
    This project is still currently under development.
-   This is also the first package of the developer, SSS_Says_Snek, so if you find something
-   that needs improvement, submit an issue on the `GitHub Repository <https://github.com/SSS-Says-Snek/hisock/>`_
+   If you find something that needs improvement, submit an issue on the
+   `GitHub Repository <https://github.com/SSS-Says-Snek/hisock/>`_
 
 .. toctree::
    :maxdepth: 2
@@ -33,7 +33,7 @@ Table of Contents
 
    quickstart/index
    tutorials/index
-   API Reference <api>
+   API Reference <api/index>
 
 .. toctree::
    :maxdepth: 1

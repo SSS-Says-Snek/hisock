@@ -719,7 +719,7 @@ class HiSockServer:
         Gets all clients from a specific group.
 
         .. note::
-            If you want to get them from :ivar:`clients_rev` directly, use
+            If you want to get them from ``clients_rev`` directly, use
             :meth:`_get_all_client_sockets_in_group` instead.
 
         :param group: A string, representing the group to look up
@@ -752,8 +752,8 @@ class HiSockServer:
     def get_all_clients(self, key: Union[Callable, str] = None) -> list[dict[str, str]]:
         """
         Get all clients currently connected to the server.
-        This is recommended over the class attribute :ivar:`self._clients` or
-        :ivar:`self.clients_rev`, as it is in a dictionary-like format.
+        This is recommended over the class attribute ``self._clients`` or
+        ``self.clients_rev``, as it is in a dictionary-like format.
 
         :param key: If specified, there are two outcomes: If it is a string,
             it will search for the dictionary for the key, and output it to a list
@@ -855,14 +855,14 @@ class HiSockServer:
         Groups are recommended for more complicated servers or multipurpose
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
+
         :param group: A string or a ClientInfo, representing the group to send data to.
             If the group is a ClientInfo, and the client is in a group, the method will
             send data to that group.
         :type group: Union[str, ClientInfo]
         :param command: A string, containing the command to send
         :type command: str
-        :param content: A bytes-like object, with the content/message
-            to send
+        :param content: A bytes-like object, with the content/message to send
         :type content: Union[bytes, dict]
 
         :raises TypeError: If the group does not exist, or the client
@@ -981,7 +981,7 @@ class HiSockServer:
         :param recv_as: The type to receive the data as.
         :type recv_as: Sendable, optional
 
-        :return: The data received type casted as :param:`recv_as`.
+        :return: The data received type casted as ``recv_as``.
         :rtype: Sendable
         """
 
@@ -1437,7 +1437,7 @@ if __name__ == "__main__":
         server.send_all_clients("message", message)
 
     @server.on("set_timer", threaded=True)
-    def on_set_timer(client_data: dict, seconds: int):
+    def on_set_timer(client_data: ClientInfo, seconds: int):
         print(f'{client_data["name"]} set a timer for {seconds} seconds!')
         __import__("time").sleep(seconds)
         print(f'{client_data["name"]}\'s timer is done!')

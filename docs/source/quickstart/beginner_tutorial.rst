@@ -34,6 +34,8 @@ the server data.
    you can create a *server* that *clients* need to join; once they do, client ``A``
    can ask the server to share some info to client ``B``, and so on and so forth.
 
+----
+
 Creating our first server
 -------------------------
 
@@ -58,6 +60,8 @@ minimize lag time. So, our final server script looks like:
 
 That's basically it! Of course, this server is useless, but hey, it's a step
 in the right direction! We'll add on to this later on.
+
+----
 
 Creating our first client
 -------------------------
@@ -87,6 +91,8 @@ our final boilerplate client code is:
 
 Like the server, this doesn't do anything at all yet, but soon, we'll
 finally add some functionality to the server and client!
+
+----
 
 .. _clearstuff:
 
@@ -135,6 +141,8 @@ attached to it, will automatically call ``handler_thing()``, albeit with less pa
 
 Now that we've done that, let's add functionality to our bland server and client!
 
+----
+
 Adding (some) functionality to our server
 -----------------------------------------
 
@@ -175,6 +183,8 @@ the client!
 
 Of course, this is still not that interesting on the client side, so we'll finally
 start to send some data in the next part!
+
+----
 
 Sending data to our client
 --------------------------
@@ -240,6 +250,8 @@ So, we must modify our client
 
 Now, whenever the client joins that server, it will receive the data sent by it! How cool is that?
 
+----
+
 Sending data to our server
 --------------------------
 
@@ -288,6 +300,8 @@ and our server can be
    ...
 
 We've successfully made a functional client and server!
+
+----
 
 Conclusion
 ----------
