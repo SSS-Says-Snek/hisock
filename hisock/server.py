@@ -1384,64 +1384,64 @@ if __name__ == "__main__":
     server = start_server(("127.0.0.1", int(input("Port: "))))
 
     @server.on("join")
-    def on_join(client_data: dict):
+    def on_join(client_data):
         print(
-            f'{client_data["name"]} has joined! '
-            f'Their IP is {":".join(map(str, client_data["ip"]))}. '
+            f"{client_data.name} has joined! "
+            f'Their IP is {":".join(map(str, client_data.ip))}. '
             f'Their group is {client_data["group"]}.'
         )
 
     @server.on("leave")
-    def on_leave(client_data: dict):
-        print(f'{client_data["name"]} has left!')
+    def on_leave(client_data):
+        print(f"{client_data.name} has left!")
 
     @server.on("message")
-    def on_message(client_data: dict, command: str, message: str):
+    def on_message(client_data, command: str, message: str):
         print(
-            f'[MESSAGE CATCH-ALL] {client_data["name"]} sent a command, {command} '
+            f"[MESSAGE CATCH-ALL] {client_data.name} sent a command, {command} "
             f'with the message "{message}".'
         )
 
     @server.on("name_change")
-    def on_name_change(_: dict, old_name: str, new_name: str):  # Client data isn't used
+    def on_name_change(_, old_name: str, new_name: str):  # Client data isn't used
         print(f"{old_name} changed their name to {new_name}.")
 
     @server.on("group_change")
-    def on_group_change(client_data: dict, old_group: str, new_group: str):
-        print(f"{client_data['name']} changed their group to {new_group}.")
+    def on_group_change(client_data, old_group: str, new_group: str):
+        print(f"{client_data.name} changed their group to {new_group}.")
         # Alert clients of change
         server.send_group(
             old_group,
             "message",
-            f'{client_data["name"]} has left to move to {new_group}.',
+            f"{client_data.name} has left to move to {new_group}.",
         )
         server.send_group(
             new_group,
             "message",
-            f'{client_data["name"]} has joined from {old_group}.',
+            f"{client_data.name} has joined from {old_group}.",
         )
 
     @server.on("ping")
-    def on_ping(client_data: dict):
-        print(f"{client_data['name']} pinged!")
-        server.send_client(client_data["ip"], "pong")
+    def on_ping(client_data):
+        print(f"{client_data.name} pinged!")
+        server.send_client(client_data.ip, "pong")
 
     @server.on("get_all_clients")
-    def on_all_clients(client_data: dict):
-        print(f"{client_data['name']} asked for all clients!")
-        server.send_client(client_data["ip"], "all_clients", server.get_all_clients())
+    def on_all_clients(client_data):
+        print(f"{client_data.name} asked for all clients!")
+        server.send_client(client_data.ip, "all_clients", server.get_all_clients())
 
     @server.on("broadcast_message")
-    def on_broadcast_message(client_data: dict, message: str):
-        print(f'{client_data["name"]} said "{message}"!')
+    def on_broadcast_message(client_data, message: str):
+        print(f'{client_data.name} said "{message}"!')
         server.send_all_clients("message", message)
 
     @server.on("set_timer", threaded=True)
-    def on_set_timer(client_data: ClientInfo, seconds: int):
-        print(f'{client_data["name"]} set a timer for {seconds} seconds!')
+    def on_set_timer(client_data, seconds: int):
+        print(f"{client_data.name} set a timer for {seconds} seconds!")
         __import__("time").sleep(seconds)
-        print(f'{client_data["name"]}\'s timer is done!')
-        server.send_client(client_data["ip"], "timer_done")
+        print(f"{client_data.name}'s timer is done!")
+        server.send_client(client_data.ip, "timer_done")
 
     @server.on("commit_genocide")
     def on_commit_genocide():

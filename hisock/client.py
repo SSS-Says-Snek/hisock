@@ -977,16 +977,16 @@ if __name__ == "__main__":
     client.change_group(input("New group: "))
 
     @client.on("client_connect")
-    def on_connect(client_data: dict):
+    def on_connect(client_data):
         print(
-            f'{client_data["name"]} has joined! '
-            f'Their IP is {iptup_to_str(client_data["ip"])}. '
+            f"{client_data.name} has joined! "
+            f"Their IP is {iptup_to_str(client_data.ip)}. "
             f'Their group is {client_data["group"]}.'
         )
 
     @client.on("client_disconnect")
-    def on_disconnect(client_data: dict):
-        print(f'{client_data["name"]} disconnected from the server.')
+    def on_disconnect(client_data):
+        print(f"{client_data.name} disconnected from the server.")
 
     @client.on("force_disconnect")
     def on_force_disconnect():
