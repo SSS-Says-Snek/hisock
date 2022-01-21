@@ -149,6 +149,8 @@ while not s.closed:
 ```
 
 ## Contributors
-@sheepy0125 @SSS-Says-Snek
+Special thanks to the following:
+- Sheepy0125, for refactoring the underhood code as well as the API
+- SSS-Says-Snek, for maintaining and developing the library
 
 ###### Copyright SSS-Says-Snek, 2021-present
