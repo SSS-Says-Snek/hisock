@@ -321,7 +321,17 @@ def _type_cast(
                 if type_cast is str:
                     return ""
                 return type_cast(0)  # int or float
-            return type_cast(content_to_type_cast.decode())
+
+            try:
+                ret = type_cast(content_to_type_cast.decode())
+            except Exception as e:
+                raise InvalidTypeCast(
+                    f"Type casting from {type(content_to_type_cast).__name__} "
+                    f"to {type_cast.__name__} failed for function "
+                    f"\"{func_name}:\n{e}\""
+                ) from e
+
+            return ret
         elif type_cast in (list, dict):
             # Handle no data
             if not content_to_type_cast:
