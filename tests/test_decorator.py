@@ -123,7 +123,7 @@ class TestClientDecs:
         assert client_dummy.funcs["i"] == {
             "func": func_client_no_typecast,
             "name": func_client_no_typecast.__name__,
-            "type_hint": {},
+            "type_hint": {"message": None},
             "threaded": False
         }
 
