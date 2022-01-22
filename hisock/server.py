@@ -13,7 +13,6 @@ Copyright SSS_Says_Snek 2021-present
 from __future__ import annotations  # Remove when 3.10 is used by majority
 
 import socket
-import inspect  # Type-hinting detection for type casting
 import select  # Handle multiple clients at once
 import json  # Handle sending dictionaries
 import threading  # Threaded server and decorators
@@ -40,7 +39,7 @@ try:
         validate_ipv4,
         ipstr_to_tup,
     )
-    from .shared import _HiSock
+    from ._shared import _HiSockBase
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
@@ -60,7 +59,7 @@ except ImportError:
         validate_ipv4,
         ipstr_to_tup,
     )
-    from shared import _HiSock
+    from _shared import _HiSockBase
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -73,7 +72,7 @@ except ImportError:
 # If this code is changed, the server may not work properly
 
 
-class HiSockServer(_HiSock):
+class HiSockServer(_HiSockBase):
     """
     The server class for :mod:`HiSock`.
 
@@ -100,8 +99,9 @@ class HiSockServer(_HiSock):
         Default passed in by :meth:`start_server` is 16 (maximum length: 10
         quadrillion bytes).
     :type header_len: int, optional
-    :param cache_size: The number of messages to cache.
-        Default passed in by :meth:`start_server` is -1.
+    :param cache_size: The size of the message cache.
+        -1 or below for no message cache, 0 for an unlimited cache size,
+        and any other number for the cache size.
     :type cache_size: int, optional
     :param keepalive: A bool indicating whether a keepalive signal should be sent or not.
         If this is True, then a signal will be sent to every client every minute to prevent
@@ -941,8 +941,6 @@ class HiSockServer(_HiSock):
             for matching_reserve, key in zip(
                 ("$CHNAME$", "$CHGROUP$"), ("name", "group")
             ):
-                if not decoded_data.startswith(matching_reserve):
-                    continue
 
                 change_to = _removeprefix(decoded_data, matching_reserve)
 

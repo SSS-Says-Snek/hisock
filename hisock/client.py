@@ -14,7 +14,6 @@ Copyright SSS_Says_Snek, 2021-present
 from __future__ import annotations  # Remove when 3.10 is used by majority
 
 import socket
-import inspect  # Type-hinting detection for type casting
 import json  # Handle sending dictionaries
 import errno  # Handle fatal errors with the server
 import warnings  # Non-severe errors
@@ -43,7 +42,7 @@ try:
         iptup_to_str,
         validate_ipv4,
     )
-    from .shared import _HiSock
+    from ._shared import _HiSockBase
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
@@ -62,7 +61,7 @@ except ImportError:
         iptup_to_str,
         validate_ipv4,
     )
-    from shared import _HiSock
+    from _shared import _HiSockBase
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -75,7 +74,7 @@ except ImportError:
 # If this code is changed, the client may not work properly
 
 
-class HiSockClient(_HiSock):
+class HiSockClient(_HiSockBase):
     """
     The client class for :mod:`HiSock`.
 
@@ -103,6 +102,10 @@ class HiSockClient(_HiSock):
         (hard to debug too!).
         Default sets to 16 (maximum length of content: 10 quadrillion bytes).
     :type header_len: int, optional
+    :param cache_size: The size of the message cache.
+        -1 or below for no message cache, 0 for an unlimited cache size,
+        and any other number for the cache size.
+    :type cache_size: int, optional
 
     :ivar tuple addr: A two-element tuple containing the IP address and the
         port number of the server.
@@ -130,6 +133,9 @@ class HiSockClient(_HiSock):
         self.name = name
         self.group = group
 
+        self.original_name = name
+        self.original_group = group
+
         # Socket initialization
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         try:
@@ -152,7 +158,7 @@ class HiSockClient(_HiSock):
             },
             "force_disconnect": {
                 "number_arguments": 0,
-                "type_cast_arguments": tuple(),
+                "type_cast_arguments": (),
             },
         }
         self._unreserved_func_arguments = ("message",)
@@ -434,23 +440,30 @@ class HiSockClient(_HiSock):
         """
         Changes the name of the client
 
-        :param new_name: The new name for the client to be called
+        :param new_name: The new name for the client to be called.
             If left blank, then the name will be reset.
-        :type new_name: str, optional
+        :type new_name: Union[str, None]
         """
 
-        data_to_send = "$CHNAME$" + (new_name if bool(new_name) else "")
+        if new_name is None:
+            new_name = self.original_name
+
+        data_to_send = "$CHNAME$" + new_name
         self._send_raw(data_to_send)
 
     def change_group(self, new_group: Union[str, None]):
         """
         Changes the client's group.
 
-        :param new_group: The new group name of the client
+        :param new_group: The new group name for the client to be called.
+            if left blank, then the group will be reset
         :type new_group: Union[str, None]
         """
 
-        data_to_send = "$CHGROUP$" + (new_group if bool(new_group) else "")
+        if new_group is None:
+            new_group = self.original_group
+
+        data_to_send = "$CHGROUP$" + new_group
         self._send_raw(data_to_send)
 
     # Update
@@ -662,13 +675,13 @@ def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
         Groups can be utilized to send specific messages to them only.
         This argument is optional.
     :type group: str, optional
-    :param blocking: A boolean specifying if the client should block or not
-        in the socket.
-        Default is True.
-    :type blocking: bool, optional
     :param header_len: An integer defining the header length of every message.
         Default is True.
     :type header_len: int, optional
+    :param cache_size: The size of the message cache.
+        -1 or below for no message cache, 0 for an unlimited cache size,
+        and any other number for the cache size.
+    :type cache_size: int, optional
 
     :return: A :class:`HiSockClient` instance.
     :rtype: instance

@@ -1,8 +1,8 @@
 """
-This module contains the HiSock shared code.
+This module contains shared code for both HiSockServer and HiSockClient.
 
 ====================================
-insert snek copyright here please :)
+Copyright SSS_Says_Snek, 2022-present
 ====================================
 """
 
@@ -33,7 +33,7 @@ except ImportError:
     )
 
 
-class _HiSock:
+class _HiSockBase:
     """
     Base class for both :class:`HiSockClient` and :class:`HiSockServer`.
     See their documentation for more info.
