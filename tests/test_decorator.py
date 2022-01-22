@@ -21,6 +21,7 @@ class DummyFuncClassServer:
             "name_change": 3,
             "group_change": 3,
         }
+        self._unreserved_func_arguments = ("client_data", "message")
 
 
 class DummyFuncClassClient(DummyFuncClassServer):
@@ -31,6 +32,7 @@ class DummyFuncClassClient(DummyFuncClassServer):
             "client_disconnect": 1,
             "force_disconnect": 0,
         }
+        self._unreserved_func_arguments = ("message",)
 
 
 _ServerDec = serv_on
