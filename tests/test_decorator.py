@@ -14,7 +14,7 @@ cli_on = HiSockClient._on
 class DummyFuncClassServer:
     def __init__(self):
         self.funcs = {}
-        self._reserved_functions = {
+        self._reserved_funcs = {
             "join": 1,
             "leave": 1,
             "message": 3,
@@ -26,7 +26,7 @@ class DummyFuncClassServer:
 class DummyFuncClassClient(DummyFuncClassServer):
     def __init__(self):
         super().__init__()
-        self._reserved_functions = {
+        self._reserved_funcs = {
             "client_connect": 1,
             "client_disconnect": 1,
             "force_disconnect": 0,
@@ -90,7 +90,7 @@ class TestServerDecs:
             "func": func_server_no_typecast,
             "name": func_server_no_typecast.__name__,
             "type_hint": {"client_data": None, "message": None},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_server_two_typecast(self):
@@ -98,7 +98,7 @@ class TestServerDecs:
             "func": func_server_two_typecast,
             "name": func_server_two_typecast.__name__,
             "type_hint": {"client_data": str, "message": int},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_server_one_typecast(self):
@@ -106,7 +106,7 @@ class TestServerDecs:
             "func": func_server_one_typecast,
             "name": func_server_one_typecast.__name__,
             "type_hint": {"client_data": None, "message": float},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_server_clt_typecast(self):
@@ -114,7 +114,7 @@ class TestServerDecs:
             "func": func_server_clt_typecast,
             "name": func_server_clt_typecast.__name__,
             "type_hint": {"client_data": list, "message": None},
-            "threaded": False
+            "threaded": False,
         }
 
 
@@ -124,7 +124,7 @@ class TestClientDecs:
             "func": func_client_no_typecast,
             "name": func_client_no_typecast.__name__,
             "type_hint": {"message": None},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_client_typecast(self):
@@ -132,7 +132,7 @@ class TestClientDecs:
             "func": func_client_typecast,
             "name": func_client_typecast.__name__,
             "type_hint": {"message": int},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_client_exception(self):

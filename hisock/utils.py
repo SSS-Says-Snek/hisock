@@ -311,11 +311,9 @@ def _type_cast(
         # Type cast content_to_type_cast to type_cast
         if type_cast is bytes:
             return content_to_type_cast
-        elif type_cast is None:
+        if type_cast is None:
             return None
-        elif type_cast is ClientInfo:
-            return ClientInfo(**_type_cast(dict, content_to_type_cast, func_name))
-        elif type_cast in (str, int, float):
+        if type_cast in (str, int, float):
             # Handle no data
             if not content_to_type_cast:
                 if type_cast is str:
@@ -328,7 +326,7 @@ def _type_cast(
                 raise InvalidTypeCast(
                     f"Type casting from {type(content_to_type_cast).__name__} "
                     f"to {type_cast.__name__} failed for function "
-                    f"\"{func_name}:\n{e}\""
+                    f'"{func_name}:\n{e}"'
                 ) from e
 
             return ret
@@ -339,12 +337,11 @@ def _type_cast(
 
             result = json.loads(content_to_type_cast.decode())
 
-            if type(result) != type_cast:
-                raise InvalidTypeCast(
-                    f"Tried to convert from {type(result)} to {type_cast}."
-                )
-            return result
+            if not isinstance(result, type_cast):
+                # json.loads works with dicts and lists, so the result could be ambiguous
+                raise InvalidTypeCast()
 
+            return result
 
         raise InvalidTypeCast(
             f"Cannot type cast bytes to {type(type_cast).__name__}."
@@ -429,7 +426,7 @@ def validate_ipv4(  # NOSONAR (always will return True, but will raise exception
     try:
         ip = IPv4Address(ip)
     except ValueError:
-        raise ValueError(f"{ip} is not a valid IPv4 address")
+        raise ValueError(f"{ip} is not a valid IPv4 address") from None
 
     return True
 

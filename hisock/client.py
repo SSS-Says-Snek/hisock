@@ -31,7 +31,6 @@ try:
         ClientException,
         ClientNotFound,
         ServerException,
-        FunctionNotFoundException,
         FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
@@ -40,19 +39,17 @@ try:
         Client,
         _removeprefix,
         _type_cast,
-        _str_type_to_type_annotations_dict,
         make_header,
         iptup_to_str,
         validate_ipv4,
-        validate_command_not_reserved,
     )
+    from .shared import _HiSock
 except ImportError:
     # Relative import doesn't work for non-pip builds
     from utils import (
         ClientException,
         ClientNotFound,
         ServerException,
-        FunctionNotFoundException,
         FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
@@ -61,12 +58,11 @@ except ImportError:
         Client,
         _removeprefix,
         _type_cast,
-        _str_type_to_type_annotations_dict,
         make_header,
         iptup_to_str,
         validate_ipv4,
-        validate_command_not_reserved,
     )
+    from shared import _HiSock
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -79,7 +75,7 @@ except ImportError:
 # If this code is changed, the client may not work properly
 
 
-class HiSockClient:
+class HiSockClient(_HiSock):
     """
     The client class for :mod:`HiSock`.
 
@@ -100,10 +96,6 @@ class HiSockClient:
         It is highly recommended to provide a group for complex servers.
         Pass in NoneType for no group (:meth:`connect` should handle that).
     :type group: str, optional
-    :param blocking: A boolean set to whether the client should block the loop
-        while waiting for message or not.
-        Default is True.
-    :type blocking: bool, optional
     :param header_len: An integer defining the header length of every message.
         A larger header length would mean a larger maximum message length
         (about 10**header_len).
@@ -130,14 +122,13 @@ class HiSockClient:
         addr: tuple[str, int],
         name: Union[str, None],
         group: Union[str, None],
-        blocking: bool = True,
         header_len: int = 16,
         cache_size: int = -1,
     ):
-        self.addr = addr
+        super().__init__(addr=addr, header_len=header_len, cache_size=cache_size)
+
         self.name = name
         self.group = group
-        self.header_len = header_len
 
         # Socket initialization
         self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -147,14 +138,10 @@ class HiSockClient:
             raise ServerNotRunning(
                 "Server is not running! Aborting..."
             ) from ConnectionRefusedError
-        self.sock.setblocking(blocking)
-
-        # Function related storage
-        # {"command": {"func": Callable, "name": str, "type_hint": Any, "threaded": bool}}
-        self.funcs = {}
+        self.sock.setblocking(False)
 
         # Stores the names of the reserved functions and information about them
-        self._reserved_functions = {
+        self._reserved_funcs = {
             "client_connect": {
                 "number_arguments": 1,
                 "type_cast_arguments": ("client_data",),
@@ -168,25 +155,11 @@ class HiSockClient:
                 "type_cast_arguments": tuple(),
             },
         }
-        # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
-        # If catching all, then event_name will be a number sandwiched by dollar signs
-        # Then `update` will handle the event with the lowest number
-        self._recv_on_events = {}
-
-        # Cache
-        self.cache_size = cache_size
-        if cache_size > 0:
-            # cache_size <= 0: No cache
-            self.cache = []
-
-        # TLS arguments
-        self.tls_arguments = {"tls": False}  # If TLS is false, then no TLS
+        self._unreserved_func_arguments = ("message",)
 
         # Flags
-        self.closed = False
         self.connected = False
         self.connect_time = 0  # Unix timestamp
-        self._receiving_data = False
 
         # Send client hello
         self._send_client_hello()
@@ -255,52 +228,6 @@ class HiSockClient:
 
     # Internal methods
 
-    @staticmethod
-    def _send_type_cast(content: Sendable) -> bytes:
-        """
-        Type casting content for the send methods.
-        This method exists so type casting can easily be changed without changing
-        all the send methods.
-
-        :param content: The content to type cast
-        :type content: Sendable
-
-        :return: The type casted content
-        :rtype: bytes
-
-        :raises InvalidTypeCast: If the content cannot be type casted
-        """
-
-        return _type_cast(
-            type_cast=bytes,
-            content_to_type_cast=content,
-            func_name="<client sending function>",
-        )
-
-    def _type_cast_client_data(
-        self, command: str, client_data: dict
-    ) -> Union[ClientInfo, dict]:
-        """
-        Type cast client info accordingly.
-        If the type hint is None, then the client info is returned as is (a dict).
-
-        :param command: The name of the function that called this method.
-        :type command: str
-        :param client_data: The client data to type cast.
-        :type client_data: dict
-
-        :return: The type casted client data from the type hint.
-        :rtype: Union[ClientInfo, dict]
-        """
-
-        type_cast_to = self.funcs[command]["type_hint"]["client_data"]
-        if type_cast_to is None:
-            type_cast_to = ClientInfo
-
-        if type_cast_to is ClientInfo:
-            return ClientInfo(**client_data)
-        return client_data
-
     def _send_client_hello(self):
         """
         Sends a hello to the server for the first connection.
@@ -325,131 +252,6 @@ class HiSockClient:
         self._send_raw("$KEEPACK$")
 
     # On decorator
-
-    def _call_function(self, func_name: str, *args, **kwargs):
-        """
-        Calls a function with the given arguments and returns the result.
-
-        :param func_name: The name of the function to call.
-        :type func_name: str
-        :param args: The arguments to pass to the function.
-        :param kwargs: The keyword arguments to pass to the function.
-
-        :raises FunctionNotFoundException: If the function is not found.
-        """
-
-        if func_name not in self.funcs:
-            raise FunctionNotFoundException(
-                f"Function with command {func_name} not found"
-            )
-
-        # Normal
-        if not self.funcs[func_name]["threaded"]:
-            self.funcs[func_name]["func"](*args, **kwargs)
-            return
-
-        # Threaded
-        function_thread = threading.Thread(
-            target=self.funcs[func_name]["func"],
-            args=args,
-            kwargs=kwargs,
-            daemon=True,
-        )
-        function_thread.start()
-
-    class _on:
-        """Decorator used to handle something when receiving command."""
-
-        def __init__(
-            self,
-            outer: HiSockClient,
-            command: str,
-            threaded: bool,
-            override: bool,
-        ):
-            self.outer = outer
-            self.command = command
-            self.threaded = threaded
-            self.override = override
-
-            validate_command_not_reserved(self.command)
-
-        def __call__(self, func: Callable) -> Callable:
-            """
-            Adds a function that gets called when the server receives a matching command.
-
-            :raises ValueError: If the number of function arguments is invalid.
-            """
-
-            func_args = inspect.getfullargspec(func).args
-
-            # Overriding a reserved command, remove it from reserved functions
-            if self.override and self.command in self.outer._reserved_functions:
-                self.outer.funcs.pop(self.command, None)
-                del self.outer._reserved_functions[self.command]
-
-            self._assert_num_func_args_valid(len(func_args))
-
-            # Store annotations of function
-            annotations = _str_type_to_type_annotations_dict(
-                inspect.getfullargspec(func).annotations
-            )  # {"param": type}
-            parameter_annotations = {}
-
-            # Map function arguments into type hint compliant ones
-            type_cast_arguments: tuple
-            if self.command in self.outer._reserved_functions:
-                type_cast_arguments = (
-                    self.outer._reserved_functions[self.command]["type_cast_arguments"],
-                )[0]
-            else:
-                type_cast_arguments = ("message",)
-
-            for func_argument, argument_name in zip(func_args, type_cast_arguments):
-                parameter_annotations[argument_name] = annotations.get(
-                    func_argument, None
-                )
-
-            # Add function
-            self.outer.funcs[self.command] = {
-                "func": func,
-                "name": func.__name__,
-                "type_hint": parameter_annotations,
-                "threaded": self.threaded,
-            }
-
-            # Decorator stuff
-            return func
-
-        def _assert_num_func_args_valid(self, number_of_func_args: int):
-            """
-            Asserts the number of function arguments is valid.
-            Unreserved commands can have either 0 or 1 arguments.
-            For reserved commands, refer to
-            :ivar:`HiSockClient._reserved_functions_parameters_num`.
-
-            :raises TypeError: If the number of function arguments is invalid.
-            """
-
-            valid = False
-            needed_number_of_args = "0-1"
-
-            # Reserved commands
-            if self.command in self.outer._reserved_functions:
-                needed_number_of_args = (
-                    self.outer._reserved_functions[self.command]["number_arguments"],
-                )[0]
-                valid = number_of_func_args == needed_number_of_args
-
-            # Unreserved commands
-            else:
-                valid = not number_of_func_args > 1
-
-            if not valid:
-                raise TypeError(
-                    f"{self.command} command must have {needed_number_of_args} "
-                    f"arguments, not {number_of_func_args}"
-                )
 
     def on(
         self, command: str, threaded: bool = False, override: bool = False
@@ -626,55 +428,6 @@ class HiSockClient:
         header = make_header(data_to_send, self.header_len)
         self.sock.send(header + data_to_send)
 
-    def recv(self, recv_on: str = None, recv_as: Sendable = bytes) -> Sendable:
-        """
-        Receive data from the server while blocking.
-        Can receive on a command, which is used as like one-time on decorator.
-
-        .. note::
-           Reserved functions will be ignored and not caught by this method.
-
-        :param recv_on: A string for the command to receive on.
-        :type recv_on: str, optional
-        :param recv_as: The type to receive the data as.
-        :type recv_as: Sendable, optional
-
-        :return: The data received type casted as ``recv_as``.
-        :rtype: Sendable
-        """
-
-        # `update` will be the one actually receiving the data (in its own thread).
-        # Tell update to listen for a command and send it to us instead.
-        if recv_on is not None:
-            listen_on = recv_on
-        else:
-            # Get the highest number of catch-all listeners
-            catch_all_listener_max = 0
-            for listener in self._recv_on_events:
-                if not listener.startswith("$") and listener.endswith("$"):
-                    continue
-                catch_all_listener_max = int(listener.replace("$", ""))
-
-            listen_on = f"${catch_all_listener_max + 1}$"
-
-        # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
-        self._recv_on_events[listen_on] = {
-            "thread_event": threading.Event(),
-            "data": None,
-        }
-
-        # Wait for `update` to retreive the data
-        self._recv_on_events[listen_on]["thread_event"].wait()
-
-        # Clean up
-        data = self._recv_on_events[listen_on]["data"]
-        del self._recv_on_events[listen_on]
-
-        # Return
-        return _type_cast(
-            type_cast=recv_as, content_to_type_cast=data, func_name="<recv function>"
-        )
-
     # Changers
 
     def change_name(self, new_name: Union[str, None]):
@@ -812,7 +565,7 @@ class HiSockClient:
             # Call functions that are listening for this command from the `on`
             # decorator
             for matching_command, func in self.funcs.items():
-                if not command == matching_command:
+                if command != matching_command:
                     continue
 
                 has_listener = True
@@ -830,25 +583,8 @@ class HiSockClient:
                 self._call_function(matching_command, *arguments)
                 break
 
-            # Handle data needed for `recv`
-            for listener in self._recv_on_events:
-                # Catch-all listeners
-                # `listener` transverses in-order, so the first will be the minimum
-                should_continue = True
-                if listener.startswith("$") and listener.endswith("$"):
-                    should_continue = False
-
-                # Specific listeners
-                if command == listener:
-                    should_continue = False
-
-                if should_continue:
-                    continue
-
-                self._recv_on_events[listener]["data"] = content
-                self._recv_on_events[listener]["thread_event"].set()
-                has_listener = True
-                break
+            else:
+                has_listener = self._handle_recv_commands(command, content)
 
             # No listener found
             if not has_listener:
@@ -860,22 +596,7 @@ class HiSockClient:
                 return
 
             # Caching
-            if self.cache_size >= 0:
-                cache_content = content if has_listener else decoded_data
-                self.cache.append(
-                    MessageCacheMember(
-                        {
-                            "header": content_header,
-                            "content": cache_content,
-                            "called": has_listener,
-                            "command": command,
-                        }
-                    )
-                )
-
-                # Pop oldest from stack
-                if 0 < self.cache_size < len(self.cache):
-                    self.cache.pop(0)
+            self._cache(has_listener, command, content, decoded_data, content_header)
 
         except IOError as e:
             # Normal, means message has ended
@@ -927,7 +648,7 @@ class HiSockClient:
         loop_thread.start()
 
 
-def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_size=-1):
+def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
     """
     Creates a `HiSockClient` instance. See HiSockClient for more details
 
@@ -958,7 +679,7 @@ def connect(addr, name=None, group=None, blocking=True, header_len=16, cache_siz
         call this function by simply doing ``connect(*input_client_config())``
     """
 
-    return HiSockClient(addr, name, group, blocking, header_len, cache_size)
+    return HiSockClient(addr, name, group, header_len, cache_size)
 
 
 if __name__ == "__main__":
@@ -1015,7 +736,9 @@ if __name__ == "__main__":
                 client.send("broadcast_message", input("Message: "))
             elif choice == "ping":
                 client.send("ping")
+                ping_time = time()
                 client.recv("pong")
+                print(f"Pong! Took {time() - ping_time} seconds.")
             elif choice == "change_name":
                 client.change_name(input("New name: "))
             elif choice == "change_group":
