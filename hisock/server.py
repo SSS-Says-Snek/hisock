@@ -942,6 +942,9 @@ class HiSockServer(_HiSockBase):
                 ("$CHNAME$", "$CHGROUP$"), ("name", "group")
             ):
 
+                if not decoded_data.startswith(matching_reserve):
+                    continue
+
                 change_to = _removeprefix(decoded_data, matching_reserve)
 
                 # Resetting
