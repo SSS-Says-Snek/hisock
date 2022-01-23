@@ -492,7 +492,7 @@ def _input_port(question: str) -> int:
 
 
 def input_server_config(
-    ip_prompt: str = "Enter the IP of for the server: ",
+    ip_prompt: str = "Enter the IP for the server: ",
     port_prompt: str = "Enter the port for the server: ",
 ) -> tuple[str, int]:
     """

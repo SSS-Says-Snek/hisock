@@ -829,7 +829,7 @@ class HiSockServer(_HiSockBase):
         """Disconnect all clients."""
 
         if not force:
-            self._send_all_clients_raw("$DISCONN$")
+            self._send_all_clients_raw(b"$DISCONN$")
             return
 
         for conn in self._sockets_list:
