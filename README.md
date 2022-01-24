@@ -40,6 +40,7 @@ Note that you **MUST** cd into the cloned directory for this to work.
 
 ## Code of Conduct and Contributing Guidelines:
 [Code of Conduct](.github/CODE_OF_CONDUCT.md)
+
 [Contributing Guidelines](.github/CONTRIBUTING.md)
 
 ## Examples
