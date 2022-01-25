@@ -650,15 +650,11 @@ class HiSockClient(_HiSockBase):
     def start(self):
         """Start the main loop for the client."""
 
-        def loop():
-            while not self.closed:
-                try:
-                    self._update()
-                except KeyboardInterrupt:
-                    self.close()
-
-        loop_thread = threading.Thread(target=loop, daemon=False)
-        loop_thread.start()
+        while not self.closed:
+            try:
+                self._update()
+            except KeyboardInterrupt:
+                self.close()
 
 
 def connect(addr, name=None, group=None, header_len=16, cache_size=-1):

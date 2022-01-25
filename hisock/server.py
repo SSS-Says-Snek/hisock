@@ -1089,15 +1089,11 @@ class HiSockServer(_HiSockBase):
     def start(self):
         """Start the main loop for the server."""
 
-        def loop():
-            while not self.closed:
-                try:
-                    self._run()
-                except KeyboardInterrupt:
-                    self.close()
-
-        loop_thread = threading.Thread(target=loop, daemon=False)
-        loop_thread.start()
+        while not self.closed:
+            try:
+                self._run()
+            except KeyboardInterrupt:
+                self.close()
 
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
