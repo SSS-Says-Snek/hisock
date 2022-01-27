@@ -157,5 +157,6 @@ while not s.closed:
 Special thanks to the following:
 - Sheepy0125, for refactoring the underhood code as well as the API
 - SSS-Says-Snek, for maintaining and developing the library
+- Ankith26, for helping me understand the usages of headers
 
 ###### Copyright SSS-Says-Snek, 2021-present
