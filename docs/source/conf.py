@@ -6,6 +6,7 @@ import pathlib
 import json
 
 import urllib.request
+from urllib.error import HTTPError
 
 path = pathlib.Path(os.path.dirname(__file__))
 
@@ -26,12 +27,15 @@ print("Source files live in:", os.path.abspath("../../"))
 
 from hisock import constants
 
-
-version_html = json.loads(
-    urllib.request.urlopen(
-        "https://api.github.com/repos/SSS-Says-Snek/hisock/releases/latest"
-    ).read()
-)
+try:
+    version_html = json.loads(
+        urllib.request.urlopen(
+            "https://api.github.com/repos/SSS-Says-Snek/hisock/releases/latest"
+        ).read()
+    )
+except HTTPError:
+    # Most likely rate-limited
+    version_html = {}
 
 # Configuration file for the Sphinx documentation builder.
 #
@@ -62,7 +66,7 @@ html_favicon = "imgs/logo.ico"
 try:
     release = version_html["tag_name"]
 except KeyError:
-    # Most likely rate limited
+    # Most likely rate-limited
     release = constants.__version__  # Fall back on latest known release
 
 # -- General configuration ---------------------------------------------------

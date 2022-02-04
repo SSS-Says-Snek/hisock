@@ -123,8 +123,8 @@ class HiSockClient(_HiSockBase):
     def __init__(
         self,
         addr: tuple[str, int],
-        name: Union[str, None],
-        group: Union[str, None],
+        name: Union[str, None] = None,
+        group: Union[str, None] = None,
         header_len: int = 16,
         cache_size: int = -1,
     ):
@@ -330,6 +330,7 @@ class HiSockClient(_HiSockBase):
 
         if idx is None:
             return self.cache
+
         return self.cache[idx]
 
     def get_client(
@@ -526,7 +527,6 @@ class HiSockClient(_HiSockBase):
             # Handle new client connection
             if decoded_data.startswith("$CLTCONN$"):
                 if "client_connect" not in self.funcs:
-                    warnings.warn("client_connect", FunctionNotFoundWarning)
                     return
 
                 client_data = self._type_cast_client_data(
@@ -543,7 +543,6 @@ class HiSockClient(_HiSockBase):
             # Handle client disconnection
             if decoded_data.startswith("$CLTDISCONN$"):
                 if "client_disconnect" not in self.funcs:
-                    warnings.warn("client_disconnect", FunctionNotFoundWarning)
                     return
 
                 client_data = self._type_cast_client_data(
@@ -639,7 +638,6 @@ class HiSockClient(_HiSockBase):
         :param emit_leave: Decides if the client will emit `leave` to the server or not
         :type emit_leave: bool
         """
-
         self.closed = True
         if emit_leave:
             self._send_raw("$USRCLOSE$")
@@ -650,15 +648,60 @@ class HiSockClient(_HiSockBase):
     def start(self):
         """Start the main loop for the client."""
 
-        def loop():
-            while not self.closed:
-                try:
-                    self._update()
-                except KeyboardInterrupt:
-                    self.close()
+        while not self.closed:
+            try:
+                self._update()
+            except KeyboardInterrupt:
+                self.close()
 
-        loop_thread = threading.Thread(target=loop, daemon=False)
-        loop_thread.start()
+
+class ThreadedHiSockClient(HiSockClient):
+    """
+    A downside of :class:`HiSockClient` is that you need to constantly
+    :meth:`run` it in a while loop, which may block the program. Fortunately,
+    in Python, you can use threads to do two different things at once. Using
+    :class:`ThreadedHiSockClient`, you would be able to run another
+    blocking program, without ever fearing about blocking and all that stuff.
+
+    .. note::
+
+       In some cases though, :class:`HiSockClient` offers more control than
+       :class:`ThreadedHiSockClient`, so be careful about when to use
+       :class:`ThreadedHiSockClient` over :class:`HiSockClient`
+    """
+
+    def __init__(
+        self, *args, **kwargs
+    ):
+        super().__init__(*args, **kwargs)
+        self._thread = threading.Thread(target=self.run)
+
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        """Stops the client"""
+        self.closed = True
+        self._stop_event.set()
+        self.sock.close()
+
+    def run(self):
+        """
+        The main while loop to run the thread
+        Refer to :class:`HiSockClient` for more details
+        .. warning::
+           This method is **NOT** recommended to be used in an actual
+           production enviroment. This is used internally for the thread, and should
+           not be interacted with the user
+        """
+        super().start()
+
+    def start(self):
+        """Starts the main server loop"""
+        self._thread.start()
+
+    def join(self):
+        """Waits for the thread to be killed"""
+        self._thread.join()
 
 
 def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
@@ -693,6 +736,17 @@ def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
     """
 
     return HiSockClient(addr, name, group, header_len, cache_size)
+
+
+def threaded_connect(
+    *args, **kwargs
+):
+    """
+    Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
+    for more details
+    :return: A :class:`ThreadedHiSockClient` instance
+    """
+    return ThreadedHiSockClient(*args, **kwargs)
 
 
 if __name__ == "__main__":

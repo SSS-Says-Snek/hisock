@@ -14,11 +14,20 @@ from hisock import server  # lgtm [py/unused-import]
 
 from hisock.constants import __version__  # lgtm [py/unused-import]
 
+from hisock.constants import __version__
+
 from .server import (
     start_server,
+    start_threaded_server,
     HiSockServer,
+    ThreadedHiSockServer
 )  # lgtm [py/unused-import]
-from .client import connect, HiSockClient  # lgtm [py/unused-import]
+from .client import (
+    connect,
+    threaded_connect,
+    HiSockClient,
+    ThreadedHiSockClient
+)  # lgtm [py/unused-import]
 from .utils import (  # lgtm [py/unused-import]
     get_local_ip,  # lgtm [py/unused-import]
     input_client_config,

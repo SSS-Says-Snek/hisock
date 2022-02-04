@@ -57,7 +57,7 @@ def run():
 
         print(f"WHOAAA! The result is {result}! Thanks server!")
 
-    while True:
+    while not s.closed:
         s.update()
 
 

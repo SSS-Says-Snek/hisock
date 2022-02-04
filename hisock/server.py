@@ -909,6 +909,11 @@ class HiSockServer(_HiSockBase):
                 except BrokenPipeError:  # UNIX
                     # Client is already gone
                     pass
+                except ConnectionResetError:
+                    self.disconnect_client(
+                        client_data["ip"], force=True, call_func=True
+                    )
+
                 continue
 
             # Handle keepalive acknowledgement
@@ -1089,16 +1094,58 @@ class HiSockServer(_HiSockBase):
     def start(self):
         """Start the main loop for the server."""
 
-        def loop():
-            while not self.closed:
-                try:
-                    self._run()
-                except KeyboardInterrupt:
-                    self.close()
+        while not self.closed:
+            try:
+                self._run()
+            except KeyboardInterrupt:
+                self.close()
 
-        loop_thread = threading.Thread(target=loop, daemon=False)
-        loop_thread.start()
 
+class ThreadedHiSockServer(HiSockServer):
+    """
+    A downside of :class:`HiSockServer` is that the execution is **blocking**,
+    which means that the program can't do anything until the loop is finished.
+    Fortunately, in Python, you can use threads to do two different things at once. Using
+    :class:`ThreadedHiSockServer`, you would be able to run another
+    blocking program, without ever fearing about blocking and all that stuff.
+
+    .. note::
+
+       In some cases though, :class:`HiSockServer` offers more control than
+       :class:`ThreadedHiSockServer`, so be careful about when to use
+       :class:`ThreadedHiSockServer` over :class:`HiSockServer`
+    """
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._thread = threading.Thread(target=self.run)
+
+        self._stop_event = threading.Event()
+
+    def stop(self):
+        """Stops the server"""
+        self._stop_event.set()
+        self.closed = True
+        self.socket.close()
+
+    def run(self):
+        """
+        The main while loop to run the thread
+        Refer to :class:`HiSockServer` for more details
+        .. warning::
+           This method is **NOT** recommended to be used in an actual
+           production enviroment. This is used internally for the thread, and should
+           not be interacted with the user
+        """
+        super().start()
+
+    def start(self):
+        """Starts the main server loop"""
+        self._thread.start()
+
+    def join(self):
+        """Waits for the thread to be killed"""
+        self._thread.join()
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
@@ -1109,6 +1156,15 @@ def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
 
     return HiSockServer(addr, blocking, max_connections, header_len)
+
+
+def start_threaded_server(*args, **kwargs):
+    """
+    Creates a :class:`ThreadedHiSockServer` instance. See :class:`ThreadedHiSockServer`
+    for more details
+    :return: A :class:`ThreadedHiSockServer` instance
+    """
+    return ThreadedHiSockServer(*args, **kwargs)
 
 
 if __name__ == "__main__":

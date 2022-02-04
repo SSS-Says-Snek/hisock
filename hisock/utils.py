@@ -95,18 +95,21 @@ class MessageCacheMember:
 
 class ClientInfo:
     def __init__(self, ip, name, group):
-        self.ip = tuple(ip)  # _type_cast converts tuple to list to be JSON-serializable
-        self.name = name
-        self.group = group
+        self.ip: tuple[str, int] = tuple(ip)  # _type_cast converts tuple to list to be JSON-serializable
+        self.name: Union[str, None] = name
+        self.group: Union[str, None] = group
 
-        self.client_dict = {"ip": self.ip, "name": self.name, "group": self.group}
-        self.ip_as_str = f"{self.ip[0]}:{self.ip[1]}"
+        self.client_dict: dict = {"ip": self.ip, "name": self.name, "group": self.group}
+        self.ip_as_str: str = f"{self.ip[0]}:{self.ip[1]}"
 
     def __getitem__(self, item):
         return self.client_dict[item]
 
     def __str__(self):
         return f"<ClientInfo: IP: {self.ip_as_str}, Name: {self.name}, Group: {self.group}>"
+
+    def __eq__(self, other: ClientInfo):
+        return self.client_dict == other.client_dict
 
 
 class File:
@@ -448,6 +451,7 @@ def get_local_ip(all_ips: bool = False) -> str:
 
     if not all_ips:
         return socket.gethostbyname(socket.gethostname())
+
     return socket.gethostbyname_ex(socket.gethostname())[-1]
 
 
