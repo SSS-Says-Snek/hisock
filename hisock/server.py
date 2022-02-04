@@ -909,6 +909,11 @@ class HiSockServer(_HiSockBase):
                 except BrokenPipeError:  # UNIX
                     # Client is already gone
                     pass
+                except ConnectionResetError:
+                    self.disconnect_client(
+                        client_data["ip"], force=True, call_func=True
+                    )
+
                 continue
 
             # Handle keepalive acknowledgement
