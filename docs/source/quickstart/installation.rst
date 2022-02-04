@@ -13,7 +13,7 @@ Installing via PyPI
 The recommended way to install a stable version of :mod:`HiSock` is through PyPI. To install hisock, open a terminal/command prompt and type:
 
 .. code-block:: console
-   
+
     $ python -m pip install hisock (Windows)
         OR
     $ pip install hisock (Windows)
@@ -51,14 +51,13 @@ After you're now in the working directory of the repo, install it in editable mo
 
     $ pip install -e .
 
-You should now have successfully installed the latest version of :mod:`HiSock`! 
+You should now have successfully installed the latest version of :mod:`HiSock`!
 If this doesn't work, then try one of the alternatives in Method 1, but replace ``hisock`` with ``-e .`` (E.g ``python3 -m pip install -e .``)
 
 .. note::
-   
+
    If you want to check if :mod:`HiSock` is *actually* installed, run this command in your terminal or command prompt:
 
    .. code-block:: console
-       
-       $ python -c $'try:\n\timport hisock;print(f"Hisock {hisock.constants.__version__} successfully installed")\nexcept Exception as e:print(f"Failed to install hisock for {e} reason")'
 
+       $ python -c $'try:\n\timport hisock;print(f"Hisock {hisock.constants.__version__} successfully installed")\nexcept Exception as e:print(f"Failed to install hisock for {e} reason")'
