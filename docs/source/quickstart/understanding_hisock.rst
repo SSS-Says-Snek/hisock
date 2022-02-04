@@ -29,7 +29,7 @@ Let's focus on what :mod:`HiSock` is built on, :mod:`socket`.
 How do you send and receive data with :mod:`HiSock`?
 ----------------------------------------------------
 
-As :mod:`HiSock` is an event-driven module, data sent must have a *command* (also known as *event*) before the data. An example of this could be if the command is ``send_number`` and the data is ``847``.
+As :mod:`HiSock` is an event-driven module, data sent must have a *command* (also known as *event*) before the data (not required). An example of this could be if the command is ``send_number`` and the data is ``847``.
 
 But what data can be sent? Sockets work with bytes, but most times, you don't just want bytes. As touched on earlier, :mod:`HiSock` comes with a type-cast system, which will convert stuff to bytes under-the-hood, so you can focus on sending the data you want and not having to deal with converting it yourself.
 
