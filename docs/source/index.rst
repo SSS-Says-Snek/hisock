@@ -29,7 +29,7 @@ Table of Contents
    quickstart/index
    tutorials/index
    examples/index
-   API Reference <api>
+   API Reference <api/index>
 
 .. toctree::
    :maxdepth: 1

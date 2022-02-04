@@ -40,6 +40,8 @@ This tutorial will focus on:
 
 Now, without further ado, let's begin!
 
+----
+
 Creating our first server
 -------------------------
 
@@ -60,6 +62,8 @@ That's basically it! Of course, this server is useless, but hey, it's a step in 
 
 Obviously, without a client, a server is kind of pointless. So, let's spice things up with some client code!
 
+----
+
 Creating our first client
 -------------------------
 In :mod:`HiSock`, there is a function to create a :class:`HiSockClient` instance, which is :meth:`hisock.connect`. This needs to be called with a maximum of two parameters. The first parameter is a tuple of the IP address of the server to connect to and the port is the port that the server is running on. The second parameter is the name of the client. :mod:`HiSock` uses IP addresses and names to identify clients. The third parameter (optional) is the group of the client. This tutorial won't mention groups.
@@ -71,7 +75,7 @@ Like :class:`HiSockServer`, :class:`HiSockClient` needs to be run constantly to 
    import hisock
 
    client = hisock.connect(
-       (hisock.utils.get_local_ip(), 6969), 
+       (hisock.utils.get_local_ip(), 6969),
        name=input("What is your name? >"),
     )
 
@@ -80,12 +84,16 @@ Like :class:`HiSockServer`, :class:`HiSockClient` needs to be run constantly to 
 
 Like the server, this doesn't do anything at all yet. Next, we will explore sending and receiving data in an example.
 
+----
+
 Transmitting Data
 -----------------
 
 Let's explore transmitting data for :mod:`HiSock`!
 
 :mod:`HiSock` is an event-driven module, and as such, has an ``on`` decorator and :meth:`send` methods for both :class:`HiSockClient` and :class:`HiSockServer`.
+
+----
 
 ==============
 Receiving data
@@ -115,7 +123,7 @@ Here's an example with the ``on`` decorator in use in a server. Here, the server
 Here's another example with receiving data, this time on the client-side. The client will receive a command, ``greet``, with a name. It will then print out a greeting with the name.
 
 .. code-block:: python
-   
+
    client = ...
 
    @client.on("greet")
@@ -130,7 +138,7 @@ If the ``threaded`` parameter for the ``on`` decorator is True, then the functio
 It is useful if you want to get user input but also want to have the user receive other data.
 
 .. code-block:: python
-     
+
    client = ...
 
    @client.on("ask_question", threaded=True)
@@ -138,14 +146,17 @@ It is useful if you want to get user input but also want to have the user receiv
        """Contains blocking code with ``input()``."""
        answer = input(f"Please answer this question: {question}\n>")
        # ... send answer to server ...
-    
+
    @client.on("important")
    def on_important(message: str):
        """This is important and cannot be missed!"""
        ...
-    
+
    while True:
        ...
+
+
+----
 
 ============
 Sending data
@@ -160,7 +171,7 @@ For the client: Sending data to the server in :mod:`HiSock` uses the :meth:`send
 Here is an example of sending data with a server-side code block:
 
 .. code-block:: python
-   
+
    server = ...
 
    @server.on("join")
@@ -177,7 +188,7 @@ Here is an example of sending data with a server-side code block:
 And here is an example on the client-side:
 
 .. code-block:: python
-   
+
    client = ...
 
    @client.on("ask_question")
@@ -191,6 +202,9 @@ And here is an example on the client-side:
 
    while True:
        ...
+
+
+----
 
 ===============
 Reserved events
@@ -208,7 +222,7 @@ Here is a list of the reserved events:
 Server:
 
 - ``join``
-  
+
    The client sends the event ``join`` when they connect to the server. The only parameter sent to the function being decorated is the client data.
 - ``leave``
 
@@ -226,7 +240,7 @@ Server:
 Client:
 
 - ``client_connect``
- 
+
    When a client connects to the server, all the clients will have this event called. The only parameter for this is the client data for the client which joined.
 - ``client_disconnect``
 
@@ -234,6 +248,8 @@ Client:
 - ``force_disconnect``
 
    The server sends the event ``force_disconnect`` to a client when they kick the client. There are *no* parameters sent with the function that is being decorated with this.
+
+----
 
 ============
 Type-casting
@@ -259,11 +275,11 @@ The type that the data gets type-casted to depends on the type hint for the mess
 Here are a few examples this server-side code block:
 
 .. code-block:: python
-    
+
    @server.on("string_sent")
    def on_string_sent(client_data, message: str):
        """``message`` will be of type ``string``"""
-       ... 
+       ...
 
    @server.on("integer_sent")
    def on_integer_sent(client_data, integer: int):
@@ -280,6 +296,8 @@ Here are a few examples this server-side code block:
 
 Of course, you need to be careful that the type-casting will work. Turning ``b"hello there"`` to ``int`` will fail.
 
+----
+
 =================
 Dynamic arguments
 =================
@@ -292,11 +310,11 @@ As an example, for the server, if the function for an event has 1 argument, it w
 Here are a few examples of this with a server-side code block.
 
 .. code-block:: python
-    
+
    @server.on("event1")
    def on_event1(client_data, message: str):
        print(f"I have {client_data=} and {message=} as a string!")
-       
+
    @server.on("event2")
    def on_event2(client_data, message: int):
        print(f"I have {client_data=} and {message=} as an integer! {message+1=}")
@@ -304,7 +322,7 @@ Here are a few examples of this with a server-side code block.
    @server.on("event3")
    def on_event3(client_data):
        print(f"I only have {client_data=}!")
-   
+
    @server.on("event4")
    def on_event4():
        print("I have nothing.")
@@ -314,13 +332,16 @@ Likewise, data sent can have a message or no message.
 Here is an example with a client-side code block.
 
 .. code-block:: python
-   
+
    client.send("event1", "Hello")  # Server will receive "Hello"
    client.send("event1")  # Server will receive an empty string
    client.send("event2", b"123")  # Server will receive 123 and output 124
    client.send("event2")  # Server will receive 0 and output 1
    client.send("event3", "there")  # Server won't receive "there"
    client.send("event4", "Hi")  # Server won't receive anything
+
+
+----
 
 Conclusion
 ----------
