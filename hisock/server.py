@@ -722,6 +722,18 @@ class HiSockServer:
 
         return _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
 
+    def start(self):
+        """
+        Starts a while loop that actually runs the server long-term. Exactly equivalent to:
+
+        .. code-block:: python
+           while not server.closed:
+               server.run()
+
+        """
+        while not self.closed:
+            self.run()
+
     def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
         """
         Gets all clients from a specific group

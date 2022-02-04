@@ -53,15 +53,14 @@ stringified_ex_subdirs = list(
     map(str, list(filter(pathlib.Path.is_dir, raw_ex_subdirs)))
 )
 ex_subdirs = [
-    subdir.replace("\\", ".").replace("/", ".") for subdir in stringified_ex_subdirs \
+    subdir.replace("\\", ".").replace("/", ".") for subdir in stringified_ex_subdirs
 ]
 ex_subdirs = [i for i in ex_subdirs if i != "examples.__pycache__"]
 
 print_ex_subdirs = "- " + "\n- ".join(ex_subdirs)
 print(
     color_text(
-        "[INFO] Collected the following examples modules:\n"
-        f"{print_ex_subdirs}\n",
+        "[INFO] Collected the following examples modules:\n" f"{print_ex_subdirs}\n",
         "green",
     )
 )
@@ -70,13 +69,14 @@ print(
 #      REQUIREMENTS     #
 #########################
 
-requirements = [line.strip() for line in (ROOT / "requirements.txt").read_text().splitlines()]
+requirements = [
+    line.strip() for line in (ROOT / "requirements.txt").read_text().splitlines()
+]
 print_requirements = "- " + "\n- ".join(requirements)
 
 print(
     color_text(
-        "[INFO] Requirements necessary:\n"
-        f"{print_requirements}\n",
+        "[INFO] Requirements necessary:\n" f"{print_requirements}\n",
         "green",
     )
 )
@@ -85,7 +85,7 @@ print(
 #  REMOVE OLD VERSIONS  #
 #########################
 
-dist_subdir = (ROOT / "dist")
+dist_subdir = ROOT / "dist"
 try:
     dist_subdir_items = list(dist_subdir.iterdir())
 except FileNotFoundError:
@@ -96,11 +96,16 @@ if dist_subdir.exists():
     if not dist_subdir_items:
         print(color_text("[INFO] Nothing in dist!", "green"))
     else:
-        print(color_text(f"[INFO] Found {len(dist_subdir_items)} items, removing...", "green"))
+        print(
+            color_text(
+                f"[INFO] Found {len(dist_subdir_items)} items, removing...", "green"
+            )
+        )
         for old_build_files in dist_subdir.iterdir():
-            if (
-                    re.match(f"{NAME}-{ESCAPED_VERSION}\.tar\.gz", old_build_files.name)
-                    or re.match(f"{NAME}-{ESCAPED_VERSION}-py3-none-any\.whl", old_build_files.name)
+            if re.match(
+                f"{NAME}-{ESCAPED_VERSION}\.tar\.gz", old_build_files.name
+            ) or re.match(
+                f"{NAME}-{ESCAPED_VERSION}-py3-none-any\.whl", old_build_files.name
             ):
                 print(
                     color_text(
@@ -108,14 +113,13 @@ if dist_subdir.exists():
                         "          "
                         "If you already pushed this file to PyPI, do NOT push the files being "
                         "generated right now.",
-                        "yellow"
+                        "yellow",
                     )
                 )
             else:
                 print(
                     color_text(
-                        f"[INFO] Removing build file {old_build_files.name}...",
-                        "green"
+                        f"[INFO] Removing build file {old_build_files.name}...", "green"
                     )
                 )
             old_build_files.unlink()
@@ -146,16 +150,11 @@ setup(
     ],
     install_requires=requirements,
     packages=[
-                 "hisock",
-                 "examples",
-             ]
-             + ex_subdirs,
+        "hisock",
+        "examples",
+    ]
+    + ex_subdirs,
     python_requires=">=3.7",
 )
 
-print(
-    color_text(
-        f"\nSuccessfully built {NAME} {VERSION}!",
-        "green"
-    )
-)
+print(color_text(f"\nSuccessfully built {NAME} {VERSION}!", "green"))

@@ -508,8 +508,8 @@ class HiSockClient:
         """
         if idx is None:
             return self.cache
-        else:
-            return self.cache[idx]
+
+        return self.cache[idx]
 
     def get_client(self, client: Client):
         """
@@ -856,7 +856,6 @@ class HiSockClient:
         :param emit_leave: Decides if the client will emit `leave` to the server or not
         :type emit_leave: bool
         """
-
         self.closed = True
         if emit_leave:
             close_header = make_header(b"$USRCLOSE$", self.header_len)
@@ -887,7 +886,7 @@ class ThreadedHiSockClient(HiSockClient):
 
     def stop_client(self):
         """Stops the client"""
-        self._closed = True
+        self.closed = True
         self._stop_event.set()
         self.sock.close()
 
@@ -902,7 +901,7 @@ class ThreadedHiSockClient(HiSockClient):
            production environment. This is used internally for the thread, and should
            not be interacted with the user
         """
-        while not self._stop_event.is_set():
+        while not (self._stop_event.is_set() or self.closed):
             try:
                 self.update()
             except (OSError, ValueError):

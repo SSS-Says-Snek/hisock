@@ -409,8 +409,8 @@ def get_local_ip(all_ips: bool = False) -> str:
 
     if not all_ips:
         return socket.gethostbyname(socket.gethostname())
-    else:
-        return socket.gethostbyname_ex(socket.gethostname())[-1]
+
+    return socket.gethostbyname_ex(socket.gethostname())[-1]
 
 
 def _input_ip_address(question: str) -> str:

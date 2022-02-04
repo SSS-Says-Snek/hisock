@@ -80,7 +80,7 @@ class TestServerDecs:
             "func": func_server_no_typecast,
             "name": func_server_no_typecast.__name__,
             "type_hint": {"clt": None, "msg": None},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_server_two_typecast(self):
@@ -88,7 +88,7 @@ class TestServerDecs:
             "func": func_server_two_typecast,
             "name": func_server_two_typecast.__name__,
             "type_hint": {"clt": str, "msg": int},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_server_one_typecast(self):
@@ -96,7 +96,7 @@ class TestServerDecs:
             "func": func_server_one_typecast,
             "name": func_server_one_typecast.__name__,
             "type_hint": {"clt": None, "msg": float},
-            "threaded": False
+            "threaded": False,
         }
 
     def test_server_clt_typecast(self):
@@ -104,7 +104,7 @@ class TestServerDecs:
             "func": func_server_clt_typecast,
             "name": func_server_clt_typecast.__name__,
             "type_hint": {"clt": list, "msg": None},
-            "threaded": False
+            "threaded": False,
         }
 
 
@@ -114,7 +114,7 @@ class TestClientDecs:
             "func": func_client_no_typecast,
             "name": func_client_no_typecast.__name__,
             "type_hint": None,
-            "threaded": False
+            "threaded": False,
         }
 
     def test_client_typecast(self):
@@ -122,7 +122,7 @@ class TestClientDecs:
             "func": func_client_typecast,
             "name": func_client_typecast.__name__,
             "type_hint": int,
-            "threaded": False
+            "threaded": False,
         }
 
     def test_client_exception(self):
