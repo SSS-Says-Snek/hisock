@@ -45,7 +45,7 @@ class _HiSockBase:
         self.header_len = header_len
 
         # Function related storage
-        # {"command": {"func": Callable, "name": str, "type_hint": {"arg": Any}, "threaded": bool}}
+        # {"command": {"func": Callable, "name": str, "type_hint": {"arg": Any}, "threaded": bool, "override": bool}}
         self.funcs = {}
         # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
         # If catching all, then event_name will be a number sandwiched by dollar signs
@@ -139,9 +139,35 @@ class _HiSockBase:
 
     # On decorator
 
+    def _call_function_reserved(self, reserved_func_name: str, *args, **kwargs):
+        """
+        Call a reserved function. If the function is overridden or not found,
+        then the function will not be called.
+
+        :param reserved_func_name: The name of the reserved function to call.
+        :type reserved_func_name: str
+        :param args: The arguments to pass to the function.
+        :param kwargs: The keyword arguments to pass to the function.
+        """
+
+        if (
+            reserved_func_name not in self._reserved_funcs
+            or
+            # This shouldn't happen, because if it is overridden then it should already
+            # be deleted from the reserved functions dictionary. But just in case the user
+            # manually changed the dictionary or something...
+            self.funcs[reserved_func_name]["override"]
+            or reserved_func_name not in self.funcs
+        ):
+            return
+
+        # Not going to verify if the amount of args and kwargs are correct, because
+        # that should've already been done
+        self.funcs[reserved_func_name]["func"](*args, **kwargs)
+
     def _call_function(self, func_name: str, *args, **kwargs):
         """
-        Calls a function with the given arguments and returns the result.
+        Calls a function with the given arguments.
 
         :param func_name: The name of the function to call.
         :type func_name: str
@@ -229,6 +255,7 @@ class _HiSockBase:
                 "name": func.__name__,
                 "type_hint": parameter_annotations,
                 "threaded": self.threaded,
+                "override": self.override,
             }
 
             # Decorator stuff
