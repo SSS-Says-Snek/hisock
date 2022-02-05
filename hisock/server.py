@@ -300,12 +300,10 @@ class HiSockServer(_HiSockBase):
         # Send reserved command to existing clients
         self._send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_data)}".encode())
 
-        if "join" in self.funcs:
-            self._call_function(
-                "join",
-                self._type_cast_client_data(command="join", client_data=client_data),
-            )
-            return
+        self._call_function_reserved(
+            "join",
+            self._type_cast_client_data(command="join", client_data=client_data),
+        )
 
         warnings.warn("join", FunctionNotFoundWarning)
 
@@ -815,15 +813,10 @@ class HiSockServer(_HiSockBase):
         self._client_disconnection(client_socket)
 
         if call_func:
-            if "leave" in self.funcs:
-                self._call_function(
-                    "leave",
-                    self._type_cast_client_data(
-                        command="leave", client_data=client_data
-                    ),
-                )
-                return
-            warnings.warn("leave", FunctionNotFoundWarning)
+            self._call_function_reserved(
+                "leave",
+                self._type_cast_client_data(command="leave", client_data=client_data),
+            )
 
     def disconnect_all_clients(self, force=False):
         """Disconnect all clients."""
@@ -1057,7 +1050,7 @@ class HiSockServer(_HiSockBase):
 
             # Call `message` function
             if "message" in self.funcs:
-                self._call_function(
+                self._call_function_reserved(
                     "message",
                     self._type_cast_client_data(
                         command="message", client_data=client_data
@@ -1065,12 +1058,12 @@ class HiSockServer(_HiSockBase):
                     _type_cast(
                         type_cast=self.funcs["message"]["type_hint"]["command"],
                         content_to_type_cast=command,
-                        func_name="message <command>",
+                        func_name="<message call in run command>",
                     ),
                     _type_cast(
                         type_cast=self.funcs["message"]["type_hint"]["message"],
                         content_to_type_cast=content,
-                        func_name="message <message>",
+                        func_name="<message call in run message>",
                     ),
                 )
 
@@ -1146,6 +1139,7 @@ class ThreadedHiSockServer(HiSockServer):
     def join(self):
         """Waits for the thread to be killed"""
         self._thread.join()
+
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """
