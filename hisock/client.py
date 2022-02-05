@@ -520,15 +520,11 @@ class HiSockClient(_HiSockBase):
             # Handle force disconnection
             if decoded_data == "$DISCONN$":
                 self.close(emit_leave=False)  # The server already knows we're gone
-                if "force_disconnect" in self.funcs:
-                    self._call_function("force_disconnect")
+                self._call_function_reserved("force_disconnect")
                 return
 
             # Handle new client connection
             if decoded_data.startswith("$CLTCONN$"):
-                if "client_connect" not in self.funcs:
-                    return
-
                 client_data = self._type_cast_client_data(
                     "client_connect",
                     _type_cast(
@@ -537,14 +533,11 @@ class HiSockClient(_HiSockBase):
                         func_name="<client connect in update>",
                     ),
                 )
-                self._call_function("client_connect", client_data)
+                self._call_function_reserved("client_connect", client_data)
                 return
 
             # Handle client disconnection
             if decoded_data.startswith("$CLTDISCONN$"):
-                if "client_disconnect" not in self.funcs:
-                    return
-
                 client_data = self._type_cast_client_data(
                     "client_disconnect",
                     _type_cast(
@@ -555,13 +548,14 @@ class HiSockClient(_HiSockBase):
                         func_name="<client disconnect in update>",
                     ),
                 )
-                self._call_function("client_disconnect", client_data)
+                self._call_function_reserved("client_disconnect", client_data)
                 return
 
             ### Unreserved commands ###
 
             # Handle random data
             if not decoded_data.startswith("$CMD$"):
+                # TODO: handle this lol
                 return
 
             has_listener = False  # For cache
@@ -670,9 +664,7 @@ class ThreadedHiSockClient(HiSockClient):
        :class:`ThreadedHiSockClient` over :class:`HiSockClient`
     """
 
-    def __init__(
-        self, *args, **kwargs
-    ):
+    def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._thread = threading.Thread(target=self.run)
 
@@ -738,9 +730,7 @@ def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
     return HiSockClient(addr, name, group, header_len, cache_size)
 
 
-def threaded_connect(
-    *args, **kwargs
-):
+def threaded_connect(*args, **kwargs):
     """
     Creates a :class:`ThreadedHiSockClient` instance. See :class:`ThreadedHiSockClient`
     for more details
