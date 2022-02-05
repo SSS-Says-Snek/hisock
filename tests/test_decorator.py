@@ -1,5 +1,6 @@
 """
 Tests the decorators that make up the core of hisock's receiving system
+Hi, what the heck is this? Please fix this.
 """
 
 import pytest
@@ -93,6 +94,7 @@ class TestServerDecs:
             "name": func_server_no_typecast.__name__,
             "type_hint": {"client_data": None, "message": None},
             "threaded": False,
+            "override": False,
         }
 
     def test_server_two_typecast(self):
@@ -101,6 +103,7 @@ class TestServerDecs:
             "name": func_server_two_typecast.__name__,
             "type_hint": {"client_data": str, "message": int},
             "threaded": False,
+            "override": False,
         }
 
     def test_server_one_typecast(self):
@@ -109,6 +112,7 @@ class TestServerDecs:
             "name": func_server_one_typecast.__name__,
             "type_hint": {"client_data": None, "message": float},
             "threaded": False,
+            "override": False,
         }
 
     def test_server_clt_typecast(self):
@@ -117,6 +121,7 @@ class TestServerDecs:
             "name": func_server_clt_typecast.__name__,
             "type_hint": {"client_data": list, "message": None},
             "threaded": False,
+            "override": False,
         }
 
 
@@ -127,6 +132,7 @@ class TestClientDecs:
             "name": func_client_no_typecast.__name__,
             "type_hint": {"message": None},
             "threaded": False,
+            "override": False,
         }
 
     def test_client_typecast(self):
@@ -135,6 +141,7 @@ class TestClientDecs:
             "name": func_client_typecast.__name__,
             "type_hint": {"message": int},
             "threaded": False,
+            "override": False,
         }
 
     def test_client_exception(self):
