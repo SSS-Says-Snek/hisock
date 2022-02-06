@@ -305,8 +305,6 @@ class HiSockServer(_HiSockBase):
             self._type_cast_client_data(command="join", client_data=client_data),
         )
 
-        warnings.warn("join", FunctionNotFoundWarning)
-
     def _client_disconnection(self, client_socket: socket.socket):
         """
         Handle a client disconnection.
@@ -812,7 +810,7 @@ class HiSockServer(_HiSockBase):
                 pass
         self._client_disconnection(client_socket)
 
-        if call_func:
+        if call_func and "leave" in self.funcs:
             self._call_function_reserved(
                 "leave",
                 self._type_cast_client_data(command="leave", client_data=client_data),
@@ -859,6 +857,12 @@ class HiSockServer(_HiSockBase):
 
             # Handle bad client
             if client_socket.fileno() == -1:
+                # Client already disconnected
+                # This can happen in the case of a keepalive that wasn't responded to
+                # or the client already disconnected and it was already handled
+                if client_socket not in self.clients:
+                    continue
+
                 self.disconnect_client(
                     self.clients[client_socket]["ip"], force=True, call_func=False
                 )

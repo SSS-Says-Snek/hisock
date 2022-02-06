@@ -524,7 +524,7 @@ class HiSockClient(_HiSockBase):
                 return
 
             # Handle new client connection
-            if decoded_data.startswith("$CLTCONN$"):
+            if decoded_data.startswith("$CLTCONN$") and "client_connect" in self.funcs:
                 client_data = self._type_cast_client_data(
                     "client_connect",
                     _type_cast(
