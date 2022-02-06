@@ -168,8 +168,8 @@ class HiSockServer(_HiSockBase):
             },
             "*": {
                 "number_arguments": 3,
-                "type_cast_arguments": ("client_data", "command", "message")
-            }
+                "type_cast_arguments": ("client_data", "command", "message"),
+            },
         }
         self._unreserved_func_arguments = ("client_data", "message")
 
@@ -1041,15 +1041,10 @@ class HiSockServer(_HiSockBase):
 
             # No listener found
             if not has_listener:
-                if '*' in self.funcs:
-                    # Checks if any catchall events are still there
-                    for recv in self._recv_on_events:
-                        if recv.startswith("$") and recv.endswith("$"):
-                            return
-
+                if "*" in self.funcs:
                     # No recv, no command, no catchall, call `*`
-                    wildcard_cmd = self.funcs['*']
-                    type_cast_to = wildcard_cmd["type_hint"]["client_data"]
+                    wildcard_command = self.funcs["*"]
+                    type_cast_to = wildcard_command["type_hint"]["client_data"]
 
                     wildcard_client_data = client_data
                     if type_cast_to is None:
@@ -1059,13 +1054,13 @@ class HiSockServer(_HiSockBase):
                         wildcard_client_data,
                         command,
                         _type_cast(
-                            type_cast=wildcard_cmd["type_hint"]["message"],
+                            type_cast=wildcard_command["type_hint"]["message"],
                             content_to_type_cast=content,
-                            func_name=wildcard_cmd["name"],
+                            func_name=wildcard_command["name"],
                         ),
                     )
 
-                    self._call_function('*', *arguments)
+                    self._call_function("*", *arguments)
                     return
 
                 warnings.warn(
@@ -1264,7 +1259,9 @@ if __name__ == "__main__":
 
     @server.on("*")
     def on_wildcard(client_data, command, data):
-        print(f"Wowww, some uncaught data from {client_data.name}: Cmd: {command}, Data: {data}")
+        print(
+            f"Wowww, some uncaught data from {client_data.name}: Cmd: {command}, Data: {data}"
+        )
 
         server.send_client(client_data, "uncaught_command", b"amogus impostor")
 

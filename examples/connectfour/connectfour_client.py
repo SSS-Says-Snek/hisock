@@ -13,13 +13,16 @@ client = hisock.ThreadedHiSockClient(addr, name)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
 
+
 @client.on("start")
 def on_start(data):
     print(data)
 
+
 @client.on("disconn")
 def on_disconn(reason: str):
     print(reason)
+
 
 client.start()
 

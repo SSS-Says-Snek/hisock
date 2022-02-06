@@ -95,7 +95,9 @@ class MessageCacheMember:
 
 class ClientInfo:
     def __init__(self, ip, name, group):
-        self.ip: tuple[str, int] = tuple(ip)  # _type_cast converts tuple to list to be JSON-serializable
+        self.ip: tuple[str, int] = tuple(
+            ip
+        )  # _type_cast converts tuple to list to be JSON-serializable
         self.name: Union[str, None] = name
         self.group: Union[str, None] = group
 

@@ -160,10 +160,7 @@ class HiSockClient(_HiSockBase):
                 "number_arguments": 0,
                 "type_cast_arguments": (),
             },
-            "*": {
-                "number_arguments": 2,
-                "type_cast_arguments": ("command", "message")
-            }
+            "*": {"number_arguments": 2, "type_cast_arguments": ("command", "message")},
         }
         self._unreserved_func_arguments = ("message",)
 
@@ -598,25 +595,20 @@ class HiSockClient(_HiSockBase):
 
             # No listener found
             if not has_listener:
-                if '*' in self.funcs:
-                    # Checks if any catchall events are still there
-                    for recv in self._recv_on_events:
-                        if recv.startswith("$") and recv.endswith("$"):
-                            return
-
+                if "*" in self.funcs:
                     # No recv, no command, no catchall, call `*`
-                    wildcard_cmd = self.funcs['*']
+                    wildcard_command = self.funcs["*"]
 
                     arguments = (
                         command,
                         _type_cast(
-                            type_cast=wildcard_cmd["type_hint"]["message"],
+                            type_cast=wildcard_command["type_hint"]["message"],
                             content_to_type_cast=content,
-                            func_name=wildcard_cmd["name"],
+                            func_name=wildcard_command["name"],
                         ),
                     )
 
-                    self._call_function('*', *arguments)
+                    self._call_function("*", *arguments)
                     return
 
                 warnings.warn(

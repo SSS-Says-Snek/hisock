@@ -34,9 +34,7 @@ class TestServerTypeCast:
 
     def test_type_cast_int_raise(self):
         with pytest.raises(InvalidTypeCast):
-            _type_cast(
-                int, b"This is not int, why???", self.__class__.func_name
-            )
+            _type_cast(int, b"This is not int, why???", self.__class__.func_name)
 
     def test_type_cast_float(self):
         _float = _type_cast(float, b"696969.696969", self.__class__.func_name)
@@ -45,14 +43,10 @@ class TestServerTypeCast:
 
     def test_type_cast_float_raise(self):
         with pytest.raises(InvalidTypeCast):
-            _type_cast(
-                float, b"This is not float, why???", self.__class__.func_name
-            )
+            _type_cast(float, b"This is not float, why???", self.__class__.func_name)
 
     def test_type_cast_dict_list(self):
-        _dict = _type_cast(
-            dict, b'{"I like": "cheese"}', self.__class__.func_name
-        )
+        _dict = _type_cast(dict, b'{"I like": "cheese"}', self.__class__.func_name)
         _list = _type_cast(
             list, b'["Do", "you", "also", "like", "cheese?"]', self.__class__.func_name
         )
@@ -62,11 +56,7 @@ class TestServerTypeCast:
 
     def test_type_cast_dict_list_raise(self):
         with pytest.raises(InvalidTypeCast):
-            _type_cast(
-                dict,
-                b"Lolololol",
-                self.__class__.func_name
-            )
+            _type_cast(dict, b"Lolololol", self.__class__.func_name)
         with pytest.raises(InvalidTypeCast):
             _type_cast(list, b"Lolololol", self.__class__.func_name)
 
