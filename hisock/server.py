@@ -308,11 +308,6 @@ class HiSockServer(_HiSockBase):
             "join",
             self._type_cast_client_data(command="join", client_data=client_data),
         )
-<<<<<<< HEAD
-=======
-
-        warnings.warn("join", FunctionNotFoundWarning)
->>>>>>> 95275e9c13e829ee432496c7b1abe26b53b50b04
 
     def _client_disconnection(self, client_socket: socket.socket):
         """
