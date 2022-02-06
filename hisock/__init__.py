@@ -20,13 +20,13 @@ from .server import (
     start_server,
     start_threaded_server,
     HiSockServer,
-    ThreadedHiSockServer
+    ThreadedHiSockServer,
 )  # lgtm [py/unused-import]
 from .client import (
     connect,
     threaded_connect,
     HiSockClient,
-    ThreadedHiSockClient
+    ThreadedHiSockClient,
 )  # lgtm [py/unused-import]
 from .utils import (  # lgtm [py/unused-import]
     get_local_ip,  # lgtm [py/unused-import]

@@ -160,6 +160,7 @@ class HiSockClient(_HiSockBase):
                 "number_arguments": 0,
                 "type_cast_arguments": (),
             },
+            "*": {"number_arguments": 2, "type_cast_arguments": ("command", "message")},
         }
         self._unreserved_func_arguments = ("message",)
 
@@ -594,6 +595,22 @@ class HiSockClient(_HiSockBase):
 
             # No listener found
             if not has_listener:
+                if "*" in self.funcs:
+                    # No recv, no command, no catchall, call `*`
+                    wildcard_command = self.funcs["*"]
+
+                    arguments = (
+                        command,
+                        _type_cast(
+                            type_cast=wildcard_command["type_hint"]["message"],
+                            content_to_type_cast=content,
+                            func_name=wildcard_command["name"],
+                        ),
+                    )
+
+                    self._call_function("*", *arguments)
+                    return
+
                 warnings.warn(
                     f"No listener found for command {command}",
                     FunctionNotFoundWarning,
@@ -782,10 +799,15 @@ if __name__ == "__main__":
         client.close()
         __import__("os")._exit(0)
 
+    @client.on("*")
+    def on_wildcard(command, data):
+        print(f"Wowww, some uncaught data from server: Cmd: {command}, Data: {data}")
+
     def choices():
         print(
             "Your choices are:"
             "\n\tsend\n\tchange_name\n\tchange_group\n\tset_timer\n\tstop\n\tgenocide"
+            "\n\tsend_random_data"
         )
         while True:
             choice = input("What would you like to do? ")
@@ -819,6 +841,9 @@ if __name__ == "__main__":
                 client.recv("timer_done")
                 print("Genociding...")
                 client.send("commit_genocide")
+            elif choice == "send_random_data":
+                print("Sending 'amongus impostor' with command 'uncaught_command'")
+                client.send("uncaught_command", "amongus impostor")
             else:
                 print("Invalid choice.")
 

@@ -166,6 +166,10 @@ class HiSockServer(_HiSockBase):
                 "number_arguments": 3,
                 "type_cast_arguments": ("client_data",),
             },
+            "*": {
+                "number_arguments": 3,
+                "type_cast_arguments": ("client_data", "command", "message"),
+            },
         }
         self._unreserved_func_arguments = ("client_data", "message")
 
@@ -304,6 +308,11 @@ class HiSockServer(_HiSockBase):
             "join",
             self._type_cast_client_data(command="join", client_data=client_data),
         )
+<<<<<<< HEAD
+=======
+
+        warnings.warn("join", FunctionNotFoundWarning)
+>>>>>>> 95275e9c13e829ee432496c7b1abe26b53b50b04
 
     def _client_disconnection(self, client_socket: socket.socket):
         """
@@ -869,6 +878,7 @@ class HiSockServer(_HiSockBase):
                 continue
 
             # Handle new connection
+            # select.select() returns the server socket if a new connection is made
             if client_socket == self.socket:
                 self._new_client_connection(*self.socket.accept())
                 continue
@@ -1020,10 +1030,10 @@ class HiSockServer(_HiSockBase):
                         command=matching_command, client_data=client_data
                     )
                 # client_data
-                if len(func["type_hint"].keys()) == 1:
+                if len(func["type_hint"]) == 1:
                     arguments = (type_casted_client_data,)
                 # client_data, message
-                elif len(func["type_hint"].keys()) >= 2:
+                elif len(func["type_hint"]) >= 2:
                     arguments = (
                         type_casted_client_data,
                         _type_cast(
@@ -1040,6 +1050,28 @@ class HiSockServer(_HiSockBase):
 
             # No listener found
             if not has_listener:
+                if "*" in self.funcs:
+                    # No recv, no command, no catchall, call `*`
+                    wildcard_command = self.funcs["*"]
+                    type_cast_to = wildcard_command["type_hint"]["client_data"]
+
+                    wildcard_client_data = client_data
+                    if type_cast_to is None:
+                        wildcard_client_data = ClientInfo(**client_data)
+
+                    arguments = (
+                        wildcard_client_data,
+                        command,
+                        _type_cast(
+                            type_cast=wildcard_command["type_hint"]["message"],
+                            content_to_type_cast=content,
+                            func_name=wildcard_command["name"],
+                        ),
+                    )
+
+                    self._call_function("*", *arguments)
+                    return
+
                 warnings.warn(
                     f"No listener found for command {command}",
                     FunctionNotFoundWarning,
@@ -1233,5 +1265,13 @@ if __name__ == "__main__":
     def on_commit_genocide():
         print("It's time to genocide the connected clients.")
         server.send_all_clients("genocide", None)
+
+    @server.on("*")
+    def on_wildcard(client_data, command, data):
+        print(
+            f"Wowww, some uncaught data from {client_data.name}: Cmd: {command}, Data: {data}"
+        )
+
+        server.send_client(client_data, "uncaught_command", b"amogus impostor")
 
     server.start()
