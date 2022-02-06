@@ -1,9 +1,17 @@
 import hisock
 import _shared as shared
 
-addr, name, _ = hisock.input_client_config(group_prompt=None)
+import pygame
+import pygame_gui
 
-client = hisock.HiSockClient(addr, name)
+WIDTH, HEIGHT = 800, 600
+
+addr, name, _ = hisock.input_client_config(group_prompt=None)
+running = True
+
+client = hisock.ThreadedHiSockClient(addr, name)
+screen = pygame.display.set_mode((WIDTH, HEIGHT))
+clock = pygame.time.Clock()
 
 @client.on("start")
 def on_start(data):
@@ -14,3 +22,16 @@ def on_disconn(reason: str):
     print(reason)
 
 client.start()
+
+while running:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            running = False
+
+    screen.fill((0, 50, 140))
+
+    clock.tick(30)
+    pygame.display.update()
+
+pygame.quit()
+client.stop()

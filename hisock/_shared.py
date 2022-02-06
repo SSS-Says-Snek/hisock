@@ -8,8 +8,7 @@ Copyright SSS_Says_Snek, 2022-present
 
 import inspect
 import threading
-import warnings
-from typing import Callable, Union
+from typing import Callable, Union, Any
 
 try:
     from .utils import (
@@ -51,7 +50,7 @@ class _HiSockBase:
         # {event_name: {"thread_event": threading.Event, "data": Union[None, bytes]}}
         # If catching all, then event_name will be a number sandwiched by dollar signs
         # Then `update` will handle the event with the lowest number
-        self._recv_on_events = {}
+        self._recv_on_events: dict[str, Any] = {}
 
         # Cache
         self.cache_size = cache_size
