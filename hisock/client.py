@@ -144,7 +144,7 @@ class HiSockClient(_HiSockBase):
             raise ServerNotRunning(
                 "Server is not running! Aborting..."
             ) from ConnectionRefusedError
-        self.sock.setblocking(False)
+        self.sock.setblocking(True)
 
         # Stores the names of the reserved functions and information about them
         self._reserved_funcs = {
@@ -479,7 +479,6 @@ class HiSockClient(_HiSockBase):
         .. warning::
            Don't call this method on its own; instead use :meth:`start`.
         """
-
         if self.closed:
             # This shouldn't happen due to `start` handling it, but just in case...
             return
@@ -502,10 +501,9 @@ class HiSockClient(_HiSockBase):
                 self.closed = True
                 self.close(emit_leave=False)
 
-            # Most likely server has stopped running
+            # Most likely client disconnected with close
             if not content_header:
-                print("Connection forcibly closed by server, exiting...")
-                raise SystemExit
+                return
 
             data = self.sock.recv(int(content_header.decode()))
             self._receiving_data = False
