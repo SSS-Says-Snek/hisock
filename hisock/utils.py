@@ -385,6 +385,7 @@ def validate_ipv4(  # NOSONAR (always will return True, but will raise exception
     Validates an IPv4 address.
     If the address isn't valid, it will raise an exception.
     Otherwise, it'll return True
+
     :param ip: The IPv4 address to validate.
     :param
     :param require_ip: Whether or not to require an IP address.
@@ -395,8 +396,8 @@ def validate_ipv4(  # NOSONAR (always will return True, but will raise exception
         If True, it will raise an exception if no port is specified.
         If False, it will return the address as a tuple without a port.
     :type require_port: bool
-    :return: If the address is valid
-    :rtype: bool
+    :return: True if there were no exceptions.
+    :rtype: Literal["True"]
 
     :raises ValueError: IP address is not valid
     """
@@ -462,9 +463,9 @@ def _input_ip_address(question: str) -> str:
     Asks the user to input an IP address. Returns the address as a string
     when it is valid.
 
-    :param question: The question to ask the user
+    :param question: The question to ask the user.
     :type question: str
-    :return: A valid IPv4 address
+    :return: A valid IPv4 address.
     :rtype: str
     """
 
@@ -482,9 +483,9 @@ def _input_port(question: str) -> int:
     Asks the user to enter a port. Returns the port as an integer when it
     is valid.
 
-    :param question: The question to ask the user
+    :param question: The question to ask the user.
     :type question: str
-    :return: A valid port
+    :return: A valid port.
     :rtype: int
     """
 
@@ -503,15 +504,15 @@ def input_server_config(
 ) -> tuple[str, int]:
     """
     Provides a built-in way to obtain the IP and port of where the server
-    should be hosted, through :func:`input()`
+    should be hosted, through :func:`input`.
 
     :param ip_prompt: A string, specifying the prompt to show when
         asking for IP.
     :type ip_prompt: str, optional
     :param port_prompt: A string, specifying the prompt to show when
-        asking for Port
+        asking for port
     :type port_prompt: str, optional
-    :return: A two-element tuple, consisting of IP and Port
+    :return: A two-element tuple, consisting of IP and port.
     :rtype: tuple[str, int]
     """
 
@@ -526,21 +527,22 @@ def input_client_config(
 ) -> tuple[tuple[str, int], Optional[str], Optional[str]]:
     """
     Provides a built-in way to obtain the IP and port of the configuration
-    of the server to connect to
+    of the server to connect to.
 
     :param ip_prompt: A string, specifying the prompt to show when
         asking for IP.
     :type ip_prompt: str, optional
     :param port_prompt: A string, specifying the prompt to show when
-        asking for port
+        asking for port.
     :type port_prompt: str, optional
     :param name_prompt: A string, specifying the prompt to show when
-        asking for client name
+        asking for client name.
     :type name_prompt: Union[str, None], optional
     :param group_prompt: A string, specifying the prompt to show when
-        asking for client group
+        asking for client group.
     :type group_prompt: Union[str, None], optional
-    :return: A tuple containing the config options of the server
+    :return: A tuple containing the config options of the server. Will
+        filter out the unused options.
     :rtype: tuple[str, int, Optional[str], Optional[int]]
     """
 
@@ -552,18 +554,18 @@ def input_client_config(
     if group_prompt:
         group = input(group_prompt)
 
-    return (ip, port), name, group
+    return tuple(filter(None, ((ip, port), name, group)))
 
 
 def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
     """
-    Converts a string IP address into a tuple equivalent
+    Converts a string IP address into a tuple equivalent.
 
     :param formatted_ip: A string, representing the IP address.
-        Must be in the format "ip:port"
+        Must be in the format "ip:port".
     :type formatted_ip: str
-    :return: A tuple, with IP address as the first element, and
-        an INTEGER port as the second element
+    :return: A tuple, with a string IP address as the first element and
+        an integer port as the second element.
     :rtype: tuple[str, int]
 
     :raises ValueError: If the IP address isn't in the "ip:port" format.
@@ -586,14 +588,13 @@ def ipstr_to_tup(formatted_ip: str) -> tuple[str, int]:
 
 def iptup_to_str(formatted_tuple: tuple[str, int]) -> str:
     """
-    Converts a tuple IP address into a string equivalent
-
-    This function is like the opposite of :func:`ipstr_to_tup`
+    Converts a tuple IP address into a string equivalent.
+    This function is the opposite of :func:`ipstr_to_tup`.
 
     :param formatted_tuple: A two-element tuple, containing the IP address and the port.
-        Must be in the format (ip: str, port: int)
+        Must be in the format (ip: str, port: int).
     :type formatted_tuple: tuple[str, int]
-    :return: A string, with the format "ip:port"
+    :return: A string, with the format "ip:port".
     :rtype: str
 
     :raises ValueError: If the IP address isn't in the "ip:port" format.

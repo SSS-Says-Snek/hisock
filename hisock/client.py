@@ -647,6 +647,7 @@ class HiSockClient(_HiSockBase):
         :param emit_leave: Decides if the client will emit `leave` to the server or not
         :type emit_leave: bool
         """
+
         self.closed = True
         if emit_leave:
             self._send_raw("$USRCLOSE$")
@@ -666,48 +667,51 @@ class HiSockClient(_HiSockBase):
 
 class ThreadedHiSockClient(HiSockClient):
     """
-    A downside of :class:`HiSockClient` is that you need to constantly
-    :meth:`run` it in a while loop, which may block the program. Fortunately,
-    in Python, you can use threads to do two different things at once. Using
-    :class:`ThreadedHiSockClient`, you would be able to run another
-    blocking program, without ever fearing about blocking and all that stuff.
+    :class:`HiSockClient`, but running in its own thread as to not block the
+    main loop. Please note that while this is running in its own thread, the
+    event handlers will still be running in the main thread. To avoid this,
+    use the ``threaded=True`` argument for the ``on`` decorator.
 
-    .. note::
-
-       In some cases though, :class:`HiSockClient` offers more control than
-       :class:`ThreadedHiSockClient`, so be careful about when to use
-       :class:`ThreadedHiSockClient` over :class:`HiSockClient`
+    For documentation purposes, see :class:`HiSockClient`.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._thread = threading.Thread(target=self.run)
-
+        self._thread = threading.Thread(target=self._start)
         self._stop_event = threading.Event()
 
-    def stop(self):
-        """Stops the client"""
-        self.closed = True
-        self._stop_event.set()
-        self.sock.close()
+        # Inheritance things, maybe unneeded
+        # Mostly to remove ambiguity
+        del self.start
+        del self.close
 
-    def run(self):
+    def close(self, *args, **kwargs):
         """
-        The main while loop to run the thread
-        Refer to :class:`HiSockClient` for more details
-        .. warning::
-           This method is **NOT** recommended to be used in an actual
-           production enviroment. This is used internally for the thread, and should
-           not be interacted with the user
+        Closes the client. Blocks the thread until the client is closed.
+        For documentation, see :meth:`HiSockClient.close`.
         """
-        super().start()
+
+        HiSockClient.close(self, *args, **kwargs)
+        self._stop_event.set()
+        self.join()
+
+    def _start(self):
+        HiSockClient.start(self)
 
     def start(self):
-        """Starts the main server loop"""
+        """
+        Starts the main client loop.
+        For documentation, see :meth:`HiSockClient.start`.
+        """
+
         self._thread.start()
 
     def join(self):
-        """Waits for the thread to be killed"""
+        """
+        Waits for the thread to be killed.
+        XXX: Should this be removed?
+        """
+
         self._thread.join()
 
 
@@ -762,12 +766,12 @@ if __name__ == "__main__":
         group=input("Group: "),
     )
 
-    print(
-        "The HiSock police are on to you. "
-        "You must change your name and group before they catch you."
-    )
-    client.change_name(input("New name: "))
-    client.change_group(input("New group: "))
+    # print(
+    # "The HiSock police are on to you. "
+    # "You must change your name and group before they catch you."
+    # )
+    # client.change_name(input("New name: "))
+    # client.change_group(input("New group: "))
 
     @client.on("client_connect")
     def on_connect(client_data):
@@ -777,9 +781,11 @@ if __name__ == "__main__":
             f'Their group is {client_data["group"]}.'
         )
 
-    @client.on("client_disconnect")
-    def on_disconnect(client_data):
-        print(f"{client_data.name} disconnected from the server.")
+    @client.on("client_disconnect", override=True)
+    def on_disconnect(leave_data: dict):
+        print(
+            f'{leave_data["name"]} disconnected from the server because {leave_data["reason"]} :('
+        )
 
     @client.on("force_disconnect")
     def on_force_disconnect():
@@ -798,19 +804,21 @@ if __name__ == "__main__":
         __import__("os")._exit(0)
 
     @client.on("*")
-    def on_wildcard(command, data):
-        print(f"Wowww, some uncaught data from server: Cmd: {command}, Data: {data}")
+    def on_wildcard(command: str, data: str):
+        print(f"There was some unhandled data from the server. {command=}, {data=}")
 
     def choices():
         print(
             "Your choices are:"
-            "\n\tsend\n\tchange_name\n\tchange_group\n\tset_timer\n\tstop\n\tgenocide"
-            "\n\tsend_random_data"
+            "\n\tsend\n\tsend_to_group\n\tchange_name\n\tchange_group\n\tset_timer\n\tstop"
+            "\n\tgenocide\n\tsend_random_data"
         )
         while True:
             choice = input("What would you like to do? ")
             if choice == "send":
                 client.send("broadcast_message", input("Message: "))
+            elif choice == "send_to_group":
+                client.send("broadcast_message_to_group", input("Message: "))
             elif choice == "ping":
                 client.send("ping")
                 ping_time = time()
@@ -840,8 +848,21 @@ if __name__ == "__main__":
                 print("Genociding...")
                 client.send("commit_genocide")
             elif choice == "send_random_data":
-                print("Sending 'amongus impostor' with command 'uncaught_command'")
-                client.send("uncaught_command", "amongus impostor")
+                print("Sending some random data...")
+                choice, randint = (
+                    __import__("random").choice,
+                    __import__("random").randint,
+                )
+                client.send(
+                    "uncaught_command",
+                    f"Random data: "
+                    + "".join(
+                        [
+                            chr(choice((randint(65, 90), randint(97, 122))))
+                            for _ in range(100)
+                        ]
+                    ),
+                )
             else:
                 print("Invalid choice.")
 

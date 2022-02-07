@@ -82,10 +82,6 @@ class HiSockServer(_HiSockBase):
         server with a port number that's greater than or equal to 1024.
         **Only IPv4 is currently supported.**
     :type addr: tuple
-    :param blocking: A boolean, set to whether the server should block the loop
-        while waiting for message or not.
-        Default passed in by :meth:`start_server` is True.
-    :type blocking: bool, optional
     :param max_connections: The number of maximum connections the server
         should accept before refusing client connections. Pass in 0 for
         unlimited connections.
@@ -126,7 +122,6 @@ class HiSockServer(_HiSockBase):
     def __init__(
         self,
         addr: tuple[str, int],
-        blocking: bool = True,
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
@@ -136,7 +131,7 @@ class HiSockServer(_HiSockBase):
 
         # Socket initialization
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.socket.setblocking(blocking)
+        self.socket.setblocking(True)
         try:
             self.socket.bind(addr)
         except socket.gaierror as e:  # getaddrinfo error
@@ -995,10 +990,19 @@ class HiSockServer(_HiSockBase):
                         new_value,
                     )
 
+                return
+
             ### Unreserved commands ###
 
+            # Handle random data with no command
             if not decoded_data.startswith("$CMD$"):
-                return  # Random data? No need to cache anyways...
+                print("Received some random garbage?", decoded_data)
+
+                if "*" in self.funcs:
+                    self._call_wildcard_function(
+                        client_data=client_data, command=None, content=decoded_data
+                    )
+                return
 
             has_listener = False  # For cache
 
@@ -1044,35 +1048,11 @@ class HiSockServer(_HiSockBase):
                 has_listener = self._handle_recv_commands(command, content)
 
             # No listener found
-            if not has_listener:
-                if "*" in self.funcs:
-                    # No recv, no command, no catchall, call `*`
-                    wildcard_command = self.funcs["*"]
-                    type_cast_to = wildcard_command["type_hint"]["client_data"]
-
-                    wildcard_client_data = client_data
-                    if type_cast_to is None:
-                        wildcard_client_data = ClientInfo(**client_data)
-
-                    arguments = (
-                        wildcard_client_data,
-                        command,
-                        _type_cast(
-                            type_cast=wildcard_command["type_hint"]["message"],
-                            content_to_type_cast=content,
-                            func_name=wildcard_command["name"],
-                        ),
-                    )
-
-                    self._call_function("*", *arguments)
-                    return
-
-                warnings.warn(
-                    f"No listener found for command {command}",
-                    FunctionNotFoundWarning,
+            if not has_listener and "*" in self.funcs:
+                # No recv and no catchall. A command and some data.
+                self._call_wildcard_function(
+                    client_data=client_data, command=command, content=decoded_data
                 )
-                # No need for caching
-                return
 
             # Caching
             self._cache(
@@ -1127,52 +1107,55 @@ class HiSockServer(_HiSockBase):
 
 class ThreadedHiSockServer(HiSockServer):
     """
-    A downside of :class:`HiSockServer` is that the execution is **blocking**,
-    which means that the program can't do anything until the loop is finished.
-    Fortunately, in Python, you can use threads to do two different things at once. Using
-    :class:`ThreadedHiSockServer`, you would be able to run another
-    blocking program, without ever fearing about blocking and all that stuff.
+    :class:`HiSockClient`, but running in its own thread as to not block the
+    main loop. Please note that while this is running in its own thread, the
+    event handlers will still be running in the main thread. To avoid this,
+    use the ``threaded=True`` argument for the ``on`` decorator.
 
-    .. note::
-
-       In some cases though, :class:`HiSockServer` offers more control than
-       :class:`ThreadedHiSockServer`, so be careful about when to use
-       :class:`ThreadedHiSockServer` over :class:`HiSockServer`
+    For documentation purposes, see :class:`HiSockClient`.
     """
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._thread = threading.Thread(target=self.run)
-
+        self._thread = threading.Thread(target=self._start)
         self._stop_event = threading.Event()
 
-    def stop(self):
-        """Stops the server"""
-        self._stop_event.set()
-        self.closed = True
-        self.socket.close()
+        # Inheritance things, maybe unneeded
+        # Mostly to remove ambiguity
+        del self.start
+        del self.close
 
-    def run(self):
+    def close(self, *args, **kwargs):
         """
-        The main while loop to run the thread
-        Refer to :class:`HiSockServer` for more details
-        .. warning::
-           This method is **NOT** recommended to be used in an actual
-           production enviroment. This is used internally for the thread, and should
-           not be interacted with the user
+        Closes the server. Blocks the thread until the server is closed.
+        For documentation, see :meth:`HiSockServer.close`.
         """
-        super().start()
+
+        HiSockServer.close(self, *args, **kwargs)
+        self._stop_event.set()
+        self.join()
+
+    def _start(self):
+        HiSockServer.start(self)
 
     def start(self):
-        """Starts the main server loop"""
+        """
+        Starts the main server loop.
+        For documentation, see :meth:`HiSockServer.start`.
+        """
+
         self._thread.start()
 
     def join(self):
-        """Waits for the thread to be killed"""
+        """
+        Waits for the thread to be killed.
+        XXX: Should this be removed?
+        """
+
         self._thread.join()
 
 
-def start_server(addr, blocking=True, max_connections=0, header_len=16):
+def start_server(addr, max_connections=0, header_len=16):
     """
     Creates a :class:`HiSockServer` instance. See :class:`HiSockServer` for
     more details and documentation.
@@ -1180,15 +1163,19 @@ def start_server(addr, blocking=True, max_connections=0, header_len=16):
     :return: A :class:`HiSockServer` instance.
     """
 
-    return HiSockServer(addr, blocking, max_connections, header_len)
+    return HiSockServer(
+        addr=addr, max_connections=max_connections, header_len=header_len
+    )
 
 
 def start_threaded_server(*args, **kwargs):
     """
     Creates a :class:`ThreadedHiSockServer` instance. See :class:`ThreadedHiSockServer`
-    for more details
+    for more details. For documentation, see :func:`start_server`.
+
     :return: A :class:`ThreadedHiSockServer` instance
     """
+
     return ThreadedHiSockServer(*args, **kwargs)
 
 
@@ -1207,6 +1194,9 @@ if __name__ == "__main__":
     @server.on("leave")
     def on_leave(client_data):
         print(f"{client_data.name} has left!")
+        server.send_all_clients(
+            "client_disconnect", {"name": client_data.name, "reason": "they left"}
+        )
 
     @server.on("message")
     def on_message(client_data, command: str, message: str):
@@ -1249,6 +1239,13 @@ if __name__ == "__main__":
         print(f'{client_data.name} said "{message}"!')
         server.send_all_clients("message", message)
 
+    @server.on("broadcast_message_to_group")
+    def on_broadcast_message_to_group(client_data, message: str):
+        print(
+            f'{client_data.name} said "{message}" to their group, {client_data.group}!'
+        )
+        server.send_group(client_data, "message", message)
+
     @server.on("set_timer", threaded=True)
     def on_set_timer(client_data, seconds: int):
         print(f"{client_data.name} set a timer for {seconds} seconds!")
@@ -1259,14 +1256,15 @@ if __name__ == "__main__":
     @server.on("commit_genocide")
     def on_commit_genocide():
         print("It's time to genocide the connected clients.")
-        server.send_all_clients("genocide", None)
+        server.send_all_clients("genocide")
 
     @server.on("*")
-    def on_wildcard(client_data, command, data):
+    def on_wildcard(client_data, command: str, data: str):
         print(
-            f"Wowww, some uncaught data from {client_data.name}: Cmd: {command}, Data: {data}"
+            f"There was some unhandled data from {client_data.name}. "
+            f"{command=}, {data=}"
         )
 
-        server.send_client(client_data, "uncaught_command", b"amogus impostor")
+        server.send_client(client_data, "uncaught_command", data.replace("a", "ඞ"))
 
     server.start()

@@ -139,6 +139,57 @@ class _HiSockBase:
 
     # On decorator
 
+    def _call_wildcard_function(
+        self,
+        command: Union[str, None],
+        content: bytes,
+        client_data: Union[dict, None] = None,
+    ):
+        """
+        Call the wildcard command.
+
+        :param command: The command that was sent. If None, then it is just
+            random data.
+        :type command: str, optional
+        :param content: The data to pass to the wildcard command. Will be
+            type-casted accordingly.
+        :type content: bytes
+        :param client_data: The client data. If None, then there is no client data.
+        :type client_data: dict, optional
+
+        :raises FunctionNotFoundException: If there is no wildcard listener.
+        """
+
+        try:
+            wildcard_func = self.funcs["*"]
+        except KeyError:
+            raise FunctionNotFoundException(
+                "A wildcard function doesn't exist."
+            ) from None
+
+        arguments = []
+        if client_data is not None:
+            arguments.append(self._type_cast_client_data("*", client_data))
+
+        arguments += [
+            _type_cast(
+                type_cast=wildcard_func["type_hint"]["command"],
+                content_to_type_cast=command,
+                func_name="<wildcard function> <command>",
+            ),
+            _type_cast(
+                type_cast=wildcard_func["type_hint"]["message"],
+                content_to_type_cast=content,
+                func_name="<wildcard function> <data>",
+            ),
+        ]
+
+        self._call_function(
+            wildcard_func["name"],
+            self._type_cast_client_data("*", client_data),
+            *arguments,
+        )
+
     def _call_function_reserved(self, reserved_func_name: str, *args, **kwargs):
         """
         Call a reserved function. If the function is overridden or not found,
