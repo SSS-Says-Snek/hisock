@@ -16,7 +16,6 @@ from __future__ import annotations  # Remove when 3.10 is used by majority
 import socket
 import json  # Handle sending dictionaries
 import errno  # Handle fatal errors with the server
-import warnings  # Non-severe errors
 import sys  # Utilize stderr
 import threading  # Threaded client and decorators
 import traceback  # Error handling
@@ -556,7 +555,6 @@ class HiSockClient(_HiSockBase):
 
             # Handle random data
             elif not decoded_data.startswith("$CMD$") and "*" in self.funcs:
-                print(decoded_data)
                 self._call_wildcard_function(
                     client_data=None, command=None, content=data
                 )

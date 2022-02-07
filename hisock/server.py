@@ -357,9 +357,12 @@ class HiSockServer(_HiSockBase):
             # Keepalive response wait is over, remove the unresponsive clients
             if not self._keepalive_event.is_set():
                 for client_socket in self._unresponsive_clients:
-                    self.disconnect_client(
-                        self.clients[client_socket]["ip"], force=True, call_func=True
-                    )
+                    try:
+                        self.disconnect_client(
+                            self.clients[client_socket]["ip"], force=True, call_func=True
+                        )
+                    except KeyError:  # Client already left
+                        pass
                 self._unresponsive_clients.clear()
 
     # On decorator
@@ -915,32 +918,6 @@ class HiSockServer(_HiSockBase):
 
                 continue
 
-            # Handle keepalive acknowledgement
-            if decoded_data.startswith("$KEEPACK$"):
-                self._handle_keepalive(client_socket)
-                continue
-
-            # Get client
-            if decoded_data.startswith("$GETCLT$"):
-                try:
-                    client_identifier = _removeprefix(decoded_data, "$GETCLT$")
-
-                    # Determine if the client identifier is a name or an IP+port
-                    try:
-                        validate_ipv4(client_identifier)
-                        client_identifier = ipstr_to_tup(client_identifier)
-                    except ValueError:
-                        pass
-
-                    client = self.get_client(client_identifier)
-                except ValueError as e:
-                    client = {"traceback": str(e)}
-                except ClientNotFound:
-                    client = {"traceback": "$NOEXIST$"}
-
-                self._send_client_raw(client_data["ip"], client)
-                continue
-
             # Change name or group
             for matching_reserve, key in zip(
                 ("$CHNAME$", "$CHGROUP$"), ("name", "group")
@@ -994,10 +971,36 @@ class HiSockServer(_HiSockBase):
 
                 return
 
+            # Handle keepalive acknowledgement
+            if decoded_data.startswith("$KEEPACK$"):
+                self._handle_keepalive(client_socket)
+                continue
+
+            # Get client
+            elif decoded_data.startswith("$GETCLT$"):
+                try:
+                    client_identifier = _removeprefix(decoded_data, "$GETCLT$")
+
+                    # Determine if the client identifier is a name or an IP+port
+                    try:
+                        validate_ipv4(client_identifier)
+                        client_identifier = ipstr_to_tup(client_identifier)
+                    except ValueError:
+                        pass
+
+                    client = self.get_client(client_identifier)
+                except ValueError as e:
+                    client = {"traceback": str(e)}
+                except ClientNotFound:
+                    client = {"traceback": "$NOEXIST$"}
+
+                self._send_client_raw(client_data["ip"], client)
+                continue
+
             ### Unreserved commands ###
 
             # Handle random data with no command
-            if not decoded_data.startswith("$CMD$"):
+            elif not decoded_data.startswith("$CMD$"):
                 if "*" in self.funcs:
                     self._call_wildcard_function(
                         client_data=client_data, command=None, content=data
