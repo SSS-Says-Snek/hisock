@@ -230,13 +230,13 @@ def client_joined(client_info: dict):
 
 
 @server.on("leave")
-def client_left(client_info: dict, reason: bytes = b"unknown"):
+def client_left(client_info: dict):
     # Check if client has already left
     data_client_info = Data.get_client_info(name=client_info["name"])
     if data_client_info[1] == -1:
         return
 
-    reason: str = reason.decode("utf-8")
+    # reason: str = reason.decode("utf-8")
 
     Data.paired_clients.pop(data_client_info[1])
 
@@ -247,14 +247,14 @@ def client_left(client_info: dict, reason: bytes = b"unknown"):
             "name": client_info["name"],
             "ip": client_info["ip"],
             "number_clients": len(Data.paired_clients),
-            "reason": reason,
+            # "reason": reason,
         },
     )
 
     # Server print
     print(
         f'"{client_info["name"]}" ({hisock.utils.iptup_to_str(client_info["ip"])}) '
-        f"left the server because {reason}"
+        # f"left the server because {reason}"
     )
 
     server.disconnect_client(client_info["ip"])
@@ -323,24 +323,10 @@ def go_again(client_info: dict, response: dict):
 
 ### Run ###
 def run():
-    while True:
-        try:
-            server.run()
-        except (
-            hisock.utils.NoMessageException,
-            hisock.utils.NoHeaderWarning,
-            BrokenPipeError,
-            ConnectionResetError,
-            TypeError,
-        ):
-            # This happens when the server is trying to send Data to a client
-            # that is no longer connected
-            pass
-        except KeyboardInterrupt:
-            break
-        except Exception as error:
-            log_error(error)
-            break
+    try:
+        server.start()
+    except Exception as e:
+        log_error(e)
 
     try:
         print("\nShutting down gracefully", end="... ")

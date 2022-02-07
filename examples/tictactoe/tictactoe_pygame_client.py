@@ -341,7 +341,8 @@ class GameState(BaseState):
                     width=10,
                 )
 
-    def draw_waiting_room(self):
+    @staticmethod
+    def draw_waiting_room():
         text_display("Waiting for opponent...", (SCREEN_SIZE[0] // 2, 24), size=24)
 
     def draw_game_over(self):
