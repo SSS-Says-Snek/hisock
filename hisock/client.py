@@ -554,7 +554,9 @@ class HiSockClient(_HiSockBase):
 
             # Handle random data
             if not decoded_data.startswith("$CMD$"):
-                # TODO: handle this lol
+                self._call_wildcard_function(
+                    client_data=None, command=None, content=data
+                )
                 return
 
             has_listener = False  # For cache
@@ -592,29 +594,11 @@ class HiSockClient(_HiSockBase):
                 has_listener = self._handle_recv_commands(command, content)
 
             # No listener found
-            if not has_listener:
-                if "*" in self.funcs:
-                    # No recv, no command, no catchall, call `*`
-                    wildcard_command = self.funcs["*"]
-
-                    arguments = (
-                        command,
-                        _type_cast(
-                            type_cast=wildcard_command["type_hint"]["message"],
-                            content_to_type_cast=content,
-                            func_name=wildcard_command["name"],
-                        ),
-                    )
-
-                    self._call_function("*", *arguments)
-                    return
-
-                warnings.warn(
-                    f"No listener found for command {command}",
-                    FunctionNotFoundWarning,
+            if not has_listener and "*" in self.funcs:
+                # No recv and no catchall. A command and some data.
+                self._call_wildcard_function(
+                    client_data=None, command=command, content=data
                 )
-                # No need for caching
-                return
 
             # Caching
             self._cache(has_listener, command, content, decoded_data, content_header)
@@ -691,12 +675,12 @@ class ThreadedHiSockClient(HiSockClient):
         For documentation, see :meth:`HiSockClient.close`.
         """
 
-        HiSockClient.close(self, *args, **kwargs)
+        super().close(*args, **kwargs)
         self._stop_event.set()
         self.join()
 
     def _start(self):
-        HiSockClient.start(self)
+        super().start()
 
     def start(self):
         """

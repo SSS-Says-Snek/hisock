@@ -874,6 +874,7 @@ class HiSockServer(_HiSockBase):
                 continue
 
             ### Receiving data ###
+            data: bytes = b""
             decoded_data: str = ""
 
             # {"header": bytes, "data": bytes} or False
@@ -899,6 +900,7 @@ class HiSockServer(_HiSockBase):
                 not raw_data  # Most likely client disconnect, could be client error
                 or decoded_data.startswith("$USRCLOSE$")
             ):
+
                 try:
                     self.disconnect_client(
                         client_data["ip"], force=False, call_func=True
@@ -996,11 +998,9 @@ class HiSockServer(_HiSockBase):
 
             # Handle random data with no command
             if not decoded_data.startswith("$CMD$"):
-                print("Received some random garbage?", decoded_data)
-
                 if "*" in self.funcs:
                     self._call_wildcard_function(
-                        client_data=client_data, command=None, content=decoded_data
+                        client_data=client_data, command=None, content=data
                     )
                 return
 
@@ -1008,7 +1008,7 @@ class HiSockServer(_HiSockBase):
 
             # Get command and message
             command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
-            content = _removeprefix(decoded_data, "$CMD$" + command + "$MSG$")
+            content = _removeprefix(decoded_data, f"$CMD${command}$MSG$")
 
             # No content? (`_removeprefix` didn't do anything)
             if not content or content == decoded_data:
@@ -1051,7 +1051,7 @@ class HiSockServer(_HiSockBase):
             if not has_listener and "*" in self.funcs:
                 # No recv and no catchall. A command and some data.
                 self._call_wildcard_function(
-                    client_data=client_data, command=command, content=decoded_data
+                    client_data=client_data, command=command, content=data
                 )
 
             # Caching
@@ -1125,18 +1125,18 @@ class ThreadedHiSockServer(HiSockServer):
         del self.start
         del self.close
 
-    def close(self, *args, **kwargs):
+    def close(self):
         """
         Closes the server. Blocks the thread until the server is closed.
         For documentation, see :meth:`HiSockServer.close`.
         """
 
-        HiSockServer.close(self, *args, **kwargs)
+        super().close()
         self._stop_event.set()
         self.join()
 
     def _start(self):
-        HiSockServer.start(self)
+        super().start()
 
     def start(self):
         """
