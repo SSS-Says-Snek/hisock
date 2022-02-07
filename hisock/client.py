@@ -517,13 +517,14 @@ class HiSockClient(_HiSockBase):
                 return
 
             # Handle force disconnection
-            if decoded_data == "$DISCONN$":
+            elif decoded_data == "$DISCONN$":
                 self.close(emit_leave=False)  # The server already knows we're gone
+
                 self._call_function_reserved("force_disconnect")
                 return
 
             # Handle new client connection
-            if decoded_data.startswith("$CLTCONN$") and "client_connect" in self.funcs:
+            elif decoded_data.startswith("$CLTCONN$") and "client_connect" in self.funcs:
                 client_data = self._type_cast_client_data(
                     "client_connect",
                     _type_cast(
@@ -536,7 +537,7 @@ class HiSockClient(_HiSockBase):
                 return
 
             # Handle client disconnection
-            if decoded_data.startswith("$CLTDISCONN$"):
+            elif decoded_data.startswith("$CLTDISCONN$"):
                 client_data = self._type_cast_client_data(
                     "client_disconnect",
                     _type_cast(
@@ -547,13 +548,15 @@ class HiSockClient(_HiSockBase):
                         func_name="<client disconnect in update>",
                     ),
                 )
+
                 self._call_function_reserved("client_disconnect", client_data)
                 return
 
             ### Unreserved commands ###
 
             # Handle random data
-            if not decoded_data.startswith("$CMD$"):
+            elif not decoded_data.startswith("$CMD$") and "*" in self.funcs:
+                print(decoded_data)
                 self._call_wildcard_function(
                     client_data=None, command=None, content=data
                 )
@@ -634,7 +637,10 @@ class HiSockClient(_HiSockBase):
 
         self.closed = True
         if emit_leave:
-            self._send_raw("$USRCLOSE$")
+            try:
+                self._send_raw("$USRCLOSE$")
+            except OSError:  # Server already closed socket
+                return
         self.sock.close()
 
     # Main loop
@@ -664,11 +670,6 @@ class ThreadedHiSockClient(HiSockClient):
         self._thread = threading.Thread(target=self._start)
         self._stop_event = threading.Event()
 
-        # Inheritance things, maybe unneeded
-        # Mostly to remove ambiguity
-        del self.start
-        del self.close
-
     def close(self, *args, **kwargs):
         """
         Closes the client. Blocks the thread until the client is closed.
@@ -677,7 +678,6 @@ class ThreadedHiSockClient(HiSockClient):
 
         super().close(*args, **kwargs)
         self._stop_event.set()
-        self.join()
 
     def _start(self):
         super().start()

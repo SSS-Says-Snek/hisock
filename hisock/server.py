@@ -1117,13 +1117,8 @@ class ThreadedHiSockServer(HiSockServer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._thread = threading.Thread(target=self._start)
+        self._thread = threading.Thread(target=super().start)
         self._stop_event = threading.Event()
-
-        # Inheritance things, maybe unneeded
-        # Mostly to remove ambiguity
-        del self.start
-        del self.close
 
     def close(self):
         """
@@ -1134,9 +1129,6 @@ class ThreadedHiSockServer(HiSockServer):
         super().close()
         self._stop_event.set()
         self.join()
-
-    def _start(self):
-        super().start()
 
     def start(self):
         """

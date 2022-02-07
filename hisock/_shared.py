@@ -203,11 +203,11 @@ class _HiSockBase:
         if (
             reserved_func_name not in self._reserved_funcs
             or
+            reserved_func_name not in self.funcs
             # This shouldn't happen, because if it is overridden then it should already
             # be deleted from the reserved functions dictionary. But just in case the user
             # manually changed the dictionary or something...
-            self.funcs[reserved_func_name]["override"]
-            or reserved_func_name not in self.funcs
+            or self.funcs[reserved_func_name]["override"]
         ):
             return
 
