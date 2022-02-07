@@ -185,8 +185,7 @@ class _HiSockBase:
         ]
 
         self._call_function(
-            wildcard_func["name"],
-            self._type_cast_client_data("*", client_data),
+            "*",
             *arguments,
         )
 

@@ -597,7 +597,7 @@ class HiSockClient(_HiSockBase):
             if not has_listener and "*" in self.funcs:
                 # No recv and no catchall. A command and some data.
                 self._call_wildcard_function(
-                    client_data=None, command=command, content=data
+                    client_data=None, command=command, content=content
                 )
 
             # Caching
