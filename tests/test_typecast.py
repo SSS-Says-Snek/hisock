@@ -105,10 +105,7 @@ class TestServerTypeCast:
             to raise an InvalidTypeCast error.
         """
 
-        try:
-            func_name = f"<test {func_name} {test=} to {type_cast.__name__=}>"
-        except AttributeError:
-            func_name = f"<test {func_name} {test=} to {type_cast=}>"
+        func_name = f"<test {func_name} {test=} to {type_cast.__name__=}>"
 
         if expected is Error:
             with pytest.raises(InvalidTypeCast):
@@ -160,5 +157,5 @@ class TestServerTypeCast:
     @pytest.mark.parametrize("test", tests["random"])
     def test_random(self, test):
         self._test_type_cast(
-            Any, test["original"], test["expected"], func_name="random"
+            any, test["original"], test["expected"], func_name="random"
         )
