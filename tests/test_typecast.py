@@ -105,7 +105,10 @@ class TestServerTypeCast:
             to raise an InvalidTypeCast error.
         """
 
-        func_name = f"<test {func_name} {test=} to {type_cast.__name__=}>"
+        try:
+            func_name = f"<test {func_name} {test=} to {type_cast.__name__=}>"
+        except AttributeError:
+            func_name = f"<test {func_name} {test=} to {type_cast=}>"
 
         if expected is Error:
             with pytest.raises(InvalidTypeCast):
