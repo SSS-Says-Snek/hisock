@@ -359,7 +359,9 @@ class HiSockServer(_HiSockBase):
                 for client_socket in self._unresponsive_clients:
                     try:
                         self.disconnect_client(
-                            self.clients[client_socket]["ip"], force=True, call_func=True
+                            self.clients[client_socket]["ip"],
+                            force=True,
+                            call_func=True,
                         )
                     except KeyError:  # Client already left
                         pass
@@ -1102,10 +1104,7 @@ class HiSockServer(_HiSockBase):
         """Start the main loop for the server."""
 
         while not self.closed:
-            try:
-                self._run()
-            except KeyboardInterrupt:
-                self.close()
+            self._run()
 
 
 class ThreadedHiSockServer(HiSockServer):

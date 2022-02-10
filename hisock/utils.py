@@ -16,11 +16,12 @@ from __future__ import annotations
 import json
 import pathlib
 import socket
-from typing import Union, Any, Optional, Type
-from ipaddress import IPv4Address
-from re import search
 import builtins
 import sys
+import ast
+from re import search
+from typing import Union, Any, Optional, Type
+from ipaddress import IPv4Address
 
 # Custom exceptions
 class ClientException(Exception):
@@ -294,56 +295,60 @@ def _type_cast(
     :raises InvalidTypeCast: If the type cast is invalid.
     """
 
-    if type_cast is None:
+    content_to_type_cast_type = type(content_to_type_cast)
+
+    if type_cast is None or type_cast is content_to_type_cast_type:
         return content_to_type_cast
 
     try:
+        ### Special type casting ###
+
+        # Handle client info
+        if type_cast is ClientInfo:
+            return ClientInfo(**content_to_type_cast)
+
+        # Handle boolean
+        if content_to_type_cast_type == bool:
+            return type_cast(content_to_type_cast)
+
+        # Handle no data
+        if not content_to_type_cast:
+            return type_cast()
+
+        ### Regular type casting ###
+
         # Convert content_to_type_cast to bytes
-        if not isinstance(content_to_type_cast, bytes):
-            if isinstance(content_to_type_cast, str):
-                content_to_type_cast = content_to_type_cast.encode()
-            elif content_to_type_cast is None:
-                content_to_type_cast = b""
-            elif type(content_to_type_cast) in (int, float):
+        if content_to_type_cast_type != bytes:
+            if content_to_type_cast_type in (str, int, float):
                 content_to_type_cast = str(content_to_type_cast).encode()
-            elif type(content_to_type_cast) in (list, dict):
+            elif content_to_type_cast_type in (list, dict):
                 content_to_type_cast = json.dumps(content_to_type_cast).encode()
             else:
                 raise TypeError(
-                    f"Cannot type cast {type(content_to_type_cast)} to bytes"
+                    f"Cannot type cast {content_to_type_cast_type} to bytes"
                 )
 
-        # Type cast content_to_type_cast to type_cast
-        if type_cast is bytes:
+        if type_cast == bytes:
             return content_to_type_cast
-        if type_cast is None:
-            return None
-        if type_cast in (str, int, float):
-            # Handle no data
-            if not content_to_type_cast:
-                if type_cast is str:
-                    return ""
-                return type_cast(0)  # int or float
 
+        if type_cast in (str, float):
+            return type_cast(content_to_type_cast.decode())
+
+        if type_cast == int:
+            return int(ast.literal_eval(content_to_type_cast.decode()))  # XXX
+
+        # Lists and dicts
+        if type_cast in (list, dict):
+            # JSON
             try:
-                ret = type_cast(content_to_type_cast.decode())
-            except Exception as e:
-                raise InvalidTypeCast(
-                    f"Type casting from {type(content_to_type_cast).__name__} "
-                    f"to {type_cast.__name__} failed for function "
-                    f'"{func_name}:\n{e}"'
-                ) from e
+                result = json.loads(content_to_type_cast.decode())
 
-            return ret
-        elif type_cast in (list, dict):
-            # Handle no data
-            if not content_to_type_cast:
-                return {} if type_cast is dict else []
+            # Python
+            except json.JSONDecodeError:
+                result = ast.literal_eval(content_to_type_cast.decode())  # XXX
 
-            result = json.loads(content_to_type_cast.decode())
-
+            # Reduce ambiguity
             if not isinstance(result, type_cast):
-                # json.loads works with dicts and lists, so the result could be ambiguous
                 raise InvalidTypeCast()
 
             return result
