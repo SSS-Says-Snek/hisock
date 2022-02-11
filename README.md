@@ -11,7 +11,7 @@
 <img src="https://raw.githubusercontent.com/SSS-Says-Snek/SSS-Says-Snek.github.io/master/assets/logo.png" width=200 class="center">
 
 # hisock (HiSock, Hisock)
-A **hi**gher level extension of Python's **sock**et module, with simpler and more efficient usages.
+A **hi**gher level extension of Python's built-in **sock**et module, with simpler and more efficient usages.
 
 ## Documentation
 Documentation is located on 
@@ -21,7 +21,7 @@ already well-documented on ReadTheDocs.
 ## Installation
 Hisock only supports Python versions 3.7 and onwards, due to annotations from the `__future__` module.
 
-`hisock` is available on PyPI, [here](https://pypi.org/project/hisock), so it is installable by `pip`. Just do the following command.
+`hisock` is available on PyPI [here](https://pypi.org/project/hisock), so it is installable by `pip`. Just do the following command.
 ```shell
 $ python -m pip install hisock (WINDOWS)
   OR
