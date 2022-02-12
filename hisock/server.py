@@ -1103,8 +1103,12 @@ class HiSockServer(_HiSockBase):
     def start(self):
         """Start the main loop for the server."""
 
-        while not self.closed:
-            self._run()
+        try:
+            while not self.closed:
+                self._run()
+        finally:
+            self.disconnect_all_clients(force=True)
+            self.close()
 
 
 class ThreadedHiSockServer(HiSockServer):

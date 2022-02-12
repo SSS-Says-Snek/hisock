@@ -142,7 +142,7 @@ class HiSockClient(_HiSockBase):
         except ConnectionRefusedError:
             raise ServerNotRunning(
                 "Server is not running! Aborting..."
-            ) from ConnectionRefusedError
+            ) from None
         self.sock.setblocking(True)
 
         # Stores the names of the reserved functions and information about them
@@ -494,7 +494,7 @@ class HiSockClient(_HiSockBase):
             except ConnectionResetError:
                 raise ServerNotRunning(
                     "Server has stopped running, aborting..."
-                ) from ConnectionResetError
+                ) from None
             except ConnectionAbortedError:
                 # Keepalive timeout reached
                 self.closed = True
@@ -645,12 +645,12 @@ class HiSockClient(_HiSockBase):
 
     def start(self):
         """Start the main loop for the client."""
-
-        while not self.closed:
-            try:
+        
+        try:
+            while not self.closed:
                 self._update()
-            except KeyboardInterrupt:
-                self.close()
+        finally:
+            self.close()
 
 
 class ThreadedHiSockClient(HiSockClient):
