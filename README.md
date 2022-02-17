@@ -10,6 +10,8 @@
 
 <img src="https://raw.githubusercontent.com/SSS-Says-Snek/SSS-Says-Snek.github.io/master/assets/logo.png" width=200 class="center">
 
+> NOTE: Even though it seems like there is no development going on, we are currently working on hisock **version 2.0**, on the *refac-hisock* branch.
+
 # hisock (HiSock, Hisock)
 A **hi**gher level extension of Python's built-in **sock**et module, with simpler and more efficient usages.
 
