@@ -1,6 +1,12 @@
 from __future__ import annotations
 
 
+PIECE_COLORS = {
+    -1: (50, 50, 50),  # NO_PIECE
+    0: (255, 0, 0),  # RED
+    1: (255, 255, 0)  # YELLOW
+}
+
 class BoardEnum:
     NO_PIECE = -1
     RED = 0
@@ -43,3 +49,6 @@ class Board:
             if path.count(self.board[new_pos[1]][new_pos[0]]) == 4:
                 return True
         return False
+
+    def make_move(self, piece_type, x, y):
+        self.board[y][x] = piece_type

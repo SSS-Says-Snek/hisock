@@ -857,231 +857,236 @@ class HiSockServer(_HiSockBase):
 
         client_socket: socket.socket
         for client_socket in read_socket:
-            ### Reserved commands ###
-
-            # Handle bad client
-            if client_socket.fileno() == -1:
-                # Client already disconnected
-                # This can happen in the case of a keepalive that wasn't responded to
-                # or the client already disconnected and it was already handled
-                if client_socket not in self.clients:
-                    continue
-
-                self.disconnect_client(
-                    self.clients[client_socket]["ip"], force=True, call_func=False
-                )
-                continue
-
-            # Handle new connection
-            # select.select() returns the server socket if a new connection is made
-            if client_socket == self.socket:
-                self._new_client_connection(*self.socket.accept())
-                continue
-
-            ### Receiving data ###
-            data: bytes = b""
-            decoded_data: str = ""
-
-            # {"header": bytes, "data": bytes} or False
-            self._receiving_data = True
-            raw_data = receive_message(client_socket, self.header_len)
-            self._receiving_data = False
-
-            if isinstance(raw_data, dict):
-                data = raw_data["data"]
-                decoded_data = data.decode()
-
             try:
-                client_data = self.clients[client_socket]
-            except KeyError:
-                raise ClientNotFound(
-                    "Client data not found, but is not a new client."
-                ) from KeyError
+                ### Reserved commands ###
 
-            ### Reserved commands ###
+                # Handle bad client
+                if client_socket.fileno() == -1:
+                    # Client already disconnected
+                    # This can happen in the case of a keepalive that wasn't responded to
+                    # or the client already disconnected and it was already handled
+                    if client_socket not in self.clients:
+                        continue
 
-            # Handle client disconnection
-            if (
-                not raw_data  # Most likely client disconnect, could be client error
-                or decoded_data.startswith("$USRCLOSE$")
-            ):
-
-                try:
                     self.disconnect_client(
-                        client_data["ip"], force=False, call_func=True
+                        self.clients[client_socket]["ip"], force=True, call_func=False
                     )
-                except BrokenPipeError:  # UNIX
-                    # Client is already gone
-                    pass
-                except ConnectionResetError:
-                    self.disconnect_client(
-                        client_data["ip"], force=True, call_func=True
-                    )
-
-                continue
-
-            # Change name or group
-            for matching_reserve, key in zip(
-                ("$CHNAME$", "$CHGROUP$"), ("name", "group")
-            ):
-
-                if not decoded_data.startswith(matching_reserve):
                     continue
 
-                change_to = _removeprefix(decoded_data, matching_reserve)
+                # Handle new connection
+                # select.select() returns the server socket if a new connection is made
+                if client_socket == self.socket:
+                    self._new_client_connection(*self.socket.accept())
+                    continue
 
-                # Resetting
-                if change_to == "":
-                    change_to = client_data[key]
+                ### Receiving data ###
+                data: bytes = b""
+                decoded_data: str = ""
 
-                # Change it
-                changed_client_data = client_data.copy()
-                changed_client_data[key] = change_to
-                self.clients[client_socket] = changed_client_data
+                # {"header": bytes, "data": bytes} or False
+                self._receiving_data = True
+                raw_data = receive_message(client_socket, self.header_len)
+                self._receiving_data = False
 
-                del self.clients_rev[
-                    (
-                        client_data["ip"],
-                        client_data["name"],
-                        client_data["group"],
-                    )
-                ]
-                self.clients_rev[
-                    (
-                        changed_client_data["ip"],
-                        changed_client_data["name"],
-                        changed_client_data["group"],
-                    )
-                ] = client_socket
+                if isinstance(raw_data, dict):
+                    data = raw_data["data"]
+                    decoded_data = data.decode()
 
-                # Call reserved function
-                reserved_func_name = f"{key}_change"
-
-                if reserved_func_name in self._reserved_funcs:
-                    old_value = client_data[key]
-                    new_value = changed_client_data[key]
-
-                    self._call_function(
-                        reserved_func_name,
-                        self._type_cast_client_data(
-                            command=reserved_func_name,
-                            client_data=changed_client_data,
-                        ),
-                        old_value,
-                        new_value,
-                    )
-
-                return
-
-            # Handle keepalive acknowledgement
-            if decoded_data.startswith("$KEEPACK$"):
-                self._handle_keepalive(client_socket)
-                continue
-
-            # Get client
-            elif decoded_data.startswith("$GETCLT$"):
                 try:
-                    client_identifier = _removeprefix(decoded_data, "$GETCLT$")
+                    client_data = self.clients[client_socket]
+                except KeyError:
+                    raise ClientNotFound(
+                        "Client data not found, but is not a new client."
+                    ) from KeyError
 
-                    # Determine if the client identifier is a name or an IP+port
+                ### Reserved commands ###
+
+                # Handle client disconnection
+                if (
+                    not raw_data  # Most likely client disconnect, could be client error
+                    or decoded_data.startswith("$USRCLOSE$")
+                ):
+
                     try:
-                        validate_ipv4(client_identifier)
-                        client_identifier = ipstr_to_tup(client_identifier)
-                    except ValueError:
+                        self.disconnect_client(
+                            client_data["ip"], force=False, call_func=True
+                        )
+                    except BrokenPipeError:  # UNIX
+                        # Client is already gone
                         pass
+                    except ConnectionResetError:
+                        self.disconnect_client(
+                            client_data["ip"], force=True, call_func=True
+                        )
 
-                    client = self.get_client(client_identifier)
-                except ValueError as e:
-                    client = {"traceback": str(e)}
-                except ClientNotFound:
-                    client = {"traceback": "$NOEXIST$"}
-
-                self._send_client_raw(client_data["ip"], client)
-                continue
-
-            ### Unreserved commands ###
-
-            # Handle random data with no command
-            elif not decoded_data.startswith("$CMD$"):
-                if "*" in self.funcs:
-                    self._call_wildcard_function(
-                        client_data=client_data, command=None, content=data
-                    )
-                return
-
-            has_listener = False  # For cache
-
-            # Get command and message
-            command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
-            content = _removeprefix(decoded_data, f"$CMD${command}$MSG$")
-
-            # No content? (`_removeprefix` didn't do anything)
-            if not content or content == decoded_data:
-                content = None
-
-            # Call functions that are listening for this command from the `on`
-            # decorator
-            for matching_command, func in self.funcs.items():
-                if command != matching_command:
                     continue
 
-                has_listener = True
+                # Change name or group
+                for matching_reserve, key in zip(
+                    ("$CHNAME$", "$CHGROUP$"), ("name", "group")
+                ):
 
-                # Call function with dynamic args
-                arguments = ()
-                if len(func["type_hint"]) != 0:
-                    type_casted_client_data = self._type_cast_client_data(
-                        command=matching_command, client_data=client_data
+                    if not decoded_data.startswith(matching_reserve):
+                        continue
+
+                    change_to = _removeprefix(decoded_data, matching_reserve)
+
+                    # Resetting
+                    if change_to == "":
+                        change_to = client_data[key]
+
+                    # Change it
+                    changed_client_data = client_data.copy()
+                    changed_client_data[key] = change_to
+                    self.clients[client_socket] = changed_client_data
+
+                    del self.clients_rev[
+                        (
+                            client_data["ip"],
+                            client_data["name"],
+                            client_data["group"],
+                        )
+                    ]
+                    self.clients_rev[
+                        (
+                            changed_client_data["ip"],
+                            changed_client_data["name"],
+                            changed_client_data["group"],
+                        )
+                    ] = client_socket
+
+                    # Call reserved function
+                    reserved_func_name = f"{key}_change"
+
+                    if reserved_func_name in self._reserved_funcs:
+                        old_value = client_data[key]
+                        new_value = changed_client_data[key]
+
+                        self._call_function(
+                            reserved_func_name,
+                            self._type_cast_client_data(
+                                command=reserved_func_name,
+                                client_data=changed_client_data,
+                            ),
+                            old_value,
+                            new_value,
+                        )
+
+                    return
+
+                # Handle keepalive acknowledgement
+                if decoded_data.startswith("$KEEPACK$"):
+                    self._handle_keepalive(client_socket)
+                    continue
+
+                # Get client
+                elif decoded_data.startswith("$GETCLT$"):
+                    try:
+                        client_identifier = _removeprefix(decoded_data, "$GETCLT$")
+
+                        # Determine if the client identifier is a name or an IP+port
+                        try:
+                            validate_ipv4(client_identifier)
+                            client_identifier = ipstr_to_tup(client_identifier)
+                        except ValueError:
+                            pass
+
+                        client = self.get_client(client_identifier)
+                    except ValueError as e:
+                        client = {"traceback": str(e)}
+                    except ClientNotFound:
+                        client = {"traceback": "$NOEXIST$"}
+
+                    self._send_client_raw(client_data["ip"], client)
+                    continue
+
+                ### Unreserved commands ###
+
+                # Handle random data with no command
+                elif not decoded_data.startswith("$CMD$"):
+                    if "*" in self.funcs:
+                        self._call_wildcard_function(
+                            client_data=client_data, command=None, content=data
+                        )
+                    return
+
+                has_listener = False  # For cache
+
+                # Get command and message
+                command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
+                content = _removeprefix(decoded_data, f"$CMD${command}$MSG$")
+
+                # No content? (`_removeprefix` didn't do anything)
+                if not content or content == decoded_data:
+                    content = None
+
+                # Call functions that are listening for this command from the `on`
+                # decorator
+                for matching_command, func in self.funcs.items():
+                    if command != matching_command:
+                        continue
+
+                    has_listener = True
+
+                    # Call function with dynamic args
+                    arguments = ()
+                    if len(func["type_hint"]) != 0:
+                        type_casted_client_data = self._type_cast_client_data(
+                            command=matching_command, client_data=client_data
+                        )
+                    # client_data
+                    if len(func["type_hint"]) == 1:
+                        arguments = (type_casted_client_data,)
+                    # client_data, message
+                    elif len(func["type_hint"]) >= 2:
+                        arguments = (
+                            type_casted_client_data,
+                            _type_cast(
+                                type_cast=func["type_hint"]["message"],
+                                content_to_type_cast=content,
+                                func_name=func["name"],
+                            ),
+                        )
+                    self._call_function(matching_command, *arguments)
+                    break
+
+                else:
+                    has_listener = self._handle_recv_commands(command, content)
+
+                # No listener found
+                if not has_listener and "*" in self.funcs:
+                    # No recv and no catchall. A command and some data.
+                    self._call_wildcard_function(
+                        client_data=client_data, command=command, content=content
                     )
-                # client_data
-                if len(func["type_hint"]) == 1:
-                    arguments = (type_casted_client_data,)
-                # client_data, message
-                elif len(func["type_hint"]) >= 2:
-                    arguments = (
-                        type_casted_client_data,
+
+                # Caching
+                self._cache(
+                    has_listener, command, content, decoded_data, raw_data["header"]
+                )
+
+                # Call `message` function
+                if "message" in self.funcs:
+                    self._call_function_reserved(
+                        "message",
+                        self._type_cast_client_data(
+                            command="message", client_data=client_data
+                        ),
                         _type_cast(
-                            type_cast=func["type_hint"]["message"],
+                            type_cast=self.funcs["message"]["type_hint"]["command"],
+                            content_to_type_cast=command,
+                            func_name="<message call in run command>",
+                        ),
+                        _type_cast(
+                            type_cast=self.funcs["message"]["type_hint"]["message"],
                             content_to_type_cast=content,
-                            func_name=func["name"],
+                            func_name="<message call in run message>",
                         ),
                     )
-                self._call_function(matching_command, *arguments)
-                break
-
-            else:
-                has_listener = self._handle_recv_commands(command, content)
-
-            # No listener found
-            if not has_listener and "*" in self.funcs:
-                # No recv and no catchall. A command and some data.
-                self._call_wildcard_function(
-                    client_data=client_data, command=command, content=content
-                )
-
-            # Caching
-            self._cache(
-                has_listener, command, content, decoded_data, raw_data["header"]
-            )
-
-            # Call `message` function
-            if "message" in self.funcs:
-                self._call_function_reserved(
-                    "message",
-                    self._type_cast_client_data(
-                        command="message", client_data=client_data
-                    ),
-                    _type_cast(
-                        type_cast=self.funcs["message"]["type_hint"]["command"],
-                        content_to_type_cast=command,
-                        func_name="<message call in run command>",
-                    ),
-                    _type_cast(
-                        type_cast=self.funcs["message"]["type_hint"]["message"],
-                        content_to_type_cast=content,
-                        func_name="<message call in run message>",
-                    ),
-                )
+            except (BrokenPipeError, ConnectionResetError):
+                if client_socket in self.clients:
+                    self.disconnect_client(self.clients[client_socket]["ip"], force=True)
+                print("AMOGUS SUSSY BOI")
 
     # Stop
 

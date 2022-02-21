@@ -41,14 +41,24 @@ class ServerData:
                 if len(client_pair) == 3:
                     other_client_idx = not client_pair.index(clt_data)
 
+                    print(
+                        f"[DEBUG] Left clt: {clt_data}, Other clt: {client_pair[other_client_idx]}\n"
+                        f"List of paired clients: {self.client_pairs}\nTime: {__import__('time').time()}"
+                    )
+
+                    other_client = client_pair[other_client_idx]
+                    self.client_pairs.remove(client_pair)
+
                     server.send_client(
                         client_pair[other_client_idx],
                         "disconn",
                         b"Opponent Disconnected",
                     )
-                    server.disconnect_client(client_pair[other_client_idx])
 
-                self.client_pairs.remove(client_pair)
+                    server.disconnect_client(other_client, force=False)
+                else:
+                    self.client_pairs.remove(client_pair)
+                print("[DEBUG] BYE BYE CLIENTS")
                 break
 
 
@@ -66,6 +76,7 @@ def on_join(clt_data):
 
 @server.on("leave")
 def on_leave(clt_data):
+    print(f"[DEBUG] in on_leave: {clt_data} LEFT, REMOVING CLIENT")
     data.remove_client(clt_data)
     print(data.client_pairs)
 

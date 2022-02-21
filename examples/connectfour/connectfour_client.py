@@ -5,30 +5,24 @@ import hisock
 import _shared as shared
 
 import pygame
+import pygame.gfxdraw
 import pygame_gui
 
 pygame.init()
 
 WIDTH, HEIGHT = 800, 600
 
-# addr, name, _ = hisock.input_client_config(group_prompt=None)
 running = True
 
-# client = hisock.ThreadedHiSockClient(addr, name)
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 clock = pygame.time.Clock()
+
+pygame.display.set_caption("HiSock Connect Four")
 
 
 class FontCache:
     font_cache = {}
 
-
-class DeltaTime:
-    current = 0
-
-    @classmethod
-    def update(cls):
-        cls.current = clock.tick(60)
 
 class Button:
     def __init__(
@@ -164,7 +158,7 @@ class ConnectState(BaseState):
 
         self.conn_button.draw()
 
-        self.gui_manager.update(DeltaTime.current)
+        self.gui_manager.update(Data.deltatime)
         self.gui_manager.draw_ui(screen)
 
 
@@ -178,10 +172,24 @@ class GameState(BaseState):
         self.load_circles_loops = 0
         self.load_circles_idx = 0
 
+        self.is_turn = False
+        self.opponent_name = None
+        self.arrow_column = None
+        self.turn_no = 1
+
+        self.board = shared.Board()
+
+        self.down_arrow = pygame.image.load("downarrow.png").convert_alpha()
+
+        self.board_rect = pygame.Rect(0, 0, 585, 445)
+        self.board_rect.bottomleft = (30, 580)
+
         @self.client.on("start")
-        def on_start(data):
+        def on_start(data: dict):
+            print(data, type(data))
             self.paired = True
-            print(data)
+            self.is_turn = True if data["turn"] == "first" else False
+            self.opponent_name = data["opp_name"]
 
         @self.client.on("disconn")
         def on_disconn(reason: str):
@@ -191,6 +199,7 @@ class GameState(BaseState):
 
     def draw(self):
         if not self.paired:
+            # Waiting
             sec_elapsed = self.load_circles_loops * 3 + self.load_circles_idx
 
             self.blit_text(
@@ -219,14 +228,65 @@ class GameState(BaseState):
                 pygame.draw.circle(
                     screen, circ_color, (250 + i * 150, 250), 50
                 )
+        else:
+            mouse_pos = pygame.mouse.get_pos()
+
+            # Actual game draw
+            self.blit_text(
+                f"{self.client.name} (YOU)",
+                (WIDTH // 2, 10), 25, (255, 255, 255), center=True
+            )
+            self.blit_text(
+                "VS",
+                (WIDTH // 2, 35), 25, (255, 255, 255), center=True
+            )
+            self.blit_text(
+                f"{self.opponent_name} (OPPONENT)",
+                (WIDTH // 2, 60), 25, (160, 160, 160), center=True
+            )
+            self.blit_text(
+                f"Turn: {self.turn_no}",
+                (700, 130), 25, (255, 255, 255)
+            )
+
+            pygame.draw.rect(
+                screen, (0, 110, 210), self.board_rect, border_radius=5
+            )
+
+            for y, row in enumerate(self.board.board):
+                for x, piece in enumerate(row):
+                    # IDC about performance
+                    pygame.gfxdraw.aacircle(
+                        screen, 80 + 80 * x, 530 - 70 * y, 30,
+                        shared.PIECE_COLORS[piece]
+                    )
+                    pygame.gfxdraw.filled_circle(
+                        screen, 80 + 80 * x, 530 - 70 * y, 30,
+                        shared.PIECE_COLORS[piece]
+                    )
+
+            if self.board_rect.collidepoint(mouse_pos):
+                self.arrow_column = (mouse_pos[0] - self.board_rect.x) * 7 // self.board_rect.width
+                screen.blit(
+                    self.down_arrow, (
+                        60 + self.arrow_column * (self.board_rect.width - 20) // 7, 80
+                    )
+                )
 
     def handle_event(self, event):
-        pass
+        if event.type == pygame.MOUSEBUTTONDOWN:
+            print(self.arrow_column)
 
 
 class Data:
     current_state = ConnectState()
+    font_cache = {}
     client = None
+    deltatime = 0
+
+    @classmethod
+    def update_deltatime(cls):
+        cls.deltatime = clock.tick(60)
 
 
 def run():
@@ -246,7 +306,7 @@ def run():
         Data.current_state.draw()
         pygame.display.update()
 
-        DeltaTime.update()
+        Data.update_deltatime()
 
     pygame.quit()
 
