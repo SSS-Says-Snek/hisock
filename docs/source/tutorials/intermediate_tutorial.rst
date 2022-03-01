@@ -18,6 +18,7 @@ This tutorial will focus on:
 - Threading
 - The other send methods
 - The other receive methods
+- Catch-all listeners (wildcard)
 - Groups, names, and client info
 
 ----
@@ -180,6 +181,71 @@ Now, let's use the example above, but using the :meth:`recv` method!
        print(f"The server said: {response}")
 
    client.start()
+
+----
+
+Catch-all listeners (wildcard)
+------------------------------
+
+In :mod:`HiSock`, there is a way to catch every piece of data sent that hasn't been handled by a listener already. This amazing thing is known as the catch-all or wildcard listener. Despite the name, this is not like the ``message`` reserved listener. It will only be called when there is no other handler for the data.
+
+The function that will be called for the catch-all listener will be passed in the client data if it's a server, the command, and the message. If there is no message, it'll be type-casted into the equivalent of ``None``.
+
+Here is an example with a client-side and server-side code block:
+
+.. code-block:: python
+
+   client = ...
+
+   client.send(
+      "hello i am an uncaught command",
+      f"Random data: "
+      + "".join(
+         [
+               chr(choice((randint(65, 90), randint(97, 122))))
+               for _ in range(100)
+         ]
+      ),
+   )
+
+   @client.on("client_connect")
+   def on_connect(client_data):
+       ...
+
+   @client.on("client_disconnect")
+   def on_disconnect(client_data):
+       ...
+
+   @client.on("*")
+   def on_wildcard(command: str, data: str):
+       print(f"The server sent some uncaught data: {command=}, {data=}")
+
+   client.start()
+
+
+.. code-block:: python
+
+   server = ...
+
+   @server.on("join")
+   def on_join(client_data):
+      ...
+   
+   @server.on("leave")
+   def on_leave(client_data):
+      ...
+
+   @server.on("*")
+   def on_wildcard(client_data, command: str, data: str):
+       print(
+           f"There was some unhandled data from {client_data.name}. "
+           f"{command=}, {data=}"
+       )
+
+       server.send_client(client_data, "i am also an uncaught command", data.replace("a", "ඞ"))
+
+   server.start()
+
 
 ----
 

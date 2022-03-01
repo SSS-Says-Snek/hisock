@@ -232,6 +232,10 @@ Server:
 
    When the server receives a command, it'll send an event to itself called ``message`` which will have two parameters. The two parameters are the client data who sent it and the raw data which was received.
 
+- ``*``
+
+   This will be called when there is no listener for an incoming command and data. The three parameters are the client data, the command, and the content.
+
 Client:
 
 - ``client_connect``
@@ -243,6 +247,9 @@ Client:
 - ``force_disconnect``
 
    The server sends the event ``force_disconnect`` to a client when they kick the client. There are *no* parameters sent with the function that is being decorated with this.
+- ``*``
+
+   This will be called when there is no listener for an incoming command and data. The two parameters are the command and the content.
 
 ----
 
