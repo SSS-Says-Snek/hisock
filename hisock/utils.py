@@ -6,9 +6,9 @@ This module contains several function to either:
 Generally, functions starting with an underscore (_) will be
 under-the-hood, while the rest are user functions
 
-====================================
+=====================================
 Copyright SSS_Says_Snek, 2021-present
-====================================
+=====================================
 """
 
 from __future__ import annotations
@@ -95,7 +95,9 @@ class MessageCacheMember:
 
 class ClientInfo:
     def __init__(self, ip, name, group):
-        self.ip: tuple[str, int] = tuple(ip)  # _type_cast converts tuple to list to be JSON-serializable
+        self.ip: tuple[str, int] = tuple(
+            ip
+        )  # _type_cast converts tuple to list to be JSON-serializable
         self.name: Union[str, None] = name
         self.group: Union[str, None] = group
 
@@ -147,15 +149,18 @@ def make_header(
 ) -> Union[str, bytes]:
     """
     Makes a header of ``header_message``, with a maximum
-    header length of ``header_len``
+    header length of ``header_len``.
 
     :param header_message: A string OR bytes-like object, representing
-        the data to make a header from
+        the data to make a header from.
     :type header_message: Union[str, bytes]
     :param header_len: An integer, specifying
-        the actual header length (will be padded)
+        the actual header length (will be padded).
     :type header_len: int
     :param encode: A boolean, specifying the
+
+        Specifying the what?
+
     :return: The constructed header, padded to ``header_len``
         bytes
     :rtype: Union[str, bytes]

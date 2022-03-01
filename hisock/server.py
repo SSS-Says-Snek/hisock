@@ -201,6 +201,7 @@ class HiSockServer(_HiSockBase):
         return len(self.clients)
 
     # Comparisons
+
     def __gt__(self, other: Union[HiSockServer, str]):
         """Example: HiSockServer(...) > "192.168.1.133:5000" """
 
@@ -801,6 +802,7 @@ class HiSockServer(_HiSockBase):
         """
 
         if isinstance(client, ClientInfo):
+            # Don't mix this up.
             client = client.ip
 
         client_socket = self._get_client_from_name_or_ip_port(client)
@@ -1146,6 +1148,7 @@ class ThreadedHiSockServer(HiSockServer):
     def join(self):
         """Waits for the thread to be killed"""
         self._thread.join()
+
 
 def start_server(addr, blocking=True, max_connections=0, header_len=16):
     """

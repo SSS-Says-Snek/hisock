@@ -1,9 +1,9 @@
 """
 This module contains shared code for both HiSockServer and HiSockClient.
 
-====================================
+=====================================
 Copyright SSS_Says_Snek, 2022-present
-====================================
+=====================================
 """
 
 import inspect
@@ -120,6 +120,7 @@ class _HiSockBase:
         content_header: bytes,
     ):
         if self.cache_size <= 0:
+            # No cache, this method shouldn't even be called.
             return
 
         cache_content = content if has_listener else decoded_data
