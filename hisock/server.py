@@ -348,6 +348,9 @@ class HiSockServer(_HiSockBase):
             # Send keepalive to all clients
             if not self._keepalive_event.is_set():
                 for client_socket, client_data in self.clients.items():
+                    if client_socket not in self.clients:
+                        continue
+
                     self._unresponsive_clients.append(client_socket)
                     self._send_client_raw(client_data["ip"], "$KEEPALIVE$")
 
@@ -1085,8 +1088,9 @@ class HiSockServer(_HiSockBase):
                     )
             except (BrokenPipeError, ConnectionResetError):
                 if client_socket in self.clients:
+                    # Does it need to be forced?? Investigate further
                     self.disconnect_client(self.clients[client_socket]["ip"], force=True)
-                print("AMOGUS SUSSY BOI")
+                print("[DEBUG] 10054 exception, we're investigating")
 
     # Stop
 

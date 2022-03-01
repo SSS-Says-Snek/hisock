@@ -4,13 +4,17 @@ from __future__ import annotations
 PIECE_COLORS = {
     -1: (50, 50, 50),  # NO_PIECE
     0: (255, 0, 0),  # RED
-    1: (255, 255, 0)  # YELLOW
+    1: (255, 255, 0),  # YELLOW
+    2: (120, 0, 0),  # HOVER RED
+    3: (120, 120, 0),  # HOVER YELLOW
 }
 
 class BoardEnum:
     NO_PIECE = -1
     RED = 0
     YELLOW = 1
+    HOVER_RED = 2
+    HOVER_YELLOW = 3
 
 
 class Board:
@@ -28,6 +32,7 @@ class Board:
             (-1, 0),
             (-1, -1),
         )
+        self.total_moves = 0
 
     def player_win(self, new_pos: tuple[int, int]) -> bool:
         potential_paths = []

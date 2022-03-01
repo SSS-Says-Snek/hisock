@@ -61,6 +61,11 @@ class ServerData:
                 print("[DEBUG] BYE BYE CLIENTS")
                 break
 
+    def find_client(self, clt_data):
+        for client_pair in self.client_pairs:
+            if clt_data in client_pair:
+                return client_pair
+
 
 addr, port = hisock.input_server_config()
 server = hisock.HiSockServer((addr, port))
@@ -79,6 +84,36 @@ def on_leave(clt_data):
     print(f"[DEBUG] in on_leave: {clt_data} LEFT, REMOVING CLIENT")
     data.remove_client(clt_data)
     print(data.client_pairs)
+
+
+@server.on("turn_made")
+def on_turn_made(clt_data, move_info: dict):
+    x, y = move_info["x"], move_info["y"]
+
+    client_pair = data.find_client(clt_data)
+    client_pair[2].board[y][x] = move_info["piece"]
+
+    other_client = client_pair[not client_pair.index(clt_data)]
+
+    if client_pair[2].player_win((x, y)):
+        server.send_client(clt_data, "win")
+        server.send_client(other_client, "lose")
+
+    server.send_client(
+        other_client,
+        "new_move", {
+            "opp_move": [x, y],
+            "opp_piece": move_info["piece"]
+        }
+    )
+
+    client_pair[2].total_moves += 1
+    if client_pair[2].total_moves % 2 == 0:
+        for client in (clt_data, other_client):
+            server.send_client(
+                client,
+                "new_turn", client_pair[2].total_moves // 2 + 1
+            )
 
 
 server.start()

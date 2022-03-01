@@ -590,7 +590,6 @@ class HiSockClient(_HiSockBase):
                     )
                 self._call_function(matching_command, *arguments)
                 break
-
             else:
                 has_listener = self._handle_recv_commands(command, content)
 

@@ -1,5 +1,6 @@
 import abc
 import string
+import time
 
 import hisock
 import _shared as shared
@@ -175,7 +176,12 @@ class GameState(BaseState):
         self.is_turn = False
         self.opponent_name = None
         self.arrow_column = None
+        self.piece_type = None
+        self.hover_piece_type = None
+        self.hover_piece_idx = None
         self.turn_no = 1
+        self.start_time = None
+        self.game_status = "in_progress"
 
         self.board = shared.Board()
 
@@ -187,15 +193,62 @@ class GameState(BaseState):
         @self.client.on("start")
         def on_start(data: dict):
             print(data, type(data))
+
             self.paired = True
             self.is_turn = True if data["turn"] == "first" else False
+            self.piece_type = shared.BoardEnum.RED if self.is_turn else shared.BoardEnum.YELLOW
+            self.hover_piece_type = shared.BoardEnum.HOVER_RED if self.is_turn else shared.BoardEnum.HOVER_YELLOW
             self.opponent_name = data["opp_name"]
+            self.start_time = time.time()
+
+        @self.client.on("new_move")
+        def on_new_move(data: dict):
+            x, y = data["opp_move"][0], data["opp_move"][1]
+
+            # self.turn_no = data["turn"]
+            self.board.board[y][x] = data["opp_piece"]
+            self.is_turn = True
+
+        @self.client.on("new_turn")  # JUST SYNCS THE TURN COUNTER, NOTHING ELSE!!!
+        def on_new_turn(turn_no: int):
+            self.turn_no = turn_no
+        
+        @self.client.on("win")
+        def on_win():
+            self.game_status = "win"
+            print("You win!!!!")
+
+        @self.client.on("lose")
+        def on_lose():
+            self.game_status = "lose"
+            print("You lose :(((")
 
         @self.client.on("disconn")
         def on_disconn(reason: str):
             print(reason)
 
         self.client.start()
+
+    @staticmethod
+    def format_secs(secs):
+        return f"{(secs // 60):02d}:{(secs % 60):02d}"
+
+    @staticmethod
+    def update_piece(x, y, piece):
+        pygame.gfxdraw.aacircle(
+            screen, 80 + 80 * x, 180 + 70 * y, 30,
+            shared.PIECE_COLORS[piece]
+        )
+        pygame.gfxdraw.filled_circle(
+            screen, 80 + 80 * x, 180 + 70 * y, 30,
+            shared.PIECE_COLORS[piece]
+        )
+
+    def pos_to_coord(self, mouse_x, mouse_y):
+        x = (mouse_x - self.board_rect.x) * 7 // self.board_rect.width
+        y = (mouse_y - self.board_rect.y) * 6 // self.board_rect.height
+
+        return x, y
 
     def draw(self):
         if not self.paired:
@@ -244,10 +297,26 @@ class GameState(BaseState):
                 f"{self.opponent_name} (OPPONENT)",
                 (WIDTH // 2, 60), 25, (160, 160, 160), center=True
             )
+
             self.blit_text(
                 f"Turn: {self.turn_no}",
-                (700, 130), 25, (255, 255, 255)
+                (650, 130), 25, (255, 255, 255)
             )
+            self.blit_text(
+                f"Time: {self.format_secs(int(time.time() - self.start_time))}",
+                (650, 170), 25, (255, 255, 255)
+            )
+
+            if self.is_turn:
+                self.blit_text(
+                    "YOUR TURN",
+                    (650, 500), 30, (255, 255, 255)
+                )
+            else:
+                self.blit_text(
+                    "OPP TURN",
+                    (650, 500), 30, (160, 160, 160)
+                )
 
             pygame.draw.rect(
                 screen, (0, 110, 210), self.board_rect, border_radius=5
@@ -256,14 +325,10 @@ class GameState(BaseState):
             for y, row in enumerate(self.board.board):
                 for x, piece in enumerate(row):
                     # IDC about performance
-                    pygame.gfxdraw.aacircle(
-                        screen, 80 + 80 * x, 530 - 70 * y, 30,
-                        shared.PIECE_COLORS[piece]
-                    )
-                    pygame.gfxdraw.filled_circle(
-                        screen, 80 + 80 * x, 530 - 70 * y, 30,
-                        shared.PIECE_COLORS[piece]
-                    )
+                    self.update_piece(x, y, piece)
+                    
+            if self.hover_piece_idx is not None:
+                self.update_piece(*self.hover_piece_idx, self.hover_piece_type)
 
             if self.board_rect.collidepoint(mouse_pos):
                 self.arrow_column = (mouse_pos[0] - self.board_rect.x) * 7 // self.board_rect.width
@@ -274,8 +339,25 @@ class GameState(BaseState):
                 )
 
     def handle_event(self, event):
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            print(self.arrow_column)
+        mp = pygame.mouse.get_pos()
+        x, _ = self.pos_to_coord(*mp)  # Y is not used cuz it's a loser
+        
+        if self.board_rect.collidepoint(mp):
+            column = [row[x] for row in self.board.board]
+            hover_y = column.count(shared.BoardEnum.NO_PIECE) - 1
+            self.hover_piece_idx = [x, hover_y]
+        else:
+            self.hover_piece_idx = None
+
+        if event.type == pygame.MOUSEBUTTONDOWN and self.is_turn:  # Player turn
+            hov_x, hov_y = self.hover_piece_idx
+            if self.board.board[hov_y][hov_x] == shared.BoardEnum.NO_PIECE:
+                self.board.board[hov_y][hov_x] = self.piece_type
+
+                self.client.send("turn_made", {"x": hov_x, "y": hov_y, "piece": self.piece_type})
+                self.is_turn = False
+
+            print(hov_x, hov_y)
 
 
 class Data:
