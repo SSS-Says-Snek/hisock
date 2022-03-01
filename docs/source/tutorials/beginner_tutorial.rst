@@ -44,7 +44,7 @@ Now, without further ado, let's begin!
 Creating our first server
 -------------------------
 
-In :mod:`HiSock`, there is a function to create a :class:`HiSockServer` instance, which is :func:`start_server`. This function is called with one parameter, which is a tuple. The tuple will contain the IP address to start the server on (most likely the local IP address) and the port to start the server on. To find the local IP address, there is a function called :func:`utils.get_local_ip`. For the port, a number between 1024 and 65535 *should* be fine.
+In :mod:`HiSock`, there exists a class, :class:`HiSockServer`, in the ``server`` module. To create a server, you will need to create an instance of this class. The ``__init__`` function of the :class:`HiSockServer` class takes a required tuple parameter, which is the IP address as a string and port as an integer to start the server on. To find the local IP address, there is a function called :func:`utils.get_local_ip`. For the port, a number between 1024 and 65535 *should* be fine.
 
 :class:`HiSockServer` instances have a :meth:`start` method to them, which will allow the server to listen for commands and data being sent.
 
@@ -52,7 +52,7 @@ In :mod:`HiSock`, there is a function to create a :class:`HiSockServer` instance
 
    import hisock
 
-   server = hisock.start_server((hisock.utils.get_local_ip(), 6969))
+   server = hisock.server.HiSockServer((hisock.utils.get_local_ip(), 6969))
 
    server.start()
 
@@ -64,7 +64,7 @@ Obviously, without a client, a server is kind of pointless. So, let's spice thin
 
 Creating our first client
 -------------------------
-In :mod:`HiSock`, there is a function to create a :class:`HiSockClient` instance, which is :meth:`hisock.connect`. This needs to be called with a maximum of two parameters. The first parameter is a tuple of the IP address of the server to connect to and the port is the port that the server is running on. The second parameter is the name of the client. :mod:`HiSock` uses IP addresses and names to identify clients. The third parameter (optional) is the group of the client. This tutorial won't mention groups.
+In :mod:`HiSock`, there is a class, :class:`HiSockClient`, in the ``client`` module. To create a client, you will need to create an instance of this class. The ``__init__`` function of the :class:`HiSockClient` class takes two required parameters. The first parameter is a tuple with the IP address and port that the server is running on. The second (optional) parameter is for the name of the client, which is used for identification. The third (optional) parameter is the group of the client, which won't be talked about in this tutorial.
 
 Like :class:`HiSockServer`, :class:`HiSockClient` needs to have its :meth:`start` method called to start the client.
 
@@ -72,7 +72,7 @@ Like :class:`HiSockServer`, :class:`HiSockClient` needs to have its :meth:`start
 
    import hisock
 
-   client = hisock.connect(
+   client = hisock.client.HiSockClient(
        (hisock.utils.get_local_ip(), 6969),
        name=input("What is your name? >")
    )
