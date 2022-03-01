@@ -6,11 +6,7 @@ A module containing the main server classes and functions, including
 
 .. note::
 
-   Header lengths usually should not be that long;
-   on average, header lengths are about 64 bytes long, which is more than
-   enough for most cases (10 vigintillion, 10**64). Plus, a release is planned
-   for hisock that utilizes ints to bump the header utilization from
-   `10**x` to `2**(7x)` (where x is the header length)
+   Header lengths shouldn't be too long. By default, the header length is 16 bytes. This is good enough for most applications, as allows for 10**16 bytes to be sent.
 
 .. autoclass:: hisock.server.HiSockServer
    :members:

@@ -21,7 +21,6 @@ This tutorial will focus on:
 - Creating a client
 - Sending and receiving data
 - Acting upon the data
-- An example of a client sending data that a server writes to a text file and the server broadcasts to all clients connected.
 
 .. note::
    For this tutorial, I will be referring the IP addresses as ``hisock.utils.get_local_ip()``. In reality, you will most likely use a hard-coded IP address from a user input.
@@ -45,18 +44,17 @@ Now, without further ado, let's begin!
 Creating our first server
 -------------------------
 
-In :mod:`HiSock`, there is a function to create a :class:`HiSockServer` instance, which is :func:`start_server`. This function is called with one parameter, which is a tuple. The tuple will contain the IP address to start the server on (most likely the local IP address) and the port to start the server on. To find the local IP address, there is a function called :func:`utils.get_local_ip`. For the port, a number between 1024 and 65535 *should* be fine.
+In :mod:`HiSock`, there exists a class, :class:`HiSockServer`, in the ``server`` module. To create a server, you will need to create an instance of this class. The ``__init__`` function of the :class:`HiSockServer` class takes a required tuple parameter, which is the IP address as a string and port as an integer to start the server on. To find the local IP address, there is a function called :func:`utils.get_local_ip`. For the port, a number between 1024 and 65535 *should* be fine.
 
-:class:`HiSockServer` instances have a :meth:`run` method to them, which should be called constantly. This allows the server to listen for commands and data being sent.
+:class:`HiSockServer` instances have a :meth:`start` method to them, which will allow the server to listen for commands and data being sent.
 
 .. code-block:: python
 
    import hisock
 
-   server = hisock.start_server((hisock.utils.get_local_ip(), 6969))
+   server = hisock.server.HiSockServer((hisock.utils.get_local_ip(), 6969))
 
-   while True:
-       server.run()
+   server.start()
 
 That's basically it! Of course, this server is useless, but hey, it's a step in the right direction! We'll add on to this later on.
 
@@ -66,21 +64,20 @@ Obviously, without a client, a server is kind of pointless. So, let's spice thin
 
 Creating our first client
 -------------------------
-In :mod:`HiSock`, there is a function to create a :class:`HiSockClient` instance, which is :meth:`hisock.connect`. This needs to be called with a maximum of two parameters. The first parameter is a tuple of the IP address of the server to connect to and the port is the port that the server is running on. The second parameter is the name of the client. :mod:`HiSock` uses IP addresses and names to identify clients. The third parameter (optional) is the group of the client. This tutorial won't mention groups.
+In :mod:`HiSock`, there is a class, :class:`HiSockClient`, in the ``client`` module. To create a client, you will need to create an instance of this class. The ``__init__`` function of the :class:`HiSockClient` class takes two required parameters. The first parameter is a tuple with the IP address and port that the server is running on. The second (optional) parameter is for the name of the client, which is used for identification. The third (optional) parameter is the group of the client, which won't be talked about in this tutorial.
 
-Like :class:`HiSockServer`, :class:`HiSockClient` needs to be run constantly to listen to receive data. However, in :class:`HiSockClient`, instead of the :meth:`run()` method, it is called :meth:`update()`. So, our final starter client code is:
+Like :class:`HiSockServer`, :class:`HiSockClient` needs to have its :meth:`start` method called to start the client.
 
 .. code-block:: python
 
    import hisock
 
-   client = hisock.connect(
+   client = hisock.client.HiSockClient(
        (hisock.utils.get_local_ip(), 6969),
-       name=input("What is your name? >"),
-    )
+       name=input("What is your name? >")
+   )
 
-   while True:
-       client.update()
+   client.start()
 
 Like the server, this doesn't do anything at all yet. Next, we will explore sending and receiving data in an example.
 
@@ -99,11 +96,14 @@ Let's explore transmitting data for :mod:`HiSock`!
 Receiving data
 ==============
 
+.. note::
+   There is another way of receiving data, which is the :meth:`recv` method. This is not covered in this tutorial, but it is covered in the :doc:`/tutorials/intermediate_tutorial`.
+
 When a function is prefaced with the ``on`` decorator, it will run on something. It will listen for a command and run when that command is received.
 
 The ``on`` decorator takes a maximum of three parameters. One of the parameters is the command to listen on. The second (optional) parameter is whether to run the listener in its own thread or not. The third (optional) parameter is whether to override a reserved command, and this tutorial won't be covering it.
 
-For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client data. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in. The second parameter is the data that is being received.
+For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client data. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in (can be type-casted to a dict). The second parameter is the data that is being received.
 
 For the client: the ``on`` decorator will send a maximum of one parameter to the function it is decorating, which will be the message or content the client receives (in most cases).
 
@@ -117,8 +117,7 @@ Here's an example with the ``on`` decorator in use in a server. Here, the server
    def on_print_message_name(client_data, message: str):
        print(f'{client_data.name} sent "{message}"')
 
-   while True:
-       ...
+   server.start()
 
 Here's another example with receiving data, this time on the client-side. The client will receive a command, ``greet``, with a name. It will then print out a greeting with the name.
 
@@ -130,8 +129,7 @@ Here's another example with receiving data, this time on the client-side. The cl
    def on_greet(name: str):
        print(f"Hello there, {name}!")
 
-   while True:
-       ...
+   client.start()
 
 If the ``threaded`` parameter for the ``on`` decorator is True, then the function being decorated will run in a separate thread. This allows blocking code to run while still listening for updates.
 
@@ -152,8 +150,7 @@ It is useful if you want to get user input but also want to have the user receiv
        """This is important and cannot be missed!"""
        ...
 
-   while True:
-       ...
+   client.start()
 
 
 ----
@@ -182,8 +179,7 @@ Here is an example of sending data with a server-side code block:
    def on_question_response(client_data, response: str):
        server.send_client(client_data.ip, "grade", 100)
 
-   while True:
-       ...
+   server.start()
 
 And here is an example on the client-side:
 
@@ -200,8 +196,7 @@ And here is an example on the client-side:
    def on_grade(grade: int):
        print(f"You got a {grade:>3}%.")
 
-   while True:
-       ...
+   client.start()
 
 
 ----
@@ -237,6 +232,10 @@ Server:
 
    When the server receives a command, it'll send an event to itself called ``message`` which will have two parameters. The two parameters are the client data who sent it and the raw data which was received.
 
+- ``*``
+
+   This will be called when there is no listener for an incoming command and data. The three parameters are the client data, the command, and the content.
+
 Client:
 
 - ``client_connect``
@@ -248,6 +247,9 @@ Client:
 - ``force_disconnect``
 
    The server sends the event ``force_disconnect`` to a client when they kick the client. There are *no* parameters sent with the function that is being decorated with this.
+- ``*``
+
+   This will be called when there is no listener for an incoming command and data. The two parameters are the command and the content.
 
 ----
 
@@ -303,9 +305,11 @@ Dynamic arguments
 =================
 Remember where I said the ``on`` decorator will call the function with a *maximum* number of parameters?
 
-In :mod:`HiSock` with an unreserved event, the function to handle it can be called with the maximum number of parameters *or less*.
+In :mod:`HiSock` with an _unreserved_ event, the function to handle it can be called with the maximum number of parameters *or less*. Note that in a reserved event, dynamic arguments doesn't apply.
 
-As an example, for the server, if the function for an event has 1 argument, it will only be called with the client data. If it has 2 arguments, it will be called with the client data and the message. If it has 0 arguments, it'll be called as a void.
+As an example, for the server: If an event has 1 argument, it will only be called with the client data. If it has 2 arguments, it will be called with the client data and the message. If it has 0 arguments, it'll be called as a void (no arguments).
+
+Data can be sent similarly. If there is no data sent, the server will receive the equivalent of ``None`` for the type-casted data.
 
 Here are a few examples of this with a server-side code block.
 
@@ -327,9 +331,7 @@ Here are a few examples of this with a server-side code block.
    def on_event4():
        print("I have nothing.")
 
-Likewise, data sent can have a message or no message.
-
-Here is an example with a client-side code block.
+Here is an example with a client-side code block that ties into the server-side code block above:
 
 .. code-block:: python
 
@@ -355,12 +357,4 @@ Now, you know how to:
 - Handle datatypes transmitted
 - Do stuff with the data
 
-========
-Exercise
-========
-
-Here is an exercise for you, the reader!
-
-Create a :mod:`HiSock` client and server. Three clients can connect to the server. Once three clients have connected, the server will allow each client to transmit user input to it, which it will write in a text file. Each client can talk to the server one after another. The server will broadcast the message to every other client, and they will display it.
-
-:doc:`Here</examples/beginner-tutorial-exercise>` is how I completed the exercise.
+Have fun HiSock-ing!
