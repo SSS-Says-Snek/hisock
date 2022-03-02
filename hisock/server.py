@@ -884,7 +884,6 @@ class HiSockServer(_HiSockBase):
 
                 ### Receiving data ###
                 data: bytes = b""
-                decoded_data: str = ""
 
                 # {"header": bytes, "data": bytes} or False
                 self._receiving_data = True
@@ -893,7 +892,6 @@ class HiSockServer(_HiSockBase):
 
                 if isinstance(raw_data, dict):
                     data = raw_data["data"]
-                    decoded_data = data.decode()
 
                 try:
                     client_data = self.clients[client_socket]
@@ -907,7 +905,7 @@ class HiSockServer(_HiSockBase):
                 # Handle client disconnection
                 if (
                     not raw_data  # Most likely client disconnect, could be client error
-                    or decoded_data.startswith("$USRCLOSE$")
+                    or data.startswith(b"$USRCLOSE$")
                 ):
 
                     try:
@@ -926,13 +924,13 @@ class HiSockServer(_HiSockBase):
 
                 # Change name or group
                 for matching_reserve, key in zip(
-                    ("$CHNAME$", "$CHGROUP$"), ("name", "group")
+                    (b"$CHNAME$", b"$CHGROUP$"), ("name", "group")
                 ):
 
-                    if not decoded_data.startswith(matching_reserve):
+                    if not data.startswith(matching_reserve):
                         continue
 
-                    change_to = _removeprefix(decoded_data, matching_reserve)
+                    change_to = _removeprefix(data, matching_reserve)
 
                     # Resetting
                     if change_to == "":
@@ -978,14 +976,14 @@ class HiSockServer(_HiSockBase):
                     return
 
                 # Handle keepalive acknowledgement
-                if decoded_data.startswith("$KEEPACK$"):
+                if data.startswith(b"$KEEPACK$"):
                     self._handle_keepalive(client_socket)
                     continue
 
                 # Get client
-                elif decoded_data.startswith("$GETCLT$"):
+                elif data.startswith(b"$GETCLT$"):
                     try:
-                        client_identifier = _removeprefix(decoded_data, "$GETCLT$")
+                        client_identifier = _removeprefix(data, b"$GETCLT$")
 
                         # Determine if the client identifier is a name or an IP+port
                         try:
@@ -1006,7 +1004,7 @@ class HiSockServer(_HiSockBase):
                 ### Unreserved commands ###
 
                 # Handle random data with no command
-                elif not decoded_data.startswith("$CMD$"):
+                elif not data.startswith(b"$CMD$"):
                     if "*" in self.funcs:
                         self._call_wildcard_function(
                             client_data=client_data, command=None, content=data
@@ -1016,11 +1014,11 @@ class HiSockServer(_HiSockBase):
                 has_listener = False  # For cache
 
                 # Get command and message
-                command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
-                content = _removeprefix(decoded_data, f"$CMD${command}$MSG$")
+                command = data.lstrip(b"$CMD$").split(b"$MSG$")[0].decode()
+                content = _removeprefix(data, f"$CMD${command}$MSG$".encode())
 
                 # No content? (`_removeprefix` didn't do anything)
-                if not content or content == decoded_data:
+                if not content or content == data:
                     content = None
 
                 # Call functions that are listening for this command from the `on`
@@ -1065,7 +1063,7 @@ class HiSockServer(_HiSockBase):
 
                 # Caching
                 self._cache(
-                    has_listener, command, content, decoded_data, raw_data["header"]
+                    has_listener, command, content, data.decode(), raw_data["header"]
                 )
 
                 # Call `message` function

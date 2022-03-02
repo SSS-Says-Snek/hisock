@@ -50,7 +50,7 @@ import sys
 import time
 import random
 
-from hisock import start_server, get_local_ip, iptup_to_str
+from hisock import start_server, get_local_ip
 
 ADDR = get_local_ip()
 PORT = 6969
@@ -65,19 +65,19 @@ server = start_server((ADDR, PORT))
 
 @server.on("join")
 def client_join(client_data):
-    print(f"Cool, {':'.join(map(str, client_data['ip']))} joined!")
+    print(f"Cool, {client_data.ip_as_str} joined!")
     if client_data['name'] is not None:
-        print(f"    - With a sick name \"{client_data['name']}\", very cool!")
+        print(f"    - With a sick name \"{client_data.name}\", very cool!")
     if client_data['group'] is not None:
-        print(f"    - In a sick group \"{client_data['group']}\", cool!")
+        print(f"    - In a sick group \"{client_data.group}\", cool!")
 
     print("I'm gonna send them a quick hello message")
 
     server.send_client(client_data['ip'], "hello_message", str(time.time()).encode())
 
 @server.on("processing1")
-def process(client, process_request: str):
-    print(f"\nAlright, looks like {iptup_to_str(client['ip'])} received the hello message, "
+def process(client_data, process_request: str):
+    print(f"\nAlright, looks like {client_data.ip_as_str} received the hello message, "
           "\nas now they're trying to compute something on the server, because they have "
           "potato computers")
     print("Their processing request is:", process_request)
@@ -89,11 +89,10 @@ def process(client, process_request: str):
     result = eval(process_request)  # Insecure, but I'm lazy, so...
     print(f"Cool! The result is {result}! I'mma send it to the client")
 
-    server.send_client_raw(client['ip'], str(result).encode())
+    server.send_client(client_data, "something", str(result))
 
 
-while not server.closed:
-    server.run()
+server.start()
 ```
 
 #### Client
@@ -123,28 +122,26 @@ if name == '':
 if group == '':
     group = None
 
-join_time = time.time()
-
-s = connect(
+client = connect(
     (server_to_connect, port),
     name=name, group=group
 )
+join_time = time.time()
 
 
-@s.on("hello_message")
-def handle_hello(msg):
+@client.on("hello_message")
+def handle_hello(msg: str):
     print("Thanks, server, for sending a hello, just for me!")
-    print(f"Looks like, the message was sent on timestamp {msg.decode()}, "
-          f"which is just {round(float(msg.decode()) - join_time, 6) * 1000} milliseconds since the connection!")
+    print(f"Looks like, the message was sent on timestamp {msg}, "
+          f"which is just {round(float(msg) - join_time, 6) * 1000} milliseconds since the connection!")
     print("In response, I'm going to send the server a request to do some processing")
 
-    s.send("processing1", b"randnum**2")
-    result = int(s.recv_raw())
+    client.send("processing1", b"randnum**2")
+    result = client.recv("something", int)
 
     print(f"WHOAAA! The result is {result}! Thanks server!")
 
-while not s.closed:
-    s.update()
+client.start()
 
 ```
 

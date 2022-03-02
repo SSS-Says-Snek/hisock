@@ -506,29 +506,29 @@ class HiSockClient(_HiSockBase):
 
             data = self.sock.recv(int(content_header.decode()))
             self._receiving_data = False
-            decoded_data = data.decode()
+            # data = data.decode()
 
             ### Reserved commands ###
 
             # Handle keepalive
-            if decoded_data == "$KEEPALIVE$":
+            if data == b"$KEEPALIVE$":
                 self._handle_keepalive()
                 return
 
             # Handle force disconnection
-            elif decoded_data == "$DISCONN$":
+            elif data == b"$DISCONN$":
                 self.close(emit_leave=False)  # The server already knows we're gone
 
                 self._call_function_reserved("force_disconnect")
                 return
 
             # Handle new client connection
-            elif decoded_data.startswith("$CLTCONN$") and "client_connect" in self.funcs:
+            elif data.startswith(b"$CLTCONN$") and "client_connect" in self.funcs:
                 client_data = self._type_cast_client_data(
                     "client_connect",
                     _type_cast(
                         type_cast=dict,
-                        content_to_type_cast=_removeprefix(decoded_data, "$CLTCONN$"),
+                        content_to_type_cast=_removeprefix(data, "$CLTCONN$"),
                         func_name="<client connect in update>",
                     ),
                 )
@@ -536,13 +536,13 @@ class HiSockClient(_HiSockBase):
                 return
 
             # Handle client disconnection
-            elif decoded_data.startswith("$CLTDISCONN$"):
+            elif data.startswith(b"$CLTDISCONN$"):
                 client_data = self._type_cast_client_data(
                     "client_disconnect",
                     _type_cast(
                         type_cast=dict,
                         content_to_type_cast=_removeprefix(
-                            decoded_data, "$CLTDISCONN$"
+                            data, "$CLTDISCONN$"
                         ),
                         func_name="<client disconnect in update>",
                     ),
@@ -554,7 +554,7 @@ class HiSockClient(_HiSockBase):
             ### Unreserved commands ###
 
             # Handle random data
-            elif not decoded_data.startswith("$CMD$") and "*" in self.funcs:
+            elif not data.startswith(b"$CMD$") and "*" in self.funcs:
                 self._call_wildcard_function(
                     client_data=None, command=None, content=data
                 )
@@ -563,11 +563,11 @@ class HiSockClient(_HiSockBase):
             has_listener = False  # For cache
 
             # Get the command and the message
-            command = decoded_data.lstrip("$CMD$").split("$MSG$")[0]
-            content = _removeprefix(decoded_data, f"$CMD${command}$MSG$")
+            command = data.lstrip(b"$CMD$").split(b"$MSG$")[0].decode()
+            content = _removeprefix(data, f"$CMD${command}$MSG$".encode())
 
             # No content? (`_removeprefix` didn't do anything)
-            if not content or content == decoded_data:
+            if not content or content == data:
                 content = None
 
             # Call functions that are listening for this command from the `on`
@@ -601,7 +601,7 @@ class HiSockClient(_HiSockBase):
                 )
 
             # Caching
-            self._cache(has_listener, command, content, decoded_data, content_header)
+            self._cache(has_listener, command, content, data.decode(), content_header)
 
         except IOError as e:
             # Normal, means message has ended
