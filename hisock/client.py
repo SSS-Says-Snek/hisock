@@ -601,7 +601,7 @@ class HiSockClient(_HiSockBase):
                 )
 
             # Caching
-            self._cache(has_listener, command, content, data.decode(), content_header)
+            self._cache(has_listener, command, content, data, content_header)
 
         except IOError as e:
             # Normal, means message has ended

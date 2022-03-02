@@ -115,13 +115,13 @@ class _HiSockBase:
         has_listener: bool,
         command: str,
         content: bytes,
-        decoded_data: str,
+        full_data: bytes,
         content_header: bytes,
     ):
         if self.cache_size <= 0:
             return
 
-        cache_content = content if has_listener else decoded_data
+        cache_content = content if has_listener else full_data
         self.cache.append(
             MessageCacheMember(
                 {

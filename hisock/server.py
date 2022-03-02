@@ -1063,7 +1063,7 @@ class HiSockServer(_HiSockBase):
 
                 # Caching
                 self._cache(
-                    has_listener, command, content, data.decode(), raw_data["header"]
+                    has_listener, command, content, data, raw_data["header"]
                 )
 
                 # Call `message` function
