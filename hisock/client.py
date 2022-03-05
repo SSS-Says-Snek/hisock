@@ -140,9 +140,7 @@ class HiSockClient(_HiSockBase):
         try:
             self.sock.connect(self.addr)
         except ConnectionRefusedError:
-            raise ServerNotRunning(
-                "Server is not running! Aborting..."
-            ) from None
+            raise ServerNotRunning("Server is not running! Aborting...") from None
         self.sock.setblocking(True)
 
         # Stores the names of the reserved functions and information about them
@@ -541,9 +539,7 @@ class HiSockClient(_HiSockBase):
                     "client_disconnect",
                     _type_cast(
                         type_cast=dict,
-                        content_to_type_cast=_removeprefix(
-                            data, "$CLTDISCONN$"
-                        ),
+                        content_to_type_cast=_removeprefix(data, "$CLTDISCONN$"),
                         func_name="<client disconnect in update>",
                     ),
                 )
@@ -642,14 +638,28 @@ class HiSockClient(_HiSockBase):
 
     # Main loop
 
-    def start(self):
-        """Start the main loop for the client."""
-        
+    def start(self, callback: Callable = None, error_handler: Callable = None):
+        """
+        Start the main loop for the client.
+
+        :param callback: A function that will be called every time the
+            client receives and handles a message.
+        :type callback: Callable, optional
+        :param error_handler: A function that will be called every time the
+            client encounters an error.
+        :type error_handler: Callable, optional
+        """
+
         try:
             while not self.closed:
                 self._update()
-        finally:
-            self.close()
+                if isinstance(callback, Callable):
+                    callback()
+        except Exception as e:
+            if isinstance(error_handler, Callable):
+                error_handler(e)
+            else:
+                raise e
 
 
 class ThreadedHiSockClient(HiSockClient):
@@ -673,27 +683,33 @@ class ThreadedHiSockClient(HiSockClient):
         For documentation, see :meth:`HiSockClient.close`.
         """
 
-        super().close(*args, **kwargs)
+        # Note:``self._start.callback` will handle the closing of the socket
+        # after the stop event is set.
         self._stop_event.set()
+        # XXX: SNEK, ``_run`` is blocking, so we need to wait for it to finish
+        # XXX: What to do?
+        self._thread.join()
 
-    def _start(self):
-        super().start()
+    def _start(self, callback: Callable = None, error_handler: Callable = None):
+        """Start the main loop for the threaded client."""
 
-    def start(self):
+        def updated_callback():
+            if self._stop_event.is_set():
+                super().close()
+
+            # Original callback
+            if isinstance(callback, Callable):
+                callback()
+
+        super().start(callback=updated_callback, error_handler=error_handler)
+
+    def start(self, callback: Callable = None, error_handler: Callable = None):
         """
         Starts the main client loop.
         For documentation, see :meth:`HiSockClient.start`.
         """
 
-        self._thread.start()
-
-    def join(self):
-        """
-        Waits for the thread to be killed.
-        XXX: Should this be removed?
-        """
-
-        self._thread.join()
+        self._thread.start(args=(callback, error_handler))
 
 
 def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
