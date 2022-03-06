@@ -1104,6 +1104,7 @@ class HiSockServer(_HiSockBase):
         self._keepalive_event.set()
         self.disconnect_all_clients()
         self.socket.close()
+        self.socket.shutdown(socket.SHUT_RDWR)
 
     # Main loop
 
@@ -1143,7 +1144,7 @@ class ThreadedHiSockServer(HiSockServer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._thread = threading.Thread(target=self._start)
+        self._thread: threading.Thread = None
         self._stop_event = threading.Event()
 
     def close(self):
@@ -1152,11 +1153,8 @@ class ThreadedHiSockServer(HiSockServer):
         For documentation, see :meth:`HiSockServer.close`.
         """
 
-        # Note:``self._start.callback` will handle the closing of the socket
-        # after the stop event is set.
+        super().close()
         self._stop_event.set()
-        # XXX: SNEK, ``_run`` is blocking, so we need to wait for it to finish
-        # XXX: What to do?
         self._thread.join()
 
     def start(self, callback: Callable = None, error_handler: Callable = None):
@@ -1165,14 +1163,17 @@ class ThreadedHiSockServer(HiSockServer):
         For documentation, see :meth:`HiSockServer.start`.
         """
 
-        self._thread.start(args=(callback, error_handler))
+        self._thread = threading.Thread(
+            target=self._start, args=(callback, error_handler)
+        )
+        self._thread.start()
 
     def _start(self, callback: Callable = None, error_handler: Callable = None):
         """Start the main loop for the threaded server."""
 
         def updated_callback():
-            if self._stop_event.is_set():
-                super().close()
+            if self._stop_event.is_set() and not self.closed:
+                self.close()
 
             # Original callback
             if isinstance(callback, Callable):

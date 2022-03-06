@@ -485,8 +485,6 @@ class HiSockClient(_HiSockBase):
 
             self._receiving_data = True
 
-            content_header = False
-            # Receive header
             try:
                 content_header = self.sock.recv(self.header_len)
             except ConnectionResetError:
@@ -498,13 +496,8 @@ class HiSockClient(_HiSockBase):
                 self.closed = True
                 self.close(emit_leave=False)
 
-            # Most likely client disconnected with close
-            if not content_header:
-                return
-
             data = self.sock.recv(int(content_header.decode()))
             self._receiving_data = False
-            # data = data.decode()
 
             ### Reserved commands ###
 
@@ -634,6 +627,7 @@ class HiSockClient(_HiSockBase):
                 self._send_raw("$USRCLOSE$")
             except OSError:  # Server already closed socket
                 return
+        self.sock.shutdown(socket.SHUT_RDWR)
         self.sock.close()
 
     # Main loop
@@ -674,7 +668,7 @@ class ThreadedHiSockClient(HiSockClient):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._thread = threading.Thread(target=self._start)
+        self._thread: threading.Thread
         self._stop_event = threading.Event()
 
     def close(self, *args, **kwargs):
@@ -683,19 +677,16 @@ class ThreadedHiSockClient(HiSockClient):
         For documentation, see :meth:`HiSockClient.close`.
         """
 
-        # Note:``self._start.callback` will handle the closing of the socket
-        # after the stop event is set.
+        super().close(*args, **kwargs)
         self._stop_event.set()
-        # XXX: SNEK, ``_run`` is blocking, so we need to wait for it to finish
-        # XXX: What to do?
         self._thread.join()
 
     def _start(self, callback: Callable = None, error_handler: Callable = None):
         """Start the main loop for the threaded client."""
 
         def updated_callback():
-            if self._stop_event.is_set():
-                super().close()
+            if self._stop_event.is_set() and not self.closed:
+                self.close()
 
             # Original callback
             if isinstance(callback, Callable):
@@ -709,7 +700,10 @@ class ThreadedHiSockClient(HiSockClient):
         For documentation, see :meth:`HiSockClient.start`.
         """
 
-        self._thread.start(args=(callback, error_handler))
+        self._thread = threading.Thread(
+            target=self._start, args=(callback, error_handler)
+        )
+        self._thread.start()
 
 
 def connect(addr, name=None, group=None, header_len=16, cache_size=-1):
