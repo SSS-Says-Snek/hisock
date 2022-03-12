@@ -494,10 +494,20 @@ class HiSockClient(_HiSockBase):
             except ConnectionAbortedError:
                 # Keepalive timeout reached
                 self.closed = True
+                self._receiving_data = False
                 self.close(emit_leave=False)
+
+            if content_header == b"":
+                # Happens when the client is closing the connection while receiving
+                # data. The content header will be empty.
+                return
 
             data = self.sock.recv(int(content_header.decode()))
             self._receiving_data = False
+            if not data:
+                # Happens when the client is closing the connection while receiving
+                # data. The data will be empty.
+                return
 
             ### Reserved commands ###
 
@@ -679,7 +689,11 @@ class ThreadedHiSockClient(HiSockClient):
 
         super().close(*args, **kwargs)
         self._stop_event.set()
-        self._thread.join()
+        try:
+            self._thread.join()
+        except RuntimeError:
+            # Cannot join current thread
+            return
 
     def _start(self, callback: Callable = None, error_handler: Callable = None):
         """Start the main loop for the threaded client."""

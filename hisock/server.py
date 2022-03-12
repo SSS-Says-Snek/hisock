@@ -1103,8 +1103,8 @@ class HiSockServer(_HiSockBase):
         self.closed = True
         self._keepalive_event.set()
         self.disconnect_all_clients()
-        self.socket.close()
         self.socket.shutdown(socket.SHUT_RDWR)
+        self.socket.close()
 
     # Main loop
 

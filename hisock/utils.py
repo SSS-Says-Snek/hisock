@@ -183,20 +183,21 @@ def receive_message(
     :param header_len: The length of the header, so that
         it can successfully retrieve data without loss/gain of data
     :type header_len: int
-    :param timeout: The timeout for the socket. If None, there won't
-        be a timeout.
-    :type timeout: float, optional
     :return: A dictionary, with two key-value pairs;
         The first key-value pair refers to the header,
         while the second one refers to the actual data
     :rtype: Union[dict["header": bytes, "data": bytes], False
     """
 
-    header_message = connection.recv(header_len)
-    if header_message:
-        message_len = int(header_message)
-        data = connection.recv(message_len)
-        return {"header": header_message, "data": data}
+    try:
+        header_message = connection.recv(header_len)
+        if header_message:
+            message_len = int(header_message)
+            data = connection.recv(message_len)
+            return {"header": header_message, "data": data}
+    except ConnectionResetError:
+        # This is most likely where clients will disconnect
+        pass
     return False
 
 
