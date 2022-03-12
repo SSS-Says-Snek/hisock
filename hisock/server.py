@@ -276,7 +276,7 @@ class HiSockServer(_HiSockBase):
         client_hello = receive_message(connection, self.header_len)
         if not client_hello:
             raise ClientException("Client disconnected or had an error.")
-        client_hello = _removeprefix(client_hello["data"].decode(), "$CLTHELLO$")
+        client_hello = _removeprefix(client_hello["data"], b"$CLTHELLO$")
         try:
             client_hello = json.loads(client_hello)
         except json.JSONDecodeError:
