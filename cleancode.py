@@ -1,6 +1,7 @@
 """
 A simple script to automate code cleanups. Not stolen from PygameCommunityBot btw.
 """
+
 import glob
 import os
 import pathlib

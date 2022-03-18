@@ -1,3 +1,12 @@
+"""
+This python script will generate hisock eggs and wheels for upload to PyPI.
+Just call `python setup.py sdist bdist_wheel` to generate.
+
+====================================
+Copyright SSS_Says_Snek, 2021-present
+====================================
+"""
+
 import pathlib
 import re
 from setuptools import setup
