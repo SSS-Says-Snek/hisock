@@ -1062,9 +1062,7 @@ class HiSockServer(_HiSockBase):
                     )
 
                 # Caching
-                self._cache(
-                    has_listener, command, content, data, raw_data["header"]
-                )
+                self._cache(has_listener, command, content, data, raw_data["header"])
 
                 # Call `message` function
                 if "message" in self.funcs:
@@ -1087,7 +1085,9 @@ class HiSockServer(_HiSockBase):
             except (BrokenPipeError, ConnectionResetError):
                 if client_socket in self.clients:
                     # Does it need to be forced?? Investigate further
-                    self.disconnect_client(self.clients[client_socket]["ip"], force=True)
+                    self.disconnect_client(
+                        self.clients[client_socket]["ip"], force=True
+                    )
                 print("[DEBUG] 10054 exception, we're investigating")
 
     # Stop
@@ -1103,19 +1103,33 @@ class HiSockServer(_HiSockBase):
         self.closed = True
         self._keepalive_event.set()
         self.disconnect_all_clients()
+        self.socket.shutdown(socket.SHUT_RDWR)
         self.socket.close()
 
     # Main loop
 
-    def start(self):
-        """Start the main loop for the server."""
+    def start(self, callback: Callable = None, error_handler: Callable = None):
+        """
+        Start the main loop for the server.
+
+        :param callback: A function that will be called every time the
+            client receives and handles a message.
+        :type callback: Callable, optional
+        :param error_handler: A function that will be called every time the
+            client encounters an error.
+        :type error_handler: Callable, optional
+        """
 
         try:
             while not self.closed:
                 self._run()
-        finally:
-            self.disconnect_all_clients(force=True)
-            self.close()
+                if isinstance(callback, Callable):
+                    callback()
+        except Exception as e:
+            if isinstance(error_handler, Callable):
+                error_handler(e)
+            else:
+                raise e
 
 
 class ThreadedHiSockServer(HiSockServer):
@@ -1130,7 +1144,7 @@ class ThreadedHiSockServer(HiSockServer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self._thread = threading.Thread(target=super().start)
+        self._thread: threading.Thread = None
         self._stop_event = threading.Event()
 
     def close(self):
@@ -1141,23 +1155,31 @@ class ThreadedHiSockServer(HiSockServer):
 
         super().close()
         self._stop_event.set()
-        self.join()
+        self._thread.join()
 
-    def start(self):
+    def start(self, callback: Callable = None, error_handler: Callable = None):
         """
         Starts the main server loop.
         For documentation, see :meth:`HiSockServer.start`.
         """
 
+        self._thread = threading.Thread(
+            target=self._start, args=(callback, error_handler)
+        )
         self._thread.start()
 
-    def join(self):
-        """
-        Waits for the thread to be killed.
-        XXX: Should this be removed?
-        """
+    def _start(self, callback: Callable = None, error_handler: Callable = None):
+        """Start the main loop for the threaded server."""
 
-        self._thread.join()
+        def updated_callback():
+            if self._stop_event.is_set() and not self.closed:
+                self.close()
+
+            # Original callback
+            if isinstance(callback, Callable):
+                callback()
+
+        super().start(callback=updated_callback, error_handler=error_handler)
 
 
 def start_server(addr, max_connections=0, header_len=16):
