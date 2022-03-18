@@ -542,7 +542,7 @@ class HiSockClient(_HiSockBase):
                     "client_disconnect",
                     _type_cast(
                         type_cast=dict,                      
-                        content_to_type_cast=_removeprefix(data, "$CLTDISCONN$"),
+                        content_to_type_cast=_removeprefix(data, b"$CLTDISCONN$"),
                         func_name="<client disconnect in update>",
                     ),
                 )
