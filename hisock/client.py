@@ -118,7 +118,6 @@ class HiSockClient(_HiSockBase):
     :ivar int connect_time: An integer sotring the Unix timestamp of when the
         client connected to the server.
     """
-
     def __init__(
         self,
         addr: tuple[str, int],
