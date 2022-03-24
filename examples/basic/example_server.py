@@ -26,20 +26,24 @@ def run():
     @server.on("join")
     def client_join(client_data):
         print(f"Cool, {client_data.ip_as_str} joined!")
-        if client_data['name'] is not None:
-            print(f"    - With a sick name \"{client_data.name}\", very cool!")
-        if client_data['group'] is not None:
-            print(f"    - In a sick group \"{client_data.group}\", cool!")
+        if client_data["name"] is not None:
+            print(f'    - With a sick name "{client_data.name}", very cool!')
+        if client_data["group"] is not None:
+            print(f'    - In a sick group "{client_data.group}", cool!')
 
         print("I'm gonna send them a quick hello message")
 
-        server.send_client(client_data['ip'], "hello_message", str(time.time()).encode())
+        server.send_client(
+            client_data["ip"], "hello_message", str(time.time()).encode()
+        )
 
     @server.on("processing1")
     def process(client_data, process_request: str):
-        print(f"\nAlright, looks like {client_data.ip_as_str} received the hello message, "
-              "\nas now they're trying to compute something on the server, because they have "
-              "potato computers")
+        print(
+            f"\nAlright, looks like {client_data.ip_as_str} received the hello message, "
+            "\nas now they're trying to compute something on the server, because they have "
+            "potato computers"
+        )
         print("Their processing request is:", process_request)
 
         for _ in range(process_request.count("randnum")):

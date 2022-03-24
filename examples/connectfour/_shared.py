@@ -9,6 +9,7 @@ PIECE_COLORS = {
     3: (120, 120, 0),  # HOVER YELLOW
 }
 
+
 class BoardEnum:
     NO_PIECE = -1
     RED = 0

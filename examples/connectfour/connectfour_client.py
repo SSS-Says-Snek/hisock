@@ -27,8 +27,15 @@ class FontCache:
 
 class Button:
     def __init__(
-        self, rect, color, txt, txt_color, font_size,
-        hover_color=None, center=False, func_when_clicked=None
+        self,
+        rect,
+        color,
+        txt,
+        txt_color,
+        font_size,
+        hover_color=None,
+        center=False,
+        func_when_clicked=None,
     ):
         self.rect = rect
         self.color = color
@@ -58,17 +65,18 @@ class Button:
             pygame.draw.rect(screen, self.color, self.rect)
 
         screen.blit(
-            self.txt_surf, (
+            self.txt_surf,
+            (
                 self.rect.centerx - self.txt_surf.get_width() // 2,
-                self.rect.centery - self.txt_surf.get_height() // 2
-            )
+                self.rect.centery - self.txt_surf.get_height() // 2,
+            ),
         )
 
     def handle_event(self, event):
         if (
-            event.type == pygame.MOUSEBUTTONDOWN and
-            self.rect.collidepoint(event.pos) and
-            self.func_when_clicked
+            event.type == pygame.MOUSEBUTTONDOWN
+            and self.rect.collidepoint(event.pos)
+            and self.func_when_clicked
         ):
             self.func_when_clicked()
 
@@ -90,9 +98,7 @@ class BaseState(abc.ABC):
         else:
             font = FontCache.font_cache[size]
 
-        surf = font.render(
-            text, True, color
-        )
+        surf = font.render(text, True, color)
         if center:
             surf_rect = surf.get_rect(center=pos)
         else:
@@ -120,9 +126,14 @@ class ConnectState(BaseState):
         )
 
         self.conn_button = Button(
-            pygame.Rect(WIDTH // 2, 500, 200, 50), (0, 128, 0),
-            "Connect", (0, 0, 0), 30, hover_color=(0, 170, 0), center=True,
-            func_when_clicked=self.connect_to_server
+            pygame.Rect(WIDTH // 2, 500, 200, 50),
+            (0, 128, 0),
+            "Connect",
+            (0, 0, 0),
+            30,
+            hover_color=(0, 170, 0),
+            center=True,
+            func_when_clicked=self.connect_to_server,
         )
 
         self.txt_inputs = (self.username_input, self.server_input)
@@ -154,8 +165,12 @@ class ConnectState(BaseState):
                     txt_input.unfocus()
 
     def draw(self):
-        self.blit_text("Enter username:", (WIDTH // 2, 40), 48, (255, 255, 255), center=True)
-        self.blit_text("Enter server IP:", (WIDTH // 2, 290), 48, (255, 255, 255), center=True)
+        self.blit_text(
+            "Enter username:", (WIDTH // 2, 40), 48, (255, 255, 255), center=True
+        )
+        self.blit_text(
+            "Enter server IP:", (WIDTH // 2, 290), 48, (255, 255, 255), center=True
+        )
 
         self.conn_button.draw()
 
@@ -196,8 +211,14 @@ class GameState(BaseState):
 
             self.paired = True
             self.is_turn = True if data["turn"] == "first" else False
-            self.piece_type = shared.BoardEnum.RED if self.is_turn else shared.BoardEnum.YELLOW
-            self.hover_piece_type = shared.BoardEnum.HOVER_RED if self.is_turn else shared.BoardEnum.HOVER_YELLOW
+            self.piece_type = (
+                shared.BoardEnum.RED if self.is_turn else shared.BoardEnum.YELLOW
+            )
+            self.hover_piece_type = (
+                shared.BoardEnum.HOVER_RED
+                if self.is_turn
+                else shared.BoardEnum.HOVER_YELLOW
+            )
             self.opponent_name = data["opp_name"]
             self.start_time = time.time()
 
@@ -212,7 +233,7 @@ class GameState(BaseState):
         @self.client.on("new_turn")  # JUST SYNCS THE TURN COUNTER, NOTHING ELSE!!!
         def on_new_turn(turn_no: int):
             self.turn_no = turn_no
-        
+
         @self.client.on("win")
         def on_win():
             self.game_status = "win"
@@ -236,12 +257,10 @@ class GameState(BaseState):
     @staticmethod
     def update_piece(x, y, piece):
         pygame.gfxdraw.aacircle(
-            screen, 80 + 80 * x, 180 + 70 * y, 30,
-            shared.PIECE_COLORS[piece]
+            screen, 80 + 80 * x, 180 + 70 * y, 30, shared.PIECE_COLORS[piece]
         )
         pygame.gfxdraw.filled_circle(
-            screen, 80 + 80 * x, 180 + 70 * y, 30,
-            shared.PIECE_COLORS[piece]
+            screen, 80 + 80 * x, 180 + 70 * y, 30, shared.PIECE_COLORS[piece]
         )
 
     def pos_to_coord(self, mouse_x, mouse_y):
@@ -257,11 +276,17 @@ class GameState(BaseState):
 
             self.blit_text(
                 "Waiting for opponent...",
-                (WIDTH // 2, 40), 48, (255, 255, 255), center=True
+                (WIDTH // 2, 40),
+                48,
+                (255, 255, 255),
+                center=True,
             )
             self.blit_text(
                 f"Time elapsed: {sec_elapsed} seconds",
-                (WIDTH // 2, 95), 24, (255, 255, 255), center=True
+                (WIDTH // 2, 95),
+                24,
+                (255, 255, 255),
+                center=True,
             )
 
             if pygame.time.get_ticks() - self.pairing_ticks >= 1000:
@@ -278,70 +303,63 @@ class GameState(BaseState):
                 else:
                     circ_color = (128, 128, 128)
 
-                pygame.draw.circle(
-                    screen, circ_color, (250 + i * 150, 250), 50
-                )
+                pygame.draw.circle(screen, circ_color, (250 + i * 150, 250), 50)
         else:
             mouse_pos = pygame.mouse.get_pos()
 
             # Actual game draw
             self.blit_text(
                 f"{self.client.name} (YOU)",
-                (WIDTH // 2, 10), 25, (255, 255, 255), center=True
+                (WIDTH // 2, 10),
+                25,
+                (255, 255, 255),
+                center=True,
             )
-            self.blit_text(
-                "VS",
-                (WIDTH // 2, 35), 25, (255, 255, 255), center=True
-            )
+            self.blit_text("VS", (WIDTH // 2, 35), 25, (255, 255, 255), center=True)
             self.blit_text(
                 f"{self.opponent_name} (OPPONENT)",
-                (WIDTH // 2, 60), 25, (160, 160, 160), center=True
+                (WIDTH // 2, 60),
+                25,
+                (160, 160, 160),
+                center=True,
             )
 
-            self.blit_text(
-                f"Turn: {self.turn_no}",
-                (650, 130), 25, (255, 255, 255)
-            )
+            self.blit_text(f"Turn: {self.turn_no}", (650, 130), 25, (255, 255, 255))
             self.blit_text(
                 f"Time: {self.format_secs(int(time.time() - self.start_time))}",
-                (650, 170), 25, (255, 255, 255)
+                (650, 170),
+                25,
+                (255, 255, 255),
             )
 
             if self.is_turn:
-                self.blit_text(
-                    "YOUR TURN",
-                    (650, 500), 30, (255, 255, 255)
-                )
+                self.blit_text("YOUR TURN", (650, 500), 30, (255, 255, 255))
             else:
-                self.blit_text(
-                    "OPP TURN",
-                    (650, 500), 30, (160, 160, 160)
-                )
+                self.blit_text("OPP TURN", (650, 500), 30, (160, 160, 160))
 
-            pygame.draw.rect(
-                screen, (0, 110, 210), self.board_rect, border_radius=5
-            )
+            pygame.draw.rect(screen, (0, 110, 210), self.board_rect, border_radius=5)
 
             for y, row in enumerate(self.board.board):
                 for x, piece in enumerate(row):
                     # IDC about performance
                     self.update_piece(x, y, piece)
-                    
+
             if self.hover_piece_idx is not None:
                 self.update_piece(*self.hover_piece_idx, self.hover_piece_type)
 
             if self.board_rect.collidepoint(mouse_pos):
-                self.arrow_column = (mouse_pos[0] - self.board_rect.x) * 7 // self.board_rect.width
+                self.arrow_column = (
+                    (mouse_pos[0] - self.board_rect.x) * 7 // self.board_rect.width
+                )
                 screen.blit(
-                    self.down_arrow, (
-                        60 + self.arrow_column * (self.board_rect.width - 20) // 7, 80
-                    )
+                    self.down_arrow,
+                    (60 + self.arrow_column * (self.board_rect.width - 20) // 7, 80),
                 )
 
     def handle_event(self, event):
         mp = pygame.mouse.get_pos()
         x, _ = self.pos_to_coord(*mp)  # Y is not used cuz it's a loser
-        
+
         if self.board_rect.collidepoint(mp):
             column = [row[x] for row in self.board.board]
             hover_y = column.count(shared.BoardEnum.NO_PIECE) - 1
@@ -354,7 +372,9 @@ class GameState(BaseState):
             if self.board.board[hov_y][hov_x] == shared.BoardEnum.NO_PIECE:
                 self.board.board[hov_y][hov_x] = self.piece_type
 
-                self.client.send("turn_made", {"x": hov_x, "y": hov_y, "piece": self.piece_type})
+                self.client.send(
+                    "turn_made", {"x": hov_x, "y": hov_y, "piece": self.piece_type}
+                )
                 self.is_turn = False
 
             print(hov_x, hov_y)
@@ -394,6 +414,7 @@ def run():
 
     if Data.client is not None:
         Data.client.close()
+
 
 if __name__ == "__main__":
     run()

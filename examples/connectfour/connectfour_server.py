@@ -100,20 +100,13 @@ def on_turn_made(clt_data, move_info: dict):
         server.send_client(other_client, "lose")
 
     server.send_client(
-        other_client,
-        "new_move", {
-            "opp_move": [x, y],
-            "opp_piece": move_info["piece"]
-        }
+        other_client, "new_move", {"opp_move": [x, y], "opp_piece": move_info["piece"]}
     )
 
     client_pair[2].total_moves += 1
     if client_pair[2].total_moves % 2 == 0:
         for client in (clt_data, other_client):
-            server.send_client(
-                client,
-                "new_turn", client_pair[2].total_moves // 2 + 1
-            )
+            server.send_client(client, "new_turn", client_pair[2].total_moves // 2 + 1)
 
 
 server.start()

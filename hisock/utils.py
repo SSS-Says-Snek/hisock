@@ -122,6 +122,7 @@ class File:
 
 
 # Custom type hints
+JSONSerializableValue = Union[str, int, float, bool, None, dict, list]
 Sendable = Union[
     bytes,
     str,
@@ -131,7 +132,7 @@ Sendable = Union[
     ClientInfo,
     list[Union[str, int, float, bool, None, dict, list]],
     dict[
-        Union[str, int, float, bool, None, dict, list],
+        str,
         Union[str, int, float, bool, None, dict, list],
     ],
 ]

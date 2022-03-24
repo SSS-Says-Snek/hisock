@@ -118,7 +118,7 @@ class HiSockClient(_HiSockBase):
     :ivar int connect_time: An integer sotring the Unix timestamp of when the
         client connected to the server.
     """
-    
+
     def __init__(
         self,
         addr: tuple[str, int],
@@ -541,7 +541,7 @@ class HiSockClient(_HiSockBase):
                 client_data = self._type_cast_client_data(
                     "client_disconnect",
                     _type_cast(
-                        type_cast=dict,                      
+                        type_cast=dict,
                         content_to_type_cast=_removeprefix(data, b"$CLTDISCONN$"),
                         func_name="<client disconnect in update>",
                     ),
