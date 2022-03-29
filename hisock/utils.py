@@ -115,6 +115,23 @@ class ClientInfo:
         return self.client_dict == other.client_dict
 
 
+class ClientInfo:
+    def __init__(self, ip, name, group):
+        self.client_dict = {"ip": ip, "name": name, "group": group}
+
+        self.ip = ip
+        self.name = name
+        self.group = group
+
+        self.ip_as_str = f"{self.ip[0]}:{self.ip[1]}"
+
+    def __getitem__(self, item):
+        return self.client_dict[item]
+
+    def __str__(self):
+        return f"<ClientInfo: IP: {self.ip_as_str}, Name: {self.name}, Group: {self.group}>"
+
+
 class File:
     def __init__(self, file_path: Union[str, pathlib.Path]):
         # TODO: implement this!

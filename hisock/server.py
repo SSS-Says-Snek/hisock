@@ -632,7 +632,6 @@ class HiSockServer(_HiSockBase):
         :type content: Sendable, optional
         """
 
-        print("[DEBUG2 ]", content)
         data_to_send = (
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         )
@@ -667,8 +666,7 @@ class HiSockServer(_HiSockBase):
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
         servers, as it allows clients to be divided, which allows clients to
-        be sent different data for print("[DEBUG]", content)
-        different purposes.
+        be sent different data for different purposes.
 
         :param group: A string or a ClientInfo, representing the group to send data to.
             If the group is a ClientInfo, and the client is in a group, the method will

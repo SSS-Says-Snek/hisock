@@ -10,8 +10,10 @@
 
 <img src="https://raw.githubusercontent.com/SSS-Says-Snek/SSS-Says-Snek.github.io/master/assets/logo.png" width=200 class="center">
 
-# hisock (HiSock)
-A ***hi***gher level extension of Python's ***sock***et module, with simpler and more efficient usages.
+> NOTE: Even though it seems like there is no development going on, we are currently working on hisock **version 2.0**, on the *refac-hisock* branch. Expect a release by the end of March.
+
+# hisock (HiSock, Hisock)
+A **hi**gher level extension of Python's built-in **sock**et module, with simpler and more efficient usages.
 
 ## Documentation
 Documentation is located on 
@@ -21,7 +23,7 @@ already well-documented on ReadTheDocs.
 ## Installation
 Hisock only supports Python versions 3.7 and onwards, due to annotations from the `__future__` module.
 
-`hisock` is available on PyPI, [here](https://pypi.org/project/hisock), so it is installable by `pip`. Just do the following command.
+`hisock` is available on PyPI [here](https://pypi.org/project/hisock), so it is installable by `pip`. Just do the following command.
 ```shell
 $ python -m pip install hisock (WINDOWS)
   OR
@@ -37,6 +39,11 @@ $ python -m pip install -e . (WINDOWS)
 $ pip3 install -e . (MAC/LINUX)
 ```
 Note that you **MUST** cd into the cloned directory for this to work.
+
+## Code of Conduct and Contributing Guidelines:
+[Code of Conduct](.github/CODE_OF_CONDUCT.md)
+
+[Contributing Guidelines](.github/CONTRIBUTING.md)
 
 ## Examples
 hisock utilizes decorators as the core of receiving messages instead of having 
@@ -144,5 +151,11 @@ def handle_hello(msg: str):
 client.start()
 
 ```
+
+## Contributors
+Special thanks to the following:
+- Sheepy0125, for refactoring the underhood code as well as the API
+- SSS-Says-Snek, for maintaining and developing the library
+- Ankith26, for helping me understand the usages of headers
 
 ###### Copyright SSS-Says-Snek, 2021-present
