@@ -295,7 +295,7 @@ def client_made_move(client_info: dict, move: dict):
         make_move()
         return
 
-    print(f"Game over!")
+    print("Game over!")
 
 
 # TODO: Use `send_raw` and `recv_raw` instead of a whole new event

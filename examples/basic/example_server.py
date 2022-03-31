@@ -8,7 +8,7 @@ import sys
 import time
 import random
 
-from hisock import start_server, get_local_ip, iptup_to_str
+from hisock import start_server, get_local_ip
 
 
 def run():

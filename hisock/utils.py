@@ -436,7 +436,7 @@ def validate_ipv4(  # NOSONAR (always will return True, but will raise exception
     # IP checking
     ip = deconstructed_ip[0]
     try:
-        ip = IPv4Address(ip)
+        IPv4Address(ip)
     except ValueError:
         raise ValueError(f"{ip} is not a valid IPv4 address") from None
 

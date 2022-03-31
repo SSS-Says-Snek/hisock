@@ -29,7 +29,6 @@ try:
         ClientException,
         ClientNotFound,
         ServerException,
-        FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
         ClientInfo,
@@ -48,7 +47,6 @@ except ImportError:
         ClientException,
         ClientNotFound,
         ServerException,
-        FunctionNotFoundWarning,
         ServerNotRunning,
         MessageCacheMember,
         ClientInfo,
@@ -860,7 +858,7 @@ if __name__ == "__main__":
                 )
                 client.send(
                     "uncaught_command",
-                    f"Random data: "
+                    "Random data: "
                     + "".join(
                         [
                             chr(choice((randint(65, 90), randint(97, 122))))

@@ -25,7 +25,6 @@ try:
     from .utils import (
         ServerException,
         ClientException,
-        FunctionNotFoundWarning,
         ClientNotFound,
         GroupNotFound,
         ClientInfo,
@@ -45,7 +44,6 @@ except ImportError:
     from utils import (
         ServerException,
         ClientException,
-        FunctionNotFoundWarning,
         ClientNotFound,
         GroupNotFound,
         ClientInfo,

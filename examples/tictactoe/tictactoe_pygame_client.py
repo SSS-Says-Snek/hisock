@@ -185,13 +185,13 @@ class ConnectToServerState(BaseState):
             text_element.unfocus()
 
     def draw(self):
-        text_display(f"Username:", (SCREEN_SIZE[0] // 2, 48))
-        text_display(f"Server IP:", (SCREEN_SIZE[0] // 2, 48 + 100))
+        text_display("Username:", (SCREEN_SIZE[0] // 2, 48))
+        text_display("Server IP:", (SCREEN_SIZE[0] // 2, 48 + 100))
         if button_display((SCREEN_SIZE[0] // 2, 48 + 200), (200, 50), "green"):
             # Connect to server
             print("Connecting to server...")
             self.connect_to_server(self.username_input.text, self.server_input.text)
-        text_display(f"Connect", (SCREEN_SIZE[0] // 2, 48 + 200))
+        text_display("Connect", (SCREEN_SIZE[0] // 2, 48 + 200))
         self.gui_manager.update(DeltaTime.current)
         self.gui_manager.draw_ui(screen)
 
@@ -288,7 +288,7 @@ class GameState(BaseState):
         mouse_pos = pygame.mouse.get_pos()
         if pygame.mouse.get_pressed()[0] and button_rect.collidepoint(mouse_pos):
             row_idx, col_idx = move_made(position)
-            self.client.send("made_move", {"move": (row_idx, col_idx)})
+            self.client.send("made_move", {"move": [row_idx, col_idx]})
 
     def draw_board(self):
         for row_idx, row in enumerate(TicTacToe.board):
@@ -346,7 +346,7 @@ class GameState(BaseState):
         text_display("Waiting for opponent...", (SCREEN_SIZE[0] // 2, 24), size=24)
 
     def draw_game_over(self):
-        text_display(f"Game over!", (SCREEN_SIZE[0] // 2, 24), size=24)
+        text_display("Game over!", (SCREEN_SIZE[0] // 2, 24), size=24)
         text_display(
             TicTacToe.game_over_message, (SCREEN_SIZE[0] // 2, 24 * 2), size=24
         )
@@ -408,7 +408,7 @@ def run():
             print("\nExiting gracefully", end="... ")
             if isinstance(State.current, GameState):
                 State.current.client.send("leave", b"simply left the game")
-                State.current.client.stop_client()
+                State.current.client.close()
             break
         except StopIteration:
             # This is raised when the player already left ("leave" sent)
