@@ -6,6 +6,8 @@ Copyright SSS_Says_Snek, 2022-present
 ====================================
 """
 
+from __future__ import annotations
+
 import inspect
 import threading
 from typing import Callable, Union, Any

@@ -20,7 +20,7 @@ import builtins
 import sys
 import ast
 from re import search
-from typing import Union, Any, Optional, Type
+from typing import Union, Any, Optional, Type, Tuple, Dict, List  # Must use these for bare annots
 from ipaddress import IPv4Address
 
 # Custom exceptions
@@ -130,8 +130,8 @@ Sendable = Union[
     float,
     None,
     ClientInfo,
-    list[Union[str, int, float, bool, None, dict, list]],
-    dict[
+    List[Union[str, int, float, bool, None, dict, list]],
+    Dict[
         str,
         Union[str, int, float, bool, None, dict, list],
     ],
@@ -141,7 +141,7 @@ SendableTypes = Type[Sendable]
 
 Client = Union[
     str,  # Name
-    tuple[str, int],  # Port
+    Tuple[str, int],  # Port
     ClientInfo,  # Returned by function, etc
 ]
 
