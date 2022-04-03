@@ -11,9 +11,8 @@ A module containing the main client classes and functions, including
 
 .. autoclass:: hisock.client.ThreadedHiSockClient
 
-   .. automethod:: join
    .. automethod:: start
-   .. automethod:: stop
+   .. automethod:: close
 
 ----
 

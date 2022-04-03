@@ -15,9 +15,8 @@ A module containing the main server classes and functions, including
 
 .. autoclass:: hisock.server.ThreadedHiSockServer
 
-   .. automethod:: join
    .. automethod:: start
-   .. automethod:: stop
+   .. automethod:: close
 
 ----
 
