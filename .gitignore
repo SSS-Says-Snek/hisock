@@ -54,6 +54,7 @@ cover/
 
 # Sphinx
 docs/build/
+docs/source/_build/
 
 # Translations
 *.mo

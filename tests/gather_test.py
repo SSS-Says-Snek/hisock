@@ -1,14 +1,15 @@
+
 import hisock
 
 server = hisock.server.ThreadedHiSockServer(("localhost", 6969))
-client = hisock.client.ThreadedHiSockClient(("localhost", 6969), None, None)
+client = hisock.client.ThreadedHiSockClient(("localhost", 6969))
 
 info = {}
 
 
 def finish():
-    server.stop_server()
-    client.stop_client()
+    server.close()
+    client.close()
 
 
 ########################
@@ -33,11 +34,8 @@ def recv(data: str):
 
     finish()
 
-server.start_server()
-client.start_client()
-
-server.join()
-client.join()
+server.start()
+client.start()
 
 def test_serv_to_clt():
     assert info["serv_to_clt"] == "AMOGUS"
