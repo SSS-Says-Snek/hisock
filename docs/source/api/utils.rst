@@ -6,6 +6,9 @@ A module containing some utilities to either:
 1. Help :mod:`hisock.client` and :mod:`hisock.server` run (denoted with leading underscore)
 1. Provide functions to use alongside :mod:`HiSock`
 
+.. autoclass:: hisock.utils.MessageCacheMember
+   :members:
+
 .. autoclass:: hisock.utils.ClientInfo
    :members:
 
@@ -17,4 +20,4 @@ A module containing some utilities to either:
 .. autofunction:: hisock.utils.input_server_config
 .. autofunction:: hisock.utils.input_client_config
 .. autofunction:: hisock.utils.ipstr_to_tup
-.. autofunction:: hisock.utils.tup_to_ipstr
+.. autofunction:: hisock.utils.iptup_to_str

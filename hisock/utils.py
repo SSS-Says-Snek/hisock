@@ -393,7 +393,7 @@ def validate_ipv4(  # NOSONAR (always will return True, but will raise exception
     Otherwise, it'll return True
 
     :param ip: The IPv4 address to validate.
-    :param
+    :type ip: Union[str, tuple]
     :param require_ip: Whether or not to require an IP address.
         If True, it will raise an exception if no IP address is given.
         If False, this will only check the port.
