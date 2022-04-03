@@ -6,6 +6,8 @@ Copyright SSS_Says_Snek, 2022-present
 ====================================
 """
 
+from __future__ import annotations
+
 from hisock import constants  # lgtm [py/unused-import]
 from hisock import utils  # lgtm [py/unused-import] lgtm [py/import-and-import-from]
 
