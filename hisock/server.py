@@ -1128,6 +1128,8 @@ class HiSockServer(_HiSockBase):
                 error_handler(e)
             else:
                 raise e
+        finally:
+            self.close()
 
 
 class ThreadedHiSockServer(HiSockServer):
