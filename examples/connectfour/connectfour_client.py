@@ -196,9 +196,23 @@ class GameState(BaseState):
         self.hover_piece_idx = None
         self.turn_no = 1
         self.start_time = None
+        self.end_time = None
         self.game_status = "in_progress"
 
+        self.will_replay = None
+        self.opp_replay = None
+
         self.board = shared.Board()
+        self.replay_button = Button(
+            pygame.Rect(WIDTH // 2, 300, 250, 40), (0, 190, 0), "Play again?",
+            (0, 0, 0), 36, hover_color=(0, 215, 0), center=True,
+            func_when_clicked=self.replay
+        )
+        self.exit_button = Button(
+            pygame.Rect(WIDTH // 2, 380, 250, 40), (190, 0, 0), "Exit",
+            (0, 0, 0), 36, hover_color=(215, 0, 0), center=True,
+            func_when_clicked=lambda: self.client.send("player_exit")
+        )
 
         self.down_arrow = pygame.image.load("downarrow.png").convert_alpha()
 
@@ -237,16 +251,37 @@ class GameState(BaseState):
         @self.client.on("win")
         def on_win():
             self.game_status = "win"
+            self.end_time = time.time()
             print("You win!!!!")
 
         @self.client.on("lose")
         def on_lose():
             self.game_status = "lose"
+            self.end_time = time.time()
             print("You lose :(((")
 
         @self.client.on("disconn")
         def on_disconn(reason: str):
             print(reason)
+
+        @self.client.on("opp_replay")
+        def on_opp_replay():
+            print("yeet")
+            self.opp_replay = True
+
+        @self.client.on("replay_confirm")
+        def on_replay_confirm():
+            self.board.reset()
+            self.turn_no = 1
+            self.start_time = time.time()
+            self.end_time = None
+            self.game_status = "in_progress"
+            self.opp_replay = False
+
+            self.replay_button.color = (0, 190, 0)
+            self.replay_button.hover_color = (0, 215, 0)
+            self.replay_button.func_when_clicked = self.replay
+
 
         self.client.start()
 
@@ -268,6 +303,14 @@ class GameState(BaseState):
         y = (mouse_y - self.board_rect.y) * 6 // self.board_rect.height
 
         return x, y
+
+    def replay(self):
+        self.will_replay = True
+        self.client.send("replay")
+
+        self.replay_button.color = (0, 70, 0)
+        self.replay_button.hover_color = (0, 70, 0)
+        self.replay_button.func_when_clicked = lambda: None
 
     def draw(self):
         if not self.paired:
@@ -326,7 +369,7 @@ class GameState(BaseState):
 
             self.blit_text(f"Turn: {self.turn_no}", (650, 130), 25, (255, 255, 255))
             self.blit_text(
-                f"Time: {self.format_secs(int(time.time() - self.start_time))}",
+                f"Time: {self.format_secs(int((self.end_time or time.time()) - self.start_time))}",
                 (650, 170),
                 25,
                 (255, 255, 255),
@@ -356,9 +399,40 @@ class GameState(BaseState):
                     (60 + self.arrow_column * (self.board_rect.width - 20) // 7, 80),
                 )
 
+            # Displays the green popup window on win/lose
+            if self.game_status != "in_progress":
+                window_rect = pygame.Rect(0, 0, 275, 275)
+                window_rect.center = (WIDTH // 2, HEIGHT // 2)
+                pygame.draw.rect(
+                    screen, (0, 150, 0),
+                    window_rect
+                )
+                self.blit_text(
+                    f"YOU {self.game_status.upper()}!", (WIDTH // 2, 190), 52,
+                    (0, 0, 0), center=True
+                )
+
+                if self.opp_replay:
+                    self.blit_text(
+                        "Opponent wants to play again", (WIDTH // 2, 260),
+                        20, (0, 0, 0), center=True
+                    )
+
+                self.replay_button.draw()
+                self.exit_button.draw()
+
+
+            if self.game_status == "win":
+                pass
+
     def handle_event(self, event):
         mp = pygame.mouse.get_pos()
         x, _ = self.pos_to_coord(*mp)  # Y is not used cuz it's a loser
+
+        if self.game_status != "in_progress":
+            self.replay_button.handle_event(event)
+            self.exit_button.handle_event(event)
+            return
 
         if self.board_rect.collidepoint(mp):
             column = [row[x] for row in self.board.board]
@@ -396,7 +470,6 @@ def run():
     running = True
 
     while running:
-
         for event in pygame.event.get():
             Data.current_state.handle_event(event)
 
@@ -404,6 +477,9 @@ def run():
                 running = False
 
         screen.fill((50, 50, 50))
+
+        if Data.client is not None and Data.client.closed:
+            running = False
 
         Data.current_state.draw()
         pygame.display.update()

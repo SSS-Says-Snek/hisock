@@ -482,6 +482,7 @@ class HiSockClient(_HiSockBase):
             ### Receiving data ###
 
             self._receiving_data = True
+            content_header = None
 
             try:
                 content_header = self.sock.recv(self.header_len)
@@ -494,6 +495,7 @@ class HiSockClient(_HiSockBase):
                 self.closed = True
                 self._receiving_data = False
                 self.close(emit_leave=False)
+                return
 
             if content_header == b"":
                 # Happens when the client is closing the connection while receiving
@@ -635,7 +637,7 @@ class HiSockClient(_HiSockBase):
                 self._send_raw("$USRCLOSE$")
             except OSError:  # Server already closed socket
                 return
-        self.sock.shutdown(socket.SHUT_RDWR)
+        # self.sock.shutdown(socket.SHUT_RDWR) DEBUG
         self.sock.close()
 
     # Main loop

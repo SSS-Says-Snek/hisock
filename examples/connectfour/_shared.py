@@ -58,3 +58,9 @@ class Board:
 
     def make_move(self, piece_type, x, y):
         self.board[y][x] = piece_type
+
+    def reset(self):
+        self.board = [
+            [BoardEnum.NO_PIECE for _ in range(7)] for _ in range(6)
+        ]
+        self.total_moves = 0
