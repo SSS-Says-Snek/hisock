@@ -56,7 +56,7 @@ def get_ip_addr_port() -> tuple[str, int]:
             print("The port must be a number")
             continue
 
-        # The port is numberical, convert it now
+        # The port is numerical, convert it now
         port = int(port)
 
         if port < 1 or port > 65535:
@@ -72,7 +72,7 @@ def log_error(error: Exception):
     """Logs an error to the console"""
 
     print(
-        "AN ERROR HAS OCCURED!!!\n"
+        "AN ERROR HAS OCCURRED!!!\n"
         f"Error message: {error!s}\n"
         f"Traceback:\n{traceback.format_exc()}\n"
         "-Sheepy's Amazing Error Message Services"

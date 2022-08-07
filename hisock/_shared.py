@@ -427,7 +427,7 @@ class _HiSockBase:
             "data": None,
         }
 
-        # Wait for `update` to retreive the data
+        # Wait for `update` to retrieve the data
         self._recv_on_events[listen_on]["thread_event"].wait()
 
         # Clean up

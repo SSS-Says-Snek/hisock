@@ -67,14 +67,14 @@ def get_move() -> tuple:
             continue
 
         # Check if the move is available
-        move_indeces = ((move - 1) // 3, (move - 1) % 3)
-        if TicTacToe.board[move_indeces[0]][move_indeces[1]] != " ":
+        move_indexes = ((move - 1) // 3, (move - 1) % 3)
+        if TicTacToe.board[move_indexes[0]][move_indexes[1]] != " ":
             print("The move is already taken")
             continue
 
         break
 
-    return move_indeces
+    return move_indexes
 
 
 ### HiSock listeners ###
