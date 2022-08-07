@@ -214,7 +214,20 @@ class _HiSockBase:
 
         # Not going to verify if the amount of args and kwargs are correct, because
         # that should've already been done
-        self.funcs[reserved_func_name]["func"](*args, **kwargs)
+
+        # Normal
+        if not self.funcs[reserved_func_name]["threaded"]:
+            self.funcs[reserved_func_name]["func"](*args, **kwargs)
+            return
+
+        # Threaded
+        function_thread = threading.Thread(
+            target=self.funcs[reserved_func_name]["func"],
+            args=args,
+            kwargs=kwargs,
+            daemon=True,
+        )
+        function_thread.start()
 
     def _call_function(self, func_name: str, *args, **kwargs):
         """
