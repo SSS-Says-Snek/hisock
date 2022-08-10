@@ -642,7 +642,11 @@ class HiSockClient(_HiSockBase):
                 self._send_raw("$USRCLOSE$")
             except OSError:  # Server already closed socket
                 return
-        # self.sock.shutdown(socket.SHUT_RDWR) DEBUG
+        try:
+            self.sock.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            # Bad file descriptor
+            ...
         self.sock.close()
 
     # Main loop

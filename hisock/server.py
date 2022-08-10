@@ -1104,7 +1104,11 @@ class HiSockServer(_HiSockBase):
         self.closed = True
         self._keepalive_event.set()
         self.disconnect_all_clients()
-        self.socket.shutdown(socket.SHUT_RDWR)
+        try:
+            self.socket.shutdown(socket.SHUT_RDWR)
+        except OSError:
+            # Bad file descriptor
+            ...
         self.socket.close()
 
     # Main loop
@@ -1158,7 +1162,11 @@ class ThreadedHiSockServer(HiSockServer):
 
         super().close()
         self._stop_event.set()
-        self._thread.join()
+        try:
+            self._thread.join()
+        except RuntimeError:
+            # Cannot join current thread
+            return
 
     def start(self, callback: Callable = None, error_handler: Callable = None):
         """
