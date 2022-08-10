@@ -524,7 +524,10 @@ class HiSockClient(_HiSockBase):
                 return
 
             # Handle new client connection
-            elif data.startswith(b"$CLTCONN$") and "client_connect" in self.funcs:
+            elif data.startswith(b"$CLTCONN$"):
+                if "client_connect" not in self.funcs:
+                    return
+
                 client_data = self._type_cast_client_data(
                     "client_connect",
                     _type_cast(
@@ -553,7 +556,9 @@ class HiSockClient(_HiSockBase):
             ### Unreserved commands ###
 
             # Handle random data
-            elif not data.startswith(b"$CMD$") and "*" in self.funcs:
+            elif not data.startswith(b"$CMD$"):
+                if "*" not in self.funcs:
+                    return
                 self._call_wildcard_function(
                     client_data=None, command=None, content=data
                 )
@@ -562,7 +567,7 @@ class HiSockClient(_HiSockBase):
             has_listener = False  # For cache
 
             # Get the command and the message
-            command = data.lstrip(b"$CMD$").split(b"$MSG$")[0].decode()
+            command = _removeprefix(data, b"$CMD$").split(b"$MSG$")[0].decode()
             content = _removeprefix(data, f"$CMD${command}$MSG$".encode())
 
             # No content? (`_removeprefix` didn't do anything)
