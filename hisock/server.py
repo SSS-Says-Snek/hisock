@@ -295,7 +295,7 @@ class HiSockServer(_HiSockBase):
         ] = connection
 
         # Send reserved command to existing clients
-        self._send_all_clients_raw(f"$CLTCONN$ {json.dumps(client_data)}".encode())
+        self._send_all_clients_raw(f"$CLTCONN${json.dumps(client_data)}".encode())
 
         self._call_function_reserved(
             "join",
@@ -325,6 +325,9 @@ class HiSockServer(_HiSockBase):
             (client_data["ip"], client_data["name"], client_data["group"])
         ]
         # Note: ``self._unresponsive_clients`` should be handled by the keepalive
+
+        # Send the client disconnection event to the clients
+        self._send_all_clients_raw(f"$CLTDISCONN${json.dumps(client_data)}".encode())
 
     # Keepalive
 
