@@ -6,7 +6,7 @@ Copyright SSS_Says_Snek, 2021-present
 ====================================
 """
 
-__version__ = "2.0"
+__version__ = "2.0.2"
 __license__ = "MIT"
 __name__ = "hisock"
 __copyright__ = "SSS-Says-Snek, 2021-present"
