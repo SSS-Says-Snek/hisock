@@ -541,6 +541,9 @@ class HiSockClient(_HiSockBase):
 
             # Handle client disconnection
             elif data.startswith(b"$CLTDISCONN$"):
+                if "client_disconnect" not in self.funcs:
+                    return
+
                 client_data = self._type_cast_client_data(
                     "client_disconnect",
                     _type_cast(
