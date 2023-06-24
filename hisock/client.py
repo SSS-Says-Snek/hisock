@@ -501,8 +501,20 @@ class HiSockClient(_HiSockBase):
                 # Happens when the client is closing the connection while receiving
                 # data. The content header will be empty.
                 return
+            
+            data = b""
+            bytes_left = int(content_header)
 
-            data = self.sock.recv(int(content_header.decode()))
+            while bytes_left > 0:
+                bytes_to_recv = min(bytes_left, self.RECV_BUFFERSIZE)
+                data_part = self.sock.recv(bytes_to_recv)
+                if not data_part:
+                    data = None
+                    break
+
+                data += data_part
+                bytes_left -= len(data_part)
+
             self._receiving_data = False
             if not data:
                 # Happens when the client is closing the connection while receiving
