@@ -28,8 +28,8 @@ tests = {
         {"original": True, "expected": "True"},
         {"original": False, "expected": "False"},
         {"original": None, "expected": ""},
-        {"original": ["a", "b"], "expected": '["a", "b"]'},
-        {"original": {"a": "b"}, "expected": '{"a": "b"}'},
+        {"original": ["a", "b"], "expected": "['a', 'b']"},
+        {"original": {"a": "b"}, "expected": "{'a': 'b'}"},
     ],
     "int": [
         {"original": "", "expected": 0},
