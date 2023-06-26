@@ -173,7 +173,7 @@ def make_header(
 
 
 def receive_message(
-    connection: socket.socket, header_len: int
+    connection: socket.socket, header_len: int, buffer_size: int
 ) -> Union[dict[str, bytes], bool]:
     """
     Receives a message from a server or client.
@@ -194,7 +194,20 @@ def receive_message(
         header_message = connection.recv(header_len)
         if header_message:
             message_len = int(header_message)
-            data = connection.recv(message_len)
+            
+            data = b""
+            bytes_left = message_len
+
+            while bytes_left > 0:
+                bytes_to_recv = min(bytes_left, buffer_size)
+                data_part = connection.recv(bytes_to_recv)
+                if not data_part:
+                    data = None
+                    break
+
+                data += data_part
+                bytes_left -= len(data_part)
+
             return {"header": header_message, "data": data}
     except ConnectionResetError:
         # This is most likely where clients will disconnect
@@ -320,10 +333,8 @@ def _type_cast(
 
         # Convert content_to_type_cast to bytes
         if content_to_type_cast_type != bytes:
-            if content_to_type_cast_type in (str, int, float):
+            if content_to_type_cast_type in (str, int, float, list, dict):
                 content_to_type_cast = str(content_to_type_cast).encode()
-            elif content_to_type_cast_type in (list, dict):
-                content_to_type_cast = json.dumps(content_to_type_cast).encode()
             else:
                 raise TypeError(
                     f"Cannot type cast {content_to_type_cast_type} to bytes"
@@ -341,12 +352,7 @@ def _type_cast(
         # Lists and dicts
         if type_cast in (list, dict):
             # JSON
-            try:
-                result = json.loads(content_to_type_cast.decode())
-
-            # Python
-            except json.JSONDecodeError:
-                result = ast.literal_eval(content_to_type_cast.decode())  # XXX
+            result = ast.literal_eval(content_to_type_cast.decode())  # XXX
 
             # Reduce ambiguity
             if not isinstance(result, type_cast):

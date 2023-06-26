@@ -271,7 +271,7 @@ class HiSockServer(_HiSockBase):
         self._sockets_list.append(connection)
 
         # Receive the client hello
-        client_hello = receive_message(connection, self.header_len)
+        client_hello = receive_message(connection, self.header_len, self.RECV_BUFFERSIZE)
         if not client_hello:
             raise ClientException("Client disconnected or had an error.")
         client_hello = _removeprefix(client_hello["data"], b"$CLTHELLO$")
@@ -888,7 +888,7 @@ class HiSockServer(_HiSockBase):
 
                 # {"header": bytes, "data": bytes} or False
                 self._receiving_data = True
-                raw_data = receive_message(client_socket, self.header_len)
+                raw_data = receive_message(client_socket, self.header_len, self.RECV_BUFFERSIZE)
                 self._receiving_data = False
 
                 if isinstance(raw_data, dict):
