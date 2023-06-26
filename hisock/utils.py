@@ -333,10 +333,8 @@ def _type_cast(
 
         # Convert content_to_type_cast to bytes
         if content_to_type_cast_type != bytes:
-            if content_to_type_cast_type in (str, int, float):
+            if content_to_type_cast_type in (str, int, float, list, dict):
                 content_to_type_cast = str(content_to_type_cast).encode()
-            elif content_to_type_cast_type in (list, dict):
-                content_to_type_cast = json.dumps(content_to_type_cast).encode()
             else:
                 raise TypeError(
                     f"Cannot type cast {content_to_type_cast_type} to bytes"
@@ -354,12 +352,7 @@ def _type_cast(
         # Lists and dicts
         if type_cast in (list, dict):
             # JSON
-            try:
-                result = json.loads(content_to_type_cast.decode())
-
-            # Python
-            except json.JSONDecodeError:
-                result = ast.literal_eval(content_to_type_cast.decode())  # XXX
+            result = ast.literal_eval(content_to_type_cast.decode())  # XXX
 
             # Reduce ambiguity
             if not isinstance(result, type_cast):
