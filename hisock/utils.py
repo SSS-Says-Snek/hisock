@@ -172,6 +172,23 @@ def make_header(
     return constructed_header
 
 
+def _recv_exactly(connection: socket.socket, length: int, buffer_size: int) -> Optional[bytes]:
+    data = b""
+    bytes_left = length
+
+    while bytes_left > 0:
+        bytes_to_recv = min(bytes_left, buffer_size)
+        data_part = connection.recv(bytes_to_recv)
+        if not data_part:
+            data = None
+            break
+            
+        data += data_part
+        bytes_left -= len(data_part)
+    
+    return data
+
+
 def receive_message(
     connection: socket.socket, header_len: int, buffer_size: int
 ) -> Union[dict[str, bytes], bool]:
@@ -191,22 +208,11 @@ def receive_message(
     """
 
     try:
-        header_message = connection.recv(header_len)
-        if header_message:
+        header_message = _recv_exactly(connection, header_len, 16) # Header's super tiny
+        if header_message is not None:
             message_len = int(header_message)
             
-            data = b""
-            bytes_left = message_len
-
-            while bytes_left > 0:
-                bytes_to_recv = min(bytes_left, buffer_size)
-                data_part = connection.recv(bytes_to_recv)
-                if not data_part:
-                    data = None
-                    break
-
-                data += data_part
-                bytes_left -= len(data_part)
+            data = _recv_exactly(connection, message_len, buffer_size)
 
             return {"header": header_message, "data": data}
     except ConnectionResetError:
