@@ -35,6 +35,7 @@ try:
         Sendable,
         Client,
         _removeprefix,
+        _recv_exactly,
         _type_cast,
         make_header,
         iptup_to_str,
@@ -53,6 +54,7 @@ except ImportError:
         Sendable,
         Client,
         _removeprefix,
+        _recv_exactly,
         _type_cast,
         make_header,
         iptup_to_str,
@@ -485,7 +487,7 @@ class HiSockClient(_HiSockBase):
             content_header = None
 
             try:
-                content_header = self.sock.recv(self.header_len)
+                content_header = _recv_exactly(self.sock, self.header_len, 16)
             except ConnectionResetError:
                 raise ServerNotRunning(
                     "Server has stopped running, aborting..."
@@ -497,23 +499,12 @@ class HiSockClient(_HiSockBase):
                 self.close(emit_leave=False)
                 return
 
-            if content_header == b"":
+            if content_header is None:
                 # Happens when the client is closing the connection while receiving
                 # data. The content header will be empty.
                 return
             
-            data = b""
-            bytes_left = int(content_header)
-
-            while bytes_left > 0:
-                bytes_to_recv = min(bytes_left, self.RECV_BUFFERSIZE)
-                data_part = self.sock.recv(bytes_to_recv)
-                if not data_part:
-                    data = None
-                    break
-
-                data += data_part
-                bytes_left -= len(data_part)
+            data = _recv_exactly(self.sock, int(content_header), self.RECV_BUFFERSIZE)
 
             self._receiving_data = False
             if not data:
