@@ -417,7 +417,7 @@ class HiSockClient(_HiSockBase):
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         )
         content_header = make_header(data_to_send, self.header_len)
-        self.sock.send(content_header + data_to_send)
+        self.sock.sendall(content_header + data_to_send)
 
     def _send_raw(self, content: Sendable = None):
         """
@@ -431,7 +431,7 @@ class HiSockClient(_HiSockBase):
 
         data_to_send = self._send_type_cast(content)
         header = make_header(data_to_send, self.header_len)
-        self.sock.send(header + data_to_send)
+        self.sock.sendall(header + data_to_send)
 
     # Changers
 

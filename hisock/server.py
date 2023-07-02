@@ -638,7 +638,7 @@ class HiSockServer(_HiSockBase):
         )
         content_header = make_header(data_to_send, self.header_len)
         for client in self.clients:
-            client.send(content_header + data_to_send)
+            client.sendall(content_header + data_to_send)
 
     def _send_all_clients_raw(self, content: Sendable = None):
         """
@@ -658,7 +658,7 @@ class HiSockServer(_HiSockBase):
 
         content_header = make_header(content, self.header_len)
         for client in self.clients:
-            client.send(content_header + content)
+            client.sendall(content_header + content)
 
     def send_group(
         self, group: Union[str, ClientInfo], command: str, content: Sendable = None
@@ -694,7 +694,7 @@ class HiSockServer(_HiSockBase):
         )
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_all_client_sockets_in_group(group):
-            client.send(content_header + data_to_send)
+            client.sendall(content_header + data_to_send)
 
     def send_client(self, client: Client, command: str, content: Sendable = None):
         """
@@ -721,7 +721,7 @@ class HiSockServer(_HiSockBase):
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         )
         content_header = make_header(data_to_send, self.header_len)
-        self._get_client_from_name_or_ip_port(client).send(
+        self._get_client_from_name_or_ip_port(client).sendall(
             content_header + data_to_send
         )
 
@@ -747,7 +747,7 @@ class HiSockServer(_HiSockBase):
 
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
-        self._get_client_from_name_or_ip_port(client).send(
+        self._get_client_from_name_or_ip_port(client).sendall(
             content_header + data_to_send
         )
 
@@ -779,7 +779,7 @@ class HiSockServer(_HiSockBase):
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_all_client_sockets_in_group(group):
-            client.send(content_header + data_to_send)
+            client.sendall(content_header + data_to_send)
 
     # Disconnect
 

@@ -35,7 +35,7 @@ except ImportError:
 
 
 class _HiSockBase:
-    RECV_BUFFERSIZE = 4096
+    RECV_BUFFERSIZE = 8192
 
     """
     Base class for both :class:`HiSockClient` and :class:`HiSockServer`.
