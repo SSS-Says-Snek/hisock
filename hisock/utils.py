@@ -115,14 +115,7 @@ class ClientInfo:
         return self.client_dict == other.client_dict
 
 
-class File:
-    def __init__(self, file_path: Union[str, pathlib.Path]):
-        # TODO: implement this!
-        self.file_path = file_path
-
-
 # Custom type hints
-JSONSerializableValue = Union[str, int, float, bool, None, dict, list]
 Sendable = Union[
     bytes,
     str,
@@ -130,13 +123,12 @@ Sendable = Union[
     float,
     None,
     ClientInfo,
-    List[Union[str, int, float, bool, None, dict, list]],
+    List["Sendable"],
     Dict[
         str,
-        Union[str, int, float, bool, None, dict, list],
+        "Sendable",
     ],
 ]
-
 SendableTypes = Type[Sendable]
 
 Client = Union[
