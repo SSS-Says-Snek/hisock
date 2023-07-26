@@ -33,7 +33,6 @@ try:
         MessageCacheMember,
         ClientInfo,
         Sendable,
-        Client,
         _removeprefix,
         _recv_exactly,
         _type_cast,
@@ -52,7 +51,6 @@ except ImportError:
         MessageCacheMember,
         ClientInfo,
         Sendable,
-        Client,
         _removeprefix,
         _recv_exactly,
         _type_cast,
@@ -147,11 +145,11 @@ class HiSockClient(_HiSockBase):
         self._reserved_funcs = {
             "client_connect": {
                 "number_arguments": 1,
-                "type_cast_arguments": ("client_data",),
+                "type_cast_arguments": ("client_info",),
             },
             "client_disconnect": {
                 "number_arguments": 1,
-                "type_cast_arguments": ("client_data",),
+                "type_cast_arguments": ("client_info",),
             },
             "force_disconnect": {
                 "number_arguments": 0,
@@ -332,18 +330,13 @@ class HiSockClient(_HiSockBase):
         return self.cache[idx]
 
     def get_client(
-        self, client: Client, get_as_dict: bool = False
-    ) -> Union[ClientInfo, dict]:
+        self, client: Union[tuple[str, int], str]
+    ) -> ClientInfo:
         """
         Gets the client data for a client.
 
         :param client: The client name or IP+port to get.
         :type client: Client
-        :param get_as_dict: A boolean representing if the client data should be
-            returned as a dictionary. Otherwise, it'll be returned as an
-            instance of :class:`ClientInfo`.
-            Default is False.
-        :type get_as_dict: bool, optional
 
         :return: The client data.
         :rtype: Union[ClientInfo, dict]
@@ -377,9 +370,7 @@ class HiSockClient(_HiSockBase):
             )
 
         # Type cast
-        if get_as_dict:
-            return response
-        return ClientInfo(**response)
+        return ClientInfo.from_dict(response)
 
     def get_server_addr(self) -> tuple[str, int]:
         """
@@ -531,7 +522,7 @@ class HiSockClient(_HiSockBase):
                 if "client_connect" not in self.funcs:
                     return
 
-                client_data = self._type_cast_client_data(
+                client_info = self._type_cast_client_info(
                     "client_connect",
                     _type_cast(
                         type_cast=dict,
@@ -539,7 +530,7 @@ class HiSockClient(_HiSockBase):
                         func_name="<client connect in update>",
                     ),
                 )
-                self._call_function_reserved("client_connect", client_data)
+                self._call_function_reserved("client_connect", ClientInfo.from_dict(client_info))
                 return
 
             # Handle client disconnection
@@ -547,7 +538,7 @@ class HiSockClient(_HiSockBase):
                 if "client_disconnect" not in self.funcs:
                     return
 
-                client_data = self._type_cast_client_data(
+                client_info = self._type_cast_client_info(
                     "client_disconnect",
                     _type_cast(
                         type_cast=dict,
@@ -556,7 +547,7 @@ class HiSockClient(_HiSockBase):
                     ),
                 )
 
-                self._call_function_reserved("client_disconnect", client_data)
+                self._call_function_reserved("client_disconnect", ClientInfo.from_dict(client_info))
                 return
 
             ### Unreserved commands ###
@@ -566,7 +557,7 @@ class HiSockClient(_HiSockBase):
                 if "*" not in self.funcs:
                     return
                 self._call_wildcard_function(
-                    client_data=None, command=None, content=data
+                    client_info=None, command=None, content=data
                 )
                 return
 
@@ -607,7 +598,7 @@ class HiSockClient(_HiSockBase):
             if not has_listener and "*" in self.funcs:
                 # No recv and no catchall. A command and some data.
                 self._call_wildcard_function(
-                    client_data=None, command=command, content=content
+                    client_info=None, command=command, content=content
                 )
 
             # Caching
@@ -794,11 +785,11 @@ if __name__ == "__main__":
     # client.change_group(input("New group: "))
 
     @client.on("client_connect")
-    def on_connect(client_data):
+    def on_connect(client: ClientInfo):
         print(
-            f"{client_data.name} has joined! "
-            f"Their IP is {iptup_to_str(client_data.ip)}. "
-            f'Their group is {client_data["group"]}.'
+            f"{client.name} has joined! "
+            f"Their IP is {client.ipstr}. "
+            f'Their group is {client.group}.'
         )
 
     @client.on("client_disconnect", override=True)

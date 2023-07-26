@@ -72,19 +72,6 @@ tests = {
         {"original": {"a": "b"}, "expected": Error},
         {"original": "hello", "expected": Error},
     ],
-    "client_info": [
-        {
-            "original": {"ip": ("127.0.0.1", "5000"), "name": "a", "group": None},
-            "expected": ClientInfo(
-                **{"ip": ("127.0.0.1", "5000"), "name": "a", "group": None}
-            ),
-        },
-        {
-            "original": '{"ip": ["127.0.0.1", "5000"], "name": "a", "group": None}"',
-            "expected": Error,
-        },
-        {"original": {"name": "a"}, "expected": Error},  # Missing ip
-    ],
     "random": [
         {"original": "hello", "expected": Error},
     ],
@@ -147,12 +134,6 @@ class TestServerTypeCast:
     @pytest.mark.parametrize("test", tests["list"])
     def test_list(self, test):
         self._test_type_cast(list, test["original"], test["expected"], func_name="list")
-
-    @pytest.mark.parametrize("test", tests["client_info"])
-    def test_client_info(self, test):
-        self._test_type_cast(
-            ClientInfo, test["original"], test["expected"], func_name="client info"
-        )
 
     @pytest.mark.parametrize("test", tests["random"])
     def test_random(self, test):

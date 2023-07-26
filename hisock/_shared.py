@@ -68,8 +68,8 @@ class _HiSockBase:
 
     # Internal methods
 
-    def _type_cast_client_data(
-        self, command: str, client_data: dict
+    def _type_cast_client_info(
+        self, command: str, client_info: ClientInfo
     ) -> Union[ClientInfo, dict]:
         """
         Type cast client info accordingly.
@@ -77,20 +77,20 @@ class _HiSockBase:
 
         :param command: The name of the function that called this method.
         :type command: str
-        :param client_data: The client data to type cast.
-        :type client_data: dict
+        :param client_info: The client info to type cast.
+        :type client_info: dict
 
-        :return: The type casted client data from the type hint.
+        :return: The type casted client info from the type hint.
         :rtype: Union[ClientInfo, dict]
         """
 
-        type_cast_to = self.funcs[command]["type_hint"]["client_data"]
+        type_cast_to = self.funcs[command]["type_hint"]["client_info"]
         if type_cast_to is None:
             type_cast_to = ClientInfo
 
         if type_cast_to is ClientInfo:
-            return ClientInfo(**client_data)
-        return client_data
+            return client_info
+        return client_info.as_dict()
 
     @staticmethod
     def _send_type_cast(content: Sendable) -> bytes:
@@ -147,7 +147,7 @@ class _HiSockBase:
         self,
         command: Union[str, None],
         content: bytes,
-        client_data: Union[dict, None] = None,
+        client_info: Union[dict, None] = None,
     ):
         """
         Call the wildcard command.
@@ -158,8 +158,8 @@ class _HiSockBase:
         :param content: The data to pass to the wildcard command. Will be
             type-casted accordingly.
         :type content: bytes
-        :param client_data: The client data. If None, then there is no client data.
-        :type client_data: dict, optional
+        :param client_info: The client info. If None, then there is no client info.
+        :type client_info: dict, optional
 
         :raises FunctionNotFoundException: If there is no wildcard listener.
         """
@@ -172,8 +172,8 @@ class _HiSockBase:
             ) from None
 
         arguments = []
-        if client_data is not None:
-            arguments.append(self._type_cast_client_data("*", client_data))
+        if client_info is not None:
+            arguments.append(self._type_cast_client_info("*", client_info))
 
         arguments += [
             _type_cast(

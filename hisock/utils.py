@@ -12,15 +12,13 @@ Copyright SSS_Says_Snek, 2021-present
 """
 
 from __future__ import annotations
-
-import json
-import pathlib
 import socket
 import builtins
 import sys
 import ast
+from dataclasses import dataclass
 from re import search
-from typing import Union, Any, Optional, Type, Tuple, Dict, List  # Must use these for bare annots
+from typing import Literal, Union, Any, Optional, Type, Tuple, Dict, List  # Must use these for bare annots
 from ipaddress import IPv4Address
 
 # Custom exceptions
@@ -93,26 +91,31 @@ class MessageCacheMember:
     def __repr__(self):
         return self.__str__()
 
-
+@dataclass(frozen=True)
 class ClientInfo:
-    def __init__(self, ip, name, group):
-        self.ip: tuple[str, int] = tuple(
-            ip
-        )  # _type_cast converts tuple to list to be JSON-serializable
-        self.name: Union[str, None] = name
-        self.group: Union[str, None] = group
+    ip: Optional[tuple[str, int]]
+    name: Optional[str] = None
+    group: Optional[str] = None
 
-        self.client_dict: dict = {"ip": self.ip, "name": self.name, "group": self.group}
-        self.ip_as_str: str = f"{self.ip[0]}:{self.ip[1]}"
+    @classmethod
+    def from_dict(cls, dict_: dict):
+        return cls(dict_["ip"], dict_["name"], dict_["group"])
 
-    def __getitem__(self, item):
-        return self.client_dict[item]
+    @property
+    def ipstr(self) -> str:
+        return f"{self.ip[0]}:{self.ip[1]}"
 
+    def as_dict(self):
+        return {"ip": self.ip, "name": self.name, "group": self.group, "ipstr": self.ipstr}
+    
+    def copy(self):
+        return type(self)(self.ip, self.name, self.group)
+    
     def __str__(self):
-        return f"<ClientInfo: IP: {self.ip_as_str}, Name: {self.name}, Group: {self.group}>"
+        return f"<ClientInfo: IP: {self.ipstr}, Name: {self.name}, Group: {self.group}>"
 
     def __eq__(self, other: ClientInfo):
-        return self.client_dict == other.client_dict
+        return (self.ip, self.name, self.group) == (other.ip, other.name, other.group)
 
 
 # Custom type hints
@@ -130,12 +133,6 @@ Sendable = Union[
     ],
 ]
 SendableTypes = Type[Sendable]
-
-Client = Union[
-    str,  # Name
-    Tuple[str, int],  # Port
-    ClientInfo,  # Returned by function, etc
-]
 
 
 def make_header(
@@ -239,6 +236,20 @@ def _dict_tupkey_lookup(
         elif isinstance(idx_to_match, int) and multikey == key[idx_to_match]:
             yield value
 
+def _find_dict_clients(dict_: dict, client: ClientInfo, search_by: Optional[Literal["name", "group"]] = None):
+    if search_by is None:
+        return dict_[client]
+    
+    new_key = None
+    if search_by == "name":
+        new_key = client.name
+    elif search_by == "group":
+        new_key = client.group
+    
+    for key, value in dict_.items():
+        if key.as_dict()[search_by] == new_key:
+            yield value
+
 
 def _dict_tupkey_lookup_key(
     multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
@@ -317,7 +328,7 @@ def _type_cast(
 
         # Handle client info
         if type_cast is ClientInfo:
-            return ClientInfo(**content_to_type_cast)
+            return ClientInfo.from_dict(content_to_type_cast)
 
         # Handle boolean
         if content_to_type_cast_type == bool:

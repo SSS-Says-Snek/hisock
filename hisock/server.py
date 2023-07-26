@@ -17,7 +17,7 @@ import select  # Handle multiple clients at once
 import json  # Handle sending dictionaries
 import threading  # Threaded server and decorators
 import warnings  # Non-severe errors
-from typing import Callable, Union, Iterable  # Type hints
+from typing import Callable, Literal, Optional, Union, Iterable  # Type hints
 from ipaddress import IPv4Address  # Comparisons
 
 try:
@@ -29,9 +29,9 @@ try:
         GroupNotFound,
         ClientInfo,
         Sendable,
-        Client,
         _removeprefix,
         _dict_tupkey_lookup,
+        _find_dict_clients,
         _type_cast,
         receive_message,
         make_header,
@@ -48,9 +48,9 @@ except ImportError:
         GroupNotFound,
         ClientInfo,
         Sendable,
-        Client,
         _removeprefix,
         _dict_tupkey_lookup,
+        _find_dict_clients,
         _type_cast,
         receive_message,
         make_header,
@@ -101,7 +101,7 @@ class HiSockServer(_HiSockBase):
         If this is True, then a signal will be sent to every client every minute to prevent
         hanging clients in the server. The clients have thirty seconds to send back an
         acknowledge signal to show that they are still alive.
-        Default is True.
+        Default is False FOR NOW. Investigating further.
     :type keepalive: bool, optional
 
     :ivar tuple addr: A two-element tuple containing the IP address and the port.
@@ -123,7 +123,7 @@ class HiSockServer(_HiSockBase):
         max_connections: int = 0,
         header_len: int = 16,
         cache_size: int = -1,
-        keepalive: bool = True,
+        keepalive: bool = False,  # DISABLE KEEPALIVE FOR NOW
     ):
         super().__init__(addr=addr, header_len=header_len, cache_size=cache_size)
 
@@ -141,37 +141,35 @@ class HiSockServer(_HiSockBase):
         self._reserved_funcs = {
             "join": {
                 "number_arguments": 1,
-                "type_cast_arguments": ("client_data",),
+                "type_cast_arguments": ("client_info",),
             },
             "leave": {
                 "number_arguments": 1,
-                "type_cast_arguments": ("client_data",),
+                "type_cast_arguments": ("client_info",),
             },
             "message": {
                 "number_arguments": 3,
-                "type_cast_arguments": ("client_data", "command", "message"),
+                "type_cast_arguments": ("client_info", "command", "message"),
             },
             "name_change": {
                 "number_arguments": 3,
-                "type_cast_arguments": ("client_data",),
+                "type_cast_arguments": ("client_info",),
             },
             "group_change": {
                 "number_arguments": 3,
-                "type_cast_arguments": ("client_data",),
+                "type_cast_arguments": ("client_info",),
             },
             "*": {
                 "number_arguments": 3,
-                "type_cast_arguments": ("client_data", "command", "message"),
+                "type_cast_arguments": ("client_info", "command", "message"),
             },
         }
-        self._unreserved_func_arguments = ("client_data", "message")
+        self._unreserved_func_arguments = ("client_info", "message")
 
         # Dictionaries and lists for client lookup
         self._sockets_list = [self.socket]  # Our socket will always be the first
-        # socket: {"ip": (ip, port), "name": str, "group": str}
-        self.clients: dict[socket.socket, dict] = {}
-        # ((ip: str, port: int), name: str, group: str): socket
-        self.clients_rev: dict[tuple, socket.socket] = {}
+        self.clients: dict[socket.socket, ClientInfo] = {}
+        self.clients_rev: dict[ClientInfo, socket.socket] = {}
 
         # Keepalive
         self._keepalive_event = threading.Event()
@@ -280,26 +278,16 @@ class HiSockServer(_HiSockBase):
         except json.JSONDecodeError:
             raise ClientException("Client sent an invalid hello.") from None
 
-        client_data = {
-            "ip": address,
-            "name": client_hello["name"],
-            "group": client_hello["group"],
-        }
-        self.clients[connection] = client_data
-        self.clients_rev[
-            (
-                address,
-                client_hello["name"],
-                client_hello["group"],
-            )
-        ] = connection
+        client_info = ClientInfo(address, client_hello["name"], client_hello["group"])
+        self.clients[connection] = client_info
+        self.clients_rev[client_info] = connection
 
         # Send reserved command to existing clients
-        self._send_all_clients_raw(f"$CLTCONN${json.dumps(client_data)}".encode())
+        self._send_all_clients_raw(f"$CLTCONN${json.dumps(client_info.as_dict())}".encode())
 
         self._call_function_reserved(
             "join",
-            self._type_cast_client_data(command="join", client_data=client_data),
+            self._type_cast_client_info(command="join", client_info=client_info),
         )
 
     def _client_disconnection(self, client_socket: socket.socket):
@@ -309,7 +297,7 @@ class HiSockServer(_HiSockBase):
         :raises ClientNotFound: The client wasn't connected to the server.
         """
 
-        client_data = self.clients[client_socket]
+        client_info = self.clients[client_socket]
 
         if client_socket not in self._sockets_list:
             raise ClientNotFound(f'Client "{client_socket}" is not connected.')
@@ -321,13 +309,11 @@ class HiSockServer(_HiSockBase):
             pass
         self._sockets_list.remove(client_socket)
         del self.clients[client_socket]
-        del self.clients_rev[
-            (client_data["ip"], client_data["name"], client_data["group"])
-        ]
+        del self.clients_rev[client_info]
         # Note: ``self._unresponsive_clients`` should be handled by the keepalive
 
         # Send the client disconnection event to the clients
-        self._send_all_clients_raw(f"$CLTDISCONN${json.dumps(client_data)}".encode())
+        self._send_all_clients_raw(f"$CLTDISCONN${json.dumps(client_info.as_dict())}".encode())
 
     # Keepalive
 
@@ -348,12 +334,12 @@ class HiSockServer(_HiSockBase):
 
             # Send keepalive to all clients
             if not self._keepalive_event.is_set():
-                for client_socket, client_data in self.clients.items():
+                for client_socket in self.clients:
                     if client_socket not in self.clients:
                         continue
 
                     self._unresponsive_clients.append(client_socket)
-                    self._send_client_raw(client_data["ip"], "$KEEPALIVE$")
+                    client_socket.sendall(b"$KEEPALIVE$")
 
             # Keepalive acknowledgments will be handled in `_handle_keepalive`
             self._keepalive_event.wait(30)
@@ -363,7 +349,7 @@ class HiSockServer(_HiSockBase):
                 for client_socket in self._unresponsive_clients:
                     try:
                         self.disconnect_client(
-                            self.clients[client_socket]["ip"],
+                            self.clients[client_socket],
                             force=True,
                             call_func=True,
                         )
@@ -433,85 +419,39 @@ class HiSockServer(_HiSockBase):
         return self._on(self, command, threaded, override)
 
     # Getters
+    
+    def _get_clientinfo(self, client: Union[tuple[str, int], str, ClientInfo]):
+        if isinstance(client, ClientInfo):
+            return client
 
-    def _get_client_from_name_or_ip_port(self, client: Client) -> socket.socket:
+        for client_info in self.clients_rev:
+            if isinstance(client, tuple) and client_info.ip == client:
+                return client_info
+            elif isinstance(client, str) and client_info.name == client:
+                return client_info
+        
+        return None
+
+    def _get_client_socket(self, client: Union[tuple[str, int], str, ClientInfo]) -> Optional[socket.socket]:
         """
         Gets a client socket from a name or tuple in the form of (ip, port).
 
         :param client: The name or tuple of the client.
-        :type client: Client
+        :type client: ClientInfo
 
         :return: The socket of the client.
         :rtype: socket.socket
 
-        :raises ValueError: Client format is wrong.
-        :raises ClientNotFound: Client does not exist.
         :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
 
-        ret_client_socket: socket.socket
+        client = self._get_clientinfo(client)
+        if client is not None:
+            return self.clients_rev[client]
+        return None
 
-        # Search by IPv4
-        if isinstance(client, tuple):
-            validate_ipv4(client)  # Raises ValueError if invalid
-            try:
-                client_socket: socket.socket = next(
-                    _dict_tupkey_lookup(
-                        client,
-                        self.clients_rev,
-                        idx_to_match=0,
-                    )
-                )
-            except StopIteration:
-                raise ClientNotFound(
-                    f'Client with IP "{client}" is not connected.'
-                ) from None
-            ret_client_socket = client_socket
-
-        # Search by name
-        elif isinstance(client, str):
-            try:
-                # Modify dictionary so only names are included
-                try:
-                    client = ipstr_to_tup(client)
-                except ValueError:
-                    client_sockets = list(
-                        _dict_tupkey_lookup(
-                            client,
-                            self.clients_rev,
-                            idx_to_match=1,
-                        )
-                    )
-                else:
-                    client_sockets = list(
-                        _dict_tupkey_lookup(
-                            client,
-                            self.clients_rev,
-                            idx_to_match=0,
-                        )
-                    )
-
-            except StopIteration:
-                raise TypeError(
-                    f'Client with name "{client}" does not exist.'
-                ) from None
-
-            if len(client_sockets) > 1:
-                warnings.warn(
-                    f'{len(client_sockets)} clients with name "{client}" detected; sending data to '
-                    f"Client with IP {':'.join(map(str, client_sockets[0].getpeername()))}"
-                )
-            ret_client_socket = client_sockets[0]
-        else:
-            raise ValueError("Client format is wrong (must be of type tuple or str).")
-
-        if ret_client_socket is None:
-            raise ValueError("Client socket does not exist.")
-
-        return ret_client_socket
-
-    def _get_all_client_sockets_in_group(self, group: str) -> Iterable[socket.socket]:
+    def _get_group_sockets(self, group: str) -> Iterable[socket.socket]:
         """
         An iterable that returns all client sockets in a group
 
@@ -525,91 +465,71 @@ class HiSockServer(_HiSockBase):
            If the group does not exist, an empty iterable is returned.
         """
 
-        return _dict_tupkey_lookup(group, self.clients_rev, idx_to_match=2)
+        return _find_dict_clients(self.clients_rev, ClientInfo(None, group=group), search_by="group")
 
-    def get_group(self, group: str) -> list[dict[str, Union[str, socket.socket]]]:
+    def get_group(self, group: str) -> list[ClientInfo]:
         """
         Gets all clients from a specific group.
-
-        .. note::
-            If you want to get them from ``clients_rev`` directly, use
-            :meth:`_get_all_client_sockets_in_group` instead.
 
         :param group: A string, representing the group to look up
         :type group: str
 
         :raises GroupNotFound: Group does not exist
 
-        :return: A list of dictionaries of clients in that group, containing
-          the address, name, group, and socket
+        :return: A list of ClientInfo
         :rtype: list
         """
 
-        mod_group_clients = []  # Will be a list of dicts
+        group_clients = []  # Will be a list of dicts
 
-        for client in self._get_all_client_sockets_in_group(group):
-            client_dict = self.clients[client]
-            mod_dict = {
-                "ip": client_dict["ip"],
-                "name": client_dict["name"],
-                "group": client_dict["group"],
-                "socket": client,
-            }
-            mod_group_clients.append(mod_dict)
+        for client_socket in self._get_group_sockets(group):
+            group_clients.append(self.clients[client_socket])
 
-        if len(mod_group_clients) == 0:
+        if len(group_clients) == 0:
             raise GroupNotFound(f'Group "{group}" does not exist.')
+        return group_clients
 
-        return mod_group_clients
-
-    def get_all_clients(self, key: Union[Callable, str] = None) -> list[dict[str, str]]:
+    def get_all_clients(self, key: Optional[str] = None) -> list[Union[ClientInfo, tuple[str, int], str]]:
         """
         Get all clients currently connected to the server.
-        This is recommended over the class attribute ``self._clients`` or
-        ``self.clients_rev``, as it is in a dictionary-like format.
 
-        :param key: If specified, there are two outcomes: If it is a string,
-            it will search for the dictionary for the key, and output it to a list
-            (currently supports "ip", "name", "group").
-            If it is a callable, it will try to integrate the callable
-            into the output with the :meth:`filter` function.
+        :param key: If a string is specified as a key,
+            it will search through the ClientInfo for the key, and output it to a list
         :type key: Union[Callable, str], optional
 
-        :return: A list of dictionaries, with the clients
+        :return: A list of either a dictionary of ClientInfo, or the content as filtered by the key
         :rtype: list[dict, ...]
         """
 
         clients = list(self.clients.values())
-
         if key is None:
             return clients
 
         filter_clients = []
-        if isinstance(key, str):
-            if key in ["ip", "name", "group"]:
-                for filter_client in clients:
-                    filter_clients.append(filter_client[key])
-        elif isinstance(key, Callable):
-            filter_clients = list(filter(key, clients))
-
+        if key in ["ip", "name", "group"]:
+            for filter_client in clients:
+                filter_clients.append(filter_client.as_dict()[key])
         return filter_clients
 
     def get_client(
         self, client: Union[str, tuple[str, int]]
-    ) -> dict[str, Union[str, socket.socket]]:
+    ) -> ClientInfo:
         """
         Gets the client data for a client from a name or tuple in the form of (ip, port).
 
-        :return: The client data without the socket.
-        :rtype: dict
+        :return: The client info.
+        :rtype: ClientInfo
 
-        :raises ValueError: Client format is wrong.
         :raises ClientNotFound: Client does not exist.
         :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
+        
+        client_socket = self._get_client_socket(client)
+        if client_socket is None:
+            raise ClientNotFound(f"Client {client} does not exist.")
 
-        return self.clients[self._get_client_from_name_or_ip_port(client)]
+        return self.clients[client_socket]
 
     def get_addr(self) -> tuple[str, int]:
         """
@@ -661,7 +581,7 @@ class HiSockServer(_HiSockBase):
             client.sendall(content_header + content)
 
     def send_group(
-        self, group: Union[str, ClientInfo], command: str, content: Sendable = None
+        self, group: str, command: str, content: Sendable = None
     ):
         """
         Sends data to a specific group.
@@ -669,10 +589,8 @@ class HiSockServer(_HiSockBase):
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
 
-        :param group: A string or a ClientInfo, representing the group to send data to.
-            If the group is a ClientInfo, and the client is in a group, the method will
-            send data to that group.
-        :type group: Union[str, ClientInfo]
+        :param group: A string representing the group to send data to.
+        :type group: str
         :param command: A string, containing the command to send
         :type command: str
         :param content: A bytes-like object, with the content/message to send
@@ -682,21 +600,14 @@ class HiSockServer(_HiSockBase):
             is not in a group (``ClientInfo``).
         """
 
-        if isinstance(group, ClientInfo):
-            client = group
-            group = client.group  # Please don't confuse this
-
-            if group is None:
-                raise TypeError(f"Client {client} does not belong to a group")
-
         data_to_send = (
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         )
         content_header = make_header(data_to_send, self.header_len)
-        for client in self._get_all_client_sockets_in_group(group):
+        for client in self._get_group_sockets(group):
             client.sendall(content_header + data_to_send)
 
-    def send_client(self, client: Client, command: str, content: Sendable = None):
+    def send_client(self, client: Union[str, tuple[str, int], ClientInfo], command: str, content: Sendable = None):
         """
         Sends data to a specific client.
 
@@ -714,40 +625,11 @@ class HiSockServer(_HiSockBase):
             the same name is detected.
         """
 
-        if isinstance(client, ClientInfo):
-            client = client.ip
-
         data_to_send = (
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         )
         content_header = make_header(data_to_send, self.header_len)
-        self._get_client_from_name_or_ip_port(client).sendall(
-            content_header + data_to_send
-        )
-
-    def _send_client_raw(self, client: Client, content: Sendable = None):
-        """
-        Sends data to a specific client, *without a command*
-        Different formats of the client is supported. It can be:
-
-        :param client: The client to send data to. The format could be either by IP+port,
-            or a client name.
-        :type client: Client
-        :param content: The message / content to send.
-        :type content: Sendable
-
-        :raises ValueError: Client format is wrong.
-        :raises TypeError: Client does not exist.
-        :raises UserWarning: Using client name, and more than one client with
-            the same name is detected.
-        """
-
-        if isinstance(client, ClientInfo):
-            client = client.ip
-
-        data_to_send = self._send_type_cast(content)
-        content_header = make_header(data_to_send, self.header_len)
-        self._get_client_from_name_or_ip_port(client).sendall(
+        self._get_client_socket(client).sendall(
             content_header + data_to_send
         )
 
@@ -757,11 +639,8 @@ class HiSockServer(_HiSockBase):
         Groups are recommended for more complicated servers or multipurpose
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
-        :param group: A string or a ClientInfo, representing the group to send data to.
-            If the group is a ClientInfo, and the client is in a group, the method will
-            send data to that group. If the client's not in a group, it will return a
-            ``TypeError``
-        :type group: Union[str, ClientInfo]
+        :param group: A string representing the group to send data to.
+        :type group: str
         :param content: A bytes-like object, with the content/message
             to send
         :type content: Union[bytes, dict]
@@ -769,22 +648,15 @@ class HiSockServer(_HiSockBase):
             is not in a group (``ClientInfo``)
         """
 
-        if isinstance(group, ClientInfo):
-            client = group
-            group = client.group  # Please don't confuse this
-
-            if group is None:
-                raise TypeError(f"Client {client} does not belong to a group")
-
         data_to_send = self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
-        for client in self._get_all_client_sockets_in_group(group):
+        for client in self._get_group_sockets(group):
             client.sendall(content_header + data_to_send)
 
     # Disconnect
 
     def disconnect_client(
-        self, client: Client, force: bool = False, call_func: bool = False
+        self, client: Union[tuple[str, int], str, ClientInfo], force: bool = False, call_func: bool = False
     ):
         """
         Disconnects a specific client.
@@ -804,15 +676,15 @@ class HiSockServer(_HiSockBase):
             the same name is detected.
         """
 
-        if isinstance(client, ClientInfo):
-            client = client.ip
+        client_socket = self._get_client_socket(client)
+        if client_socket is None:
+            raise ClientNotFound(f"Client {client} does not exist.")
 
-        client_socket = self._get_client_from_name_or_ip_port(client)
-        client_data = self.clients[client_socket]
+        client_info = self.clients[client_socket]
 
         if not force:
             try:
-                self._send_client_raw(client, "$DISCONN$")
+                client_socket.sendall(b"$DISCONN$")
             except BrokenPipeError:
                 # Client is already gone
                 pass
@@ -821,7 +693,7 @@ class HiSockServer(_HiSockBase):
         if call_func and "leave" in self.funcs:
             self._call_function_reserved(
                 "leave",
-                self._type_cast_client_data(command="leave", client_data=client_data),
+                self._type_cast_client_info(command="leave", client_info=client_info),
             )
 
     def disconnect_all_clients(self, force=False):
@@ -873,7 +745,7 @@ class HiSockServer(_HiSockBase):
                         continue
 
                     self.disconnect_client(
-                        self.clients[client_socket]["ip"], force=True, call_func=False
+                        self.clients[client_socket], force=True, call_func=False
                     )
                     continue
 
@@ -895,7 +767,7 @@ class HiSockServer(_HiSockBase):
                     data = raw_data["data"]
 
                 try:
-                    client_data = self.clients[client_socket]
+                    client_info = self.clients[client_socket]
                 except KeyError:
                     raise ClientNotFound(
                         "Client data not found, but is not a new client."
@@ -911,14 +783,14 @@ class HiSockServer(_HiSockBase):
 
                     try:
                         self.disconnect_client(
-                            client_data["ip"], force=False, call_func=True
+                            client_info, force=False, call_func=True
                         )
                     except BrokenPipeError:  # UNIX
                         # Client is already gone
                         pass
                     except ConnectionResetError:
                         self.disconnect_client(
-                            client_data["ip"], force=True, call_func=True
+                            client_info, force=True, call_func=True
                         )
 
                     continue
@@ -932,43 +804,34 @@ class HiSockServer(_HiSockBase):
                         continue
 
                     change_to = _removeprefix(data, matching_reserve).decode()
-
+                    client_info_dict = client_info.as_dict()
+                    
                     # Resetting
                     if change_to == "":
-                        change_to = client_data[key]
+                        change_to = client_info_dict[key]
 
                     # Change it
-                    changed_client_data = client_data.copy()
-                    changed_client_data[key] = change_to
-                    self.clients[client_socket] = changed_client_data
+                    new_client_info_dict = client_info.as_dict()
+                    new_client_info_dict[key] = change_to
 
-                    del self.clients_rev[
-                        (
-                            client_data["ip"],
-                            client_data["name"],
-                            client_data["group"],
-                        )
-                    ]
-                    self.clients_rev[
-                        (
-                            changed_client_data["ip"],
-                            changed_client_data["name"],
-                            changed_client_data["group"],
-                        )
-                    ] = client_socket
+                    new_client_info = ClientInfo.from_dict(new_client_info_dict)
+                    self.clients[client_socket] = new_client_info
+
+                    del self.clients_rev[client_info]
+                    self.clients_rev[new_client_info] = client_socket
 
                     # Call reserved function
                     reserved_func_name = f"{key}_change"
 
                     if reserved_func_name in self._reserved_funcs:
-                        old_value = client_data[key]
-                        new_value = changed_client_data[key]
+                        old_value = client_info_dict[key]
+                        new_value = new_client_info_dict[key]
 
                         self._call_function(
                             reserved_func_name,
-                            self._type_cast_client_data(
+                            self._type_cast_client_info(
                                 command=reserved_func_name,
-                                client_data=changed_client_data,
+                                client_info=new_client_info,
                             ),
                             old_value,
                             new_value,
@@ -993,13 +856,13 @@ class HiSockServer(_HiSockBase):
                         except ValueError:
                             pass
 
-                        client = self.get_client(client_identifier)
+                        client = self.get_client(client_identifier).as_dict()
                     except ValueError as e:
                         client = {"traceback": str(e)}
                     except ClientNotFound:
                         client = {"traceback": "$NOEXIST$"}
 
-                    self._send_client_raw(client_data["ip"], client)
+                    self.clients_rev[client_info].sendall(json.dumps(client).encode())
                     continue
 
                 ### Unreserved commands ###
@@ -1008,7 +871,7 @@ class HiSockServer(_HiSockBase):
                 elif not data.startswith(b"$CMD$"):
                     if "*" in self.funcs:
                         self._call_wildcard_function(
-                            client_data=client_data, command=None, content=data
+                            client_info=client_info, command=None, content=data
                         )
                     return
 
@@ -1033,16 +896,16 @@ class HiSockServer(_HiSockBase):
                     # Call function with dynamic args
                     arguments = ()
                     if len(func["type_hint"]) != 0:
-                        type_casted_client_data = self._type_cast_client_data(
-                            command=matching_command, client_data=client_data
+                        type_casted_client_info = self._type_cast_client_info(
+                            command=matching_command, client_info=client_info
                         )
-                    # client_data
+                    # client_info
                     if len(func["type_hint"]) == 1:
-                        arguments = (type_casted_client_data,)
-                    # client_data, message
+                        arguments = (type_casted_client_info,)
+                    # client_info, message
                     elif len(func["type_hint"]) >= 2:
                         arguments = (
-                            type_casted_client_data,
+                            type_casted_client_info,
                             _type_cast(
                                 type_cast=func["type_hint"]["message"],
                                 content_to_type_cast=content,
@@ -1059,7 +922,7 @@ class HiSockServer(_HiSockBase):
                 if not has_listener and "*" in self.funcs:
                     # No recv and no catchall. A command and some data.
                     self._call_wildcard_function(
-                        client_data=client_data, command=command, content=content
+                        client_info=client_info, command=command, content=content
                     )
 
                 # Caching
@@ -1069,8 +932,8 @@ class HiSockServer(_HiSockBase):
                 if "message" in self.funcs:
                     self._call_function_reserved(
                         "message",
-                        self._type_cast_client_data(
-                            command="message", client_data=client_data
+                        self._type_cast_client_info(
+                            command="message", client_info=client_info
                         ),
                         _type_cast(
                             type_cast=self.funcs["message"]["type_hint"]["command"],
@@ -1222,24 +1085,24 @@ if __name__ == "__main__":
     server = start_server(("127.0.0.1", int(input("Port: "))))
 
     @server.on("join")
-    def on_join(client_data):
+    def on_join(client: ClientInfo):
         print(
-            f"{client_data.name} has joined! "
-            f'Their IP is {":".join(map(str, client_data.ip))}. '
-            f'Their group is {client_data["group"]}.'
+            f"{client.name} has joined! "
+            f'Their IP is {":".join(map(str, client.ip))}. '
+            f'Their group is {client.group}.'
         )
 
     @server.on("leave")
-    def on_leave(client_data):
-        print(f"{client_data.name} has left!")
+    def on_leave(client: ClientInfo):
+        print(f"{client.name} has left!")
         server.send_all_clients(
-            "client_disconnect", {"name": client_data.name, "reason": "they left"}
+            "client_disconnect", {"name": client.name, "reason": "they left"}
         )
 
     @server.on("message")
-    def on_message(client_data, command: str, message: str):
+    def on_message(client: ClientInfo, command: str, message: str):
         print(
-            f"[MESSAGE CATCH-ALL] {client_data.name} sent a command, {command} "
+            f"[MESSAGE CATCH-ALL] {client.name} sent a command, {command} "
             f'with the message "{message}".'
         )
 
@@ -1248,48 +1111,48 @@ if __name__ == "__main__":
         print(f"{old_name} changed their name to {new_name}.")
 
     @server.on("group_change")
-    def on_group_change(client_data, old_group: str, new_group: str):
-        print(f"{client_data.name} changed their group to {new_group}.")
+    def on_group_change(client: ClientInfo, old_group: str, new_group: str):
+        print(f"{client.name} changed their group to {new_group}.")
         # Alert clients of change
         server.send_group(
             old_group,
             "message",
-            f"{client_data.name} has left to move to {new_group}.",
+            f"{client.name} has left to move to {new_group}.",
         )
         server.send_group(
             new_group,
             "message",
-            f"{client_data.name} has joined from {old_group}.",
+            f"{client.name} has joined from {old_group}.",
         )
 
     @server.on("ping")
-    def on_ping(client_data):
-        print(f"{client_data.name} pinged!")
-        server.send_client(client_data.ip, "pong")
+    def on_ping(client: ClientInfo):
+        print(f"{client.name} pinged!")
+        server.send_client(client.ip, "pong")
 
     @server.on("get_all_clients")
-    def on_all_clients(client_data):
-        print(f"{client_data.name} asked for all clients!")
-        server.send_client(client_data.ip, "all_clients", server.get_all_clients())
+    def on_all_clients(client: ClientInfo):
+        print(f"{client.name} asked for all clients!")
+        server.send_client(client.ip, "all_clients", server.get_all_clients())
 
     @server.on("broadcast_message")
-    def on_broadcast_message(client_data, message: str):
-        print(f'{client_data.name} said "{message}"!')
+    def on_broadcast_message(client: ClientInfo, message: str):
+        print(f'{client.name} said "{message}"!')
         server.send_all_clients("message", message)
 
     @server.on("broadcast_message_to_group")
-    def on_broadcast_message_to_group(client_data, message: str):
+    def on_broadcast_message_to_group(client: ClientInfo, message: str):
         print(
-            f'{client_data.name} said "{message}" to their group, {client_data.group}!'
+            f'{client.name} said "{message}" to their group, {client.group}!'
         )
-        server.send_group(client_data, "message", message)
+        server.send_group(client, "message", message)
 
     @server.on("set_timer", threaded=True)
-    def on_set_timer(client_data, seconds: int):
-        print(f"{client_data.name} set a timer for {seconds} seconds!")
+    def on_set_timer(client: ClientInfo, seconds: int):
+        print(f"{client.name} set a timer for {seconds} seconds!")
         __import__("time").sleep(seconds)
-        print(f"{client_data.name}'s timer is done!")
-        server.send_client(client_data.ip, "timer_done")
+        print(f"{client.name}'s timer is done!")
+        server.send_client(client.ip, "timer_done")
 
     @server.on("commit_genocide")
     def on_commit_genocide():
@@ -1297,12 +1160,12 @@ if __name__ == "__main__":
         server.send_all_clients("genocide")
 
     @server.on("*")
-    def on_wildcard(client_data, command: str, data: str):
+    def on_wildcard(client: ClientInfo, command: str, data: str):
         print(
-            f"There was some unhandled data from {client_data.name}. "
+            f"There was some unhandled data from {client.name}. "
             f"{command=}, {data=}"
         )
 
-        server.send_client(client_data, "uncaught_command", data.replace("a", "ඞ"))
+        server.send_client(client, "uncaught_command", data.replace("a", "ඞ"))
 
     server.start()
