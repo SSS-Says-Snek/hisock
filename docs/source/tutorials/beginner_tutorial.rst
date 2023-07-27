@@ -23,7 +23,7 @@ This tutorial will focus on:
 - Acting upon the data
 
 .. note::
-   For this tutorial, I will be referring the IP addresses as ``hisock.utils.get_local_ip()``. In reality, you will most likely use a hard-coded IP address from a user input.
+   For this tutorial, I will be referring the IP addresses as ``hisock.get_local_ip()``. In reality, you will most likely use a hard-coded IP address or a user input.
 
 .. note::
    When I refer to "a way to identify the client", I am talking about either:
@@ -52,7 +52,7 @@ In :mod:`HiSock`, there exists a class, :class:`HiSockServer`, in the ``server``
 
    import hisock
 
-   server = hisock.server.HiSockServer((hisock.utils.get_local_ip(), 6969))
+   server = hisock.server.HiSockServer((hisock.get_local_ip(), 6969))
 
    server.start()
 
@@ -73,7 +73,7 @@ Like :class:`HiSockServer`, :class:`HiSockClient` needs to have its :meth:`start
    import hisock
 
    client = hisock.client.HiSockClient(
-       (hisock.utils.get_local_ip(), 6969),
+       (hisock.get_local_ip(), 6969),
        name=input("What is your name? >")
    )
 
@@ -103,7 +103,7 @@ When a function is prefaced with the ``on`` decorator, it will run on something.
 
 The ``on`` decorator takes a maximum of three parameters. One of the parameters is the command to listen on. The second (optional) parameter is whether to run the listener in its own thread or not. The third (optional) parameter is whether to override a reserved command, and this tutorial won't be covering it.
 
-For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client data. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in (can be type-casted to a dict). The second parameter is the data that is being received.
+For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client info. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in (can be type-casted to a dict). The second parameter is the data that is being received.
 
 For the client: the ``on`` decorator will send a maximum of one parameter to the function it is decorating, which will be the message or content the client receives (in most cases).
 
@@ -114,8 +114,8 @@ Here's an example with the ``on`` decorator in use in a server. Here, the server
    server = ...
 
    @server.on("print_message_name")
-   def on_print_message_name(client_data, message: str):
-       print(f'{client_data.name} sent "{message}"')
+   def on_print_message_name(client: hisock.ClientInfo, message: str):
+       print(f'{client.name} sent "{message}"')
 
    server.start()
 
@@ -172,12 +172,12 @@ Here is an example of sending data with a server-side code block:
    server = ...
 
    @server.on("join")
-   def on_client_join(client_data):
-       server.send_client(client_data.ip, "ask_question", "Do you like sheep?")
+   def on_client_join(client: hisock.ClientInfo):
+       server.send_client(client, "ask_question", "Do you like sheep?")
 
    @server.on("question_response")
-   def on_question_response(client_data, response: str):
-       server.send_client(client_data.ip, "grade", 100)
+   def on_question_response(client: hisock.ClientInfo, response: str):
+       server.send_client(client, "grade", 100)
 
    server.start()
 
@@ -218,38 +218,38 @@ Server:
 
 - ``join``
 
-   The client sends the event ``join`` when they connect to the server. The only parameter sent to the function being decorated is the client data.
+   The client sends the event ``join`` when they connect to the server. The only parameter sent to the function being decorated is the client info.
 - ``leave``
 
-   The client sends the event ``leave`` when they disconnect from the server. The only parameter sent to the function being decorated is the client data.
+   The client sends the event ``leave`` when they disconnect from the server. The only parameter sent to the function being decorated is the client info.
 - ``name_change``
 
-   The client sends the event ``name_change`` when they change their name. The parameters sent to the listening function are (in order) the client data, the old name, and the new name.
+   The client sends the event ``name_change`` when they change their name. The parameters sent to the listening function are (in order) the client info, the old name, and the new name.
 - ``group_change``
 
-   The client sends the event ``group_change`` when they change their group. The parameters sent to the listening function are (in order) the client data, the old group, and the new group.
+   The client sends the event ``group_change`` when they change their group. The parameters sent to the listening function are (in order) the client info, the old group, and the new group.
 - ``message``
 
-   When the server receives a command, it'll send an event to itself called ``message`` which will have two parameters. The two parameters are the client data who sent it and the raw data which was received.
+   When the server receives a command, it'll send an event to itself called ``message`` which will have two parameters. The two parameters are the client info who sent it and the raw data which was received.
 
 - ``*``
 
-   This will be called when there is no listener for an incoming command and data. The three parameters are the client data, the command, and the content.
+   This will be called when there is no listener for an incoming command and data. The three parameters are the client info, the command, and the content.
 
 Client:
 
 - ``client_connect``
 
-   When a client connects to the server, all the clients will have this event called. The only parameter for this is the client data for the client which joined.
+   When a client connects to the server, all the clients will have this event called. The only parameter for this is the client info for the client which joined.
 - ``client_disconnect``
 
-   When a client disconnects from the server, all the clients will have this event called. The only parameter for this is the client data for the client which left.
+   When a client disconnects from the server, all the clients will have this event called. The only parameter for this is the client info for the client which left.
 - ``force_disconnect``
 
    The server sends the event ``force_disconnect`` to a client when they kick the client. There are *no* parameters sent with the function that is being decorated with this.
 - ``*``
 
-   This will be called when there is no listener for an incoming command and data. The two parameters are the command and the content.
+   This will be called when there is no listener for an incoming command and content. The two parameters are the command and the content.
 
 ----
 
@@ -279,17 +279,17 @@ Here are a few examples this server-side code block:
 .. code-block:: python
 
    @server.on("string_sent")
-   def on_string_sent(client_data, message: str):
+   def on_string_sent(client: hisock.ClientInfo, message: str):
        """``message`` will be of type ``string``"""
        ...
 
    @server.on("integer_sent")
-   def on_integer_sent(client_data, integer: int):
+   def on_integer_sent(client: hisock.ClientInfo, integer: int):
       """``integer`` will be of type ``int``"""
       ...
 
    @server.on("dictionary_sent")
-   def on_dictionary_sent(client_data, dictionary: dict):
+   def on_dictionary_sent(client: hisock.ClientInfo, dictionary: dict):
       """``dictionary`` will be of type ``dict``"""
       ...
 
@@ -307,7 +307,7 @@ Remember where I said the ``on`` decorator will call the function with a *maximu
 
 In :mod:`HiSock` with an _unreserved_ event, the function to handle it can be called with the maximum number of parameters *or less*. Note that in a reserved event, dynamic arguments doesn't apply.
 
-As an example, for the server: If an event has 1 argument, it will only be called with the client data. If it has 2 arguments, it will be called with the client data and the message. If it has 0 arguments, it'll be called as a void (no arguments).
+As an example, for the server: If an event has 1 argument, it will only be called with the client info. If it has 2 arguments, it will be called with the client info and the message. If it has 0 arguments, it'll be called as a void (no arguments).
 
 Data can be sent similarly. If there is no data sent, the server will receive the equivalent of ``None`` for the type-casted data.
 
@@ -316,16 +316,16 @@ Here are a few examples of this with a server-side code block.
 .. code-block:: python
 
    @server.on("event1")
-   def on_event1(client_data, message: str):
-       print(f"I have {client_data=} and {message=} as a string!")
+   def on_event1(client: hisock.ClientInfo, message: str):
+       print(f"I have {client=} and {message=} as a string!")
 
    @server.on("event2")
-   def on_event2(client_data, message: int):
-       print(f"I have {client_data=} and {message=} as an integer! {message+1=}")
+   def on_event2(client: hisock.ClientInfo, message: int):
+       print(f"I have {client=} and {message=} as an integer! {message+1=}")
 
    @server.on("event3")
-   def on_event3(client_data):
-       print(f"I only have {client_data=}!")
+   def on_event3(client: hisock.ClientInfo):
+       print(f"I only have {client=}!")
 
    @server.on("event4")
    def on_event4():
