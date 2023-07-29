@@ -221,52 +221,6 @@ def _removeprefix(
     return string[:]
 
 
-def _dict_tupkey_lookup(
-    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
-) -> Any:
-    """
-    Returns the value of the dict looked up,
-    given a key that is part of a key-tuple
-    """
-
-    for key, value in _dict.items():
-        if idx_to_match is None:
-            if multikey in key:
-                yield value
-        elif isinstance(idx_to_match, int) and multikey == key[idx_to_match]:
-            yield value
-
-def _find_dict_clients(dict_: dict, client: ClientInfo, search_by: Optional[Literal["name", "group"]] = None):
-    if search_by is None:
-        return dict_[client]
-    
-    new_key = None
-    if search_by == "name":
-        new_key = client.name
-    elif search_by == "group":
-        new_key = client.group
-    
-    for key, value in dict_.items():
-        if key.as_dict()[search_by] == new_key:
-            yield value
-
-
-def _dict_tupkey_lookup_key(
-    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
-) -> Any:
-    """
-    Returns the key of the dict looked up,
-    given a key that is part of a key-tuple
-    """
-
-    for key in _dict.keys():
-        if idx_to_match is None:
-            if multikey in key:
-                yield key
-        elif isinstance(idx_to_match, int) and multikey == key[idx_to_match]:
-            yield key
-
-
 def _str_type_to_type_annotations_dict(annotations_dict: dict):
     """
     When getting the annotations, they return as a string representation of the type.

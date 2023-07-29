@@ -5,6 +5,10 @@ Not an advanced example, but gets the main advantages of hisock across
 
 # Builtin module
 import time
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 from hisock import connect, get_local_ip
 
@@ -38,7 +42,7 @@ def run():
     client = connect((server_to_connect, port), name=name, group=group)
     join_time = time.time()
 
-    @client.on("hello_message")
+    @client.on("hello_message", threaded=True)
     def handle_hello(msg: str):
         print("Thanks, server, for sending a hello, just for me!")
         print(

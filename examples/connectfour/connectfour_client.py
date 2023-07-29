@@ -1,6 +1,10 @@
 import abc
 import string
 import time
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 import hisock
 import _shared as shared

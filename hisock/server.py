@@ -30,8 +30,6 @@ try:
         ClientInfo,
         Sendable,
         _removeprefix,
-        _dict_tupkey_lookup,
-        _find_dict_clients,
         _type_cast,
         receive_message,
         make_header,
@@ -49,8 +47,6 @@ except ImportError:
         ClientInfo,
         Sendable,
         _removeprefix,
-        _dict_tupkey_lookup,
-        _find_dict_clients,
         _type_cast,
         receive_message,
         make_header,
@@ -465,20 +461,23 @@ class HiSockServer(_HiSockBase):
            If the group does not exist, an empty iterable is returned.
         """
 
-        return _find_dict_clients(self.clients_rev, ClientInfo(None, group=group), search_by="group")
+        return map(lambda client: self.clients_rev[client], filter(lambda client: client.group == group, self.clients_rev))
 
-    def get_group(self, group: str) -> list[ClientInfo]:
+    def get_group(self, group: Union[ClientInfo, str]) -> list[ClientInfo]:
         """
         Gets all clients from a specific group.
 
-        :param group: A string, representing the group to look up
-        :type group: str
+        :param group: Either a ClientInfo representing a client in a group, or a string, representing the group to look up
+        :type group: Union[ClientInfo, str]
 
         :raises GroupNotFound: Group does not exist
 
         :return: A list of ClientInfo
-        :rtype: list
+        :rtype: list[ClientInfo]
         """
+
+        if isinstance(group, ClientInfo):
+            group = group.group
 
         group_clients = []  # Will be a list of dicts
 
@@ -497,8 +496,8 @@ class HiSockServer(_HiSockBase):
             it will search through the ClientInfo for the key, and output it to a list
         :type key: Union[Callable, str], optional
 
-        :return: A list of either a dictionary of ClientInfo, or the content as filtered by the key
-        :rtype: list[dict, ...]
+        :return: A list of either ClientInfo or the content as filtered by the key
+        :rtype: list[Union[ClientInfo, tuple[str, int], str]]
         """
 
         clients = list(self.clients.values())
@@ -581,7 +580,7 @@ class HiSockServer(_HiSockBase):
             client.sendall(content_header + content)
 
     def send_group(
-        self, group: str, command: str, content: Sendable = None
+        self, group: Union[ClientInfo, str], command: str, content: Sendable = None
     ):
         """
         Sends data to a specific group.
@@ -589,7 +588,7 @@ class HiSockServer(_HiSockBase):
         servers, as it allows clients to be divided, which allows clients to
         be sent different data for different purposes.
 
-        :param group: A string representing the group to send data to.
+        :param group: Either a ClientInfo representing a client in a group, or a string representing the group to send data to.
         :type group: str
         :param command: A string, containing the command to send
         :type command: str
@@ -599,6 +598,9 @@ class HiSockServer(_HiSockBase):
         :raises TypeError: If the group does not exist, or the client
             is not in a group (``ClientInfo``).
         """
+
+        if isinstance(group, ClientInfo):
+            group = group.group
 
         data_to_send = (
             b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
@@ -632,26 +634,6 @@ class HiSockServer(_HiSockBase):
         self._get_client_socket(client).sendall(
             content_header + data_to_send
         )
-
-    def _send_group_raw(self, group: str, content: Sendable = None):
-        """
-        Sends data to a specific group, without commands.
-        Groups are recommended for more complicated servers or multipurpose
-        servers, as it allows clients to be divided, which allows clients to
-        be sent different data for different purposes.
-        :param group: A string representing the group to send data to.
-        :type group: str
-        :param content: A bytes-like object, with the content/message
-            to send
-        :type content: Union[bytes, dict]
-        :raise TypeError: The group does not exist, or the client
-            is not in a group (``ClientInfo``)
-        """
-
-        data_to_send = self._send_type_cast(content)
-        content_header = make_header(data_to_send, self.header_len)
-        for client in self._get_group_sockets(group):
-            client.sendall(content_header + data_to_send)
 
     # Disconnect
 
@@ -1128,12 +1110,12 @@ if __name__ == "__main__":
     @server.on("ping")
     def on_ping(client: ClientInfo):
         print(f"{client.name} pinged!")
-        server.send_client(client.ip, "pong")
+        server.send_client(client, "pong")
 
     @server.on("get_all_clients")
     def on_all_clients(client: ClientInfo):
         print(f"{client.name} asked for all clients!")
-        server.send_client(client.ip, "all_clients", server.get_all_clients())
+        server.send_client(client, "all_clients", server.get_all_clients())
 
     @server.on("broadcast_message")
     def on_broadcast_message(client: ClientInfo, message: str):
@@ -1152,7 +1134,7 @@ if __name__ == "__main__":
         print(f"{client.name} set a timer for {seconds} seconds!")
         __import__("time").sleep(seconds)
         print(f"{client.name}'s timer is done!")
-        server.send_client(client.ip, "timer_done")
+        server.send_client(client, "timer_done")
 
     @server.on("commit_genocide")
     def on_commit_genocide():

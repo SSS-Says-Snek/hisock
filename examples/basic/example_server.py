@@ -7,6 +7,9 @@ Not an advanced example, but gets the main advantages of hisock across
 import sys
 import time
 import random
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 from hisock import ClientInfo, start_server, get_local_ip
 

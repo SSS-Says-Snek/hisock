@@ -1,5 +1,9 @@
 import _shared as shared
 import random
+import sys
+import os
+
+sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 from hisock import HiSockServer, ClientInfo, input_server_config
 
@@ -110,6 +114,7 @@ def on_replay(client: ClientInfo):
 
 @server.on("player_exit")
 def on_player_exit(client: ClientInfo):
+    print("EEE")
     clt_pair = data.find_client(client)
     server.disconnect_client(clt_pair[0])
     server.disconnect_client(clt_pair[1])

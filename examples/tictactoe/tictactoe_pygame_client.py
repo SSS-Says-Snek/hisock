@@ -1,6 +1,11 @@
 """HiSock TicTacToe client side (GUI)"""
 
 ### Setup ###
+import os
+import sys
+
+sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
+
 import hisock
 import pygame
 import pygame_gui
@@ -216,8 +221,8 @@ class ConnectToServerState(BaseState):
 
 
 class GameState(BaseState):
-    def __init__(self, client):
-        self.client: hisock.client.ThreadedHiSockClient = client
+    def __init__(self, client: hisock.client.ThreadedHiSockClient):
+        self.client = client
 
         # Joining
         @client.on("join_result")
@@ -265,7 +270,7 @@ class GameState(BaseState):
             TicTacToe.our_turn = True
 
         # The client will be threaded, no need for `update` every iteration
-        client.start_client()
+        client.start()
 
     def draw_status_text(self):
         text_display(

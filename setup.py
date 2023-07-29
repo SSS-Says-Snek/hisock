@@ -12,7 +12,7 @@ import shutil
 import pathlib
 import re
 import subprocess
-from distutils.core import Command
+from setuptools import Command
 from setuptools import setup
 
 ROOT = pathlib.Path(__file__).parent  # pathlib.Path object of root (/hisock/)
