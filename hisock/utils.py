@@ -20,8 +20,8 @@ import sys
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from re import search
-from typing import (Dict, List,  # Must use these for bare annots
-                    Optional, Type, Union)
+from typing import (Dict, List, Optional,  # Must use these for bare annots
+                    Type, Union)
 
 
 # Custom exceptions

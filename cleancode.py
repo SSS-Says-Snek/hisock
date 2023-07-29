@@ -57,7 +57,8 @@ def cleanup_code():
     """
     for filepath in glob.iglob("**/*.py", recursive=True):
         path = pathlib.Path(os.getcwd(), filepath)
-        if "venv" in str(path):
+        if "venv" in str(path) or path.name == "__init__.py":
+            print(str(path))
             continue
 
         if black.format_file_in_place(path, False, black.FileMode(line_length=119), black.WriteBack.YES):
@@ -69,11 +70,20 @@ def cleanup_code():
     # check_header_string()
 
     print("\n====================== Reorganizing imports ======================")
-    subprocess.run([sys.executable, "-m", "isort", "."])
+    subprocess.run([sys.executable, "-m", "isort", ".", "--skip", "__init__.py"])
 
     print("\n====================== Adding future imports ======================")
     subprocess.run(
-        [sys.executable, "-m", "isort", ".", "--add-import", "from __future__ import annotations"],
+        [
+            sys.executable,
+            "-m",
+            "isort",
+            ".",
+            "--skip",
+            "__init__.py",
+            "--add-import",
+            "from __future__ import annotations",
+        ],
         stdout=subprocess.DEVNULL,
     )
     print("Done!")
