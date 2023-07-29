@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-
 PIECE_COLORS = {
     -1: (50, 50, 50),  # NO_PIECE
     0: (255, 0, 0),  # RED
@@ -20,9 +19,7 @@ class BoardEnum:
 
 class Board:
     def __init__(self):
-        self.board: list[list[int]] = [
-            [BoardEnum.NO_PIECE for _ in range(7)] for _ in range(6)
-        ]
+        self.board: list[list[int]] = [[BoardEnum.NO_PIECE for _ in range(7)] for _ in range(6)]
         self.win_vectors = (
             (0, -1),
             (1, -1),
@@ -60,7 +57,5 @@ class Board:
         self.board[y][x] = piece_type
 
     def reset(self):
-        self.board = [
-            [BoardEnum.NO_PIECE for _ in range(7)] for _ in range(6)
-        ]
+        self.board = [[BoardEnum.NO_PIECE for _ in range(7)] for _ in range(6)]
         self.total_moves = 0

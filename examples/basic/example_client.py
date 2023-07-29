@@ -3,10 +3,12 @@ Basic example of the structure of `hisock`. This is the client script.
 Not an advanced example, but gets the main advantages of hisock across
 """
 
+from __future__ import annotations
+
+import os
+import sys
 # Builtin module
 import time
-import sys
-import os
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
@@ -14,9 +16,7 @@ from hisock import connect, get_local_ip
 
 
 def run():
-    server_to_connect = input(
-        "Enter server IP to connect to (Press enter for default of your local IP): "
-    )
+    server_to_connect = input("Enter server IP to connect to (Press enter for default of your local IP): ")
     port = input("Enter Server port number (Press enter for default of 6969): ")
 
     if server_to_connect == "":
@@ -30,9 +30,7 @@ def run():
     name = input("Name? (Press enter for no name) ")
     group = input("Group? (Press enter for no group) ")
 
-    print(
-        "======================================= ESTABLISHING CONNECTION ======================================="
-    )
+    print("======================================= ESTABLISHING CONNECTION =======================================")
 
     if name == "":
         name = None
@@ -49,9 +47,7 @@ def run():
             f"Looks like, the message was sent on timestamp {msg}, "
             f"which is just {round(float(msg) - join_time, 6) * 1000} milliseconds since the connection!"
         )
-        print(
-            "In response, I'm going to send the server a request to do some processing"
-        )
+        print("In response, I'm going to send the server a request to do some processing")
 
         client.send("processing1", b"randnum**2")
         result = client.recv("something", int)

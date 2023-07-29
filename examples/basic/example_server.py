@@ -3,15 +3,17 @@ Basic example of the structure of `hisock`. This is the server script.
 Not an advanced example, but gets the main advantages of hisock across
 """
 
+from __future__ import annotations
+
+import os
+import random
 # Builtin modules
 import sys
 import time
-import random
-import os
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
-from hisock import ClientInfo, start_server, get_local_ip
+from hisock import ClientInfo, get_local_ip, start_server
 
 
 def run():
@@ -36,9 +38,7 @@ def run():
 
         print("I'm gonna send them a quick hello message")
 
-        server.send_client(
-            client, "hello_message", str(time.time()).encode()
-        )
+        server.send_client(client, "hello_message", str(time.time()).encode())
 
     @server.on("processing1")
     def process(client: ClientInfo, process_request: str):

@@ -1,13 +1,16 @@
 """HiSock TicTacToe server side"""
 
 ### Setup ###
+from __future__ import annotations
+
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
-import hisock
 from shared import get_ip_addr_port, log_error
+
+import hisock
 
 # Setup server
 print("TicTacToe Server")
@@ -113,19 +116,9 @@ class TicTacToe:
                 return first_condition
 
         # Diagonal (2/8)
-        if (
-            (first_condition := TicTacToe.board[0][0])
-            == TicTacToe.board[1][1]
-            == TicTacToe.board[2][2]
-            != " "
-        ):
+        if (first_condition := TicTacToe.board[0][0]) == TicTacToe.board[1][1] == TicTacToe.board[2][2] != " ":
             return first_condition
-        if (
-            (first_condition := TicTacToe.board[0][2])
-            == TicTacToe.board[1][1]
-            == TicTacToe.board[2][0]
-            != " "
-        ):
+        if (first_condition := TicTacToe.board[0][2]) == TicTacToe.board[1][1] == TicTacToe.board[2][0] != " ":
             return first_condition
 
         return ""
@@ -206,9 +199,7 @@ def client_joined(client_info: dict):
             "worked": True,
             "message": "Joined server",
             "player_info": {"name": client_info["name"]},
-            "other_player": Data.paired_clients[0]
-            if len(Data.paired_clients) > 1
-            else None,
+            "other_player": Data.paired_clients[0] if len(Data.paired_clients) > 1 else None,
         },
     )
     server.send_all_clients(
@@ -222,10 +213,7 @@ def client_joined(client_info: dict):
     )
 
     # Server print
-    print(
-        f'"{client_info["name"]}"'
-        f'({hisock.utils.iptup_to_str(client_info["ip"])}) joined the server'
-    )
+    print(f'"{client_info["name"]}"' f'({hisock.utils.iptup_to_str(client_info["ip"])}) joined the server')
 
     # Start game if two players are paired
     if len(Data.paired_clients) != 2:

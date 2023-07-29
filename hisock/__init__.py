@@ -6,33 +6,15 @@ Copyright SSS_Says_Snek, 2022-present
 ====================================
 """
 
-from hisock import constants 
-from hisock import utils
-
-from hisock import client
-from hisock import server
-
-from hisock.constants import __version__
-
-from .server import (
-    start_server,
-    start_threaded_server,
-    HiSockServer,
-    ThreadedHiSockServer,
-)   
-from .client import (
-    connect,
-    threaded_connect,
-    HiSockClient,
-    ThreadedHiSockClient,
-)   
-from .utils import (
-    ClientInfo,
-    get_local_ip,
-    input_client_config,
-    input_server_config,
-    ipstr_to_tup,
-    iptup_to_str,
-)
+from __future__ import annotations
 
 import examples
+from hisock import client, constants, server, utils
+from hisock.constants import __version__
+
+from .client import (HiSockClient, ThreadedHiSockClient, connect,
+                     threaded_connect)
+from .server import (HiSockServer, ThreadedHiSockServer, start_server,
+                     start_threaded_server)
+from .utils import (ClientInfo, get_local_ip, input_client_config,
+                    input_server_config, ipstr_to_tup, iptup_to_str)

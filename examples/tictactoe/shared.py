@@ -1,15 +1,19 @@
 """HiSock TicTacToe client and server shared code"""
 
 
+from __future__ import annotations
+
 ### Setup ###
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
-import hisock
 import traceback
 from typing import Union
+
+import hisock
+
 
 ### Functions ###
 def get_username() -> str:
@@ -27,9 +31,7 @@ def get_username() -> str:
             continue
 
         if not username.strip("_").isalnum():
-            print(
-                "The username must be made up of only alpha numeric characters and underscores"
-            )
+            print("The username must be made up of only alpha numeric characters and underscores")
             continue
 
         break

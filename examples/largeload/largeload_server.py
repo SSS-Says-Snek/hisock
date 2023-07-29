@@ -1,5 +1,7 @@
-import sys
+from __future__ import annotations
+
 import os
+import sys
 import time
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
@@ -9,8 +11,11 @@ print(hisock.__file__)
 
 server = hisock.HiSockServer(("192.168.1.126", 8888))
 
+
 @server.on("join")
-def on_join(_): pass
+def on_join(_):
+    pass
+
 
 @server.on("large_load")
 def on_large_load(client: hisock.ClientInfo, data: list):

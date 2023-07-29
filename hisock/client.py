@@ -13,52 +13,30 @@ Copyright SSS_Says_Snek, 2021-present
 # Imports
 from __future__ import annotations  # Remove when 3.10 is used by majority
 
-import socket
-import json  # Handle sending dictionaries
 import errno  # Handle fatal errors with the server
+import json  # Handle sending dictionaries
+import socket
 import sys  # Utilize stderr
 import threading  # Threaded client and decorators
 import traceback  # Error handling
-from typing import Callable, Union  # Type hints
 from ipaddress import IPv4Address  # Comparisons
 from time import time  # Unix timestamp support
+from typing import Callable, Union  # Type hints
 
 try:
     # Pip builds require relative import
-    from .utils import (
-        ClientException,
-        ClientNotFound,
-        ServerException,
-        ServerNotRunning,
-        MessageCacheMember,
-        ClientInfo,
-        Sendable,
-        _removeprefix,
-        _recv_exactly,
-        _type_cast,
-        make_header,
-        iptup_to_str,
-        validate_ipv4,
-    )
     from ._shared import _HiSockBase
+    from .utils import (ClientException, ClientInfo, ClientNotFound,
+                        MessageCacheMember, Sendable, ServerException,
+                        ServerNotRunning, _recv_exactly, _removeprefix,
+                        _type_cast, iptup_to_str, make_header, validate_ipv4)
 except ImportError:
     # Relative import doesn't work for non-pip builds
-    from utils import (
-        ClientException,
-        ClientNotFound,
-        ServerException,
-        ServerNotRunning,
-        MessageCacheMember,
-        ClientInfo,
-        Sendable,
-        _removeprefix,
-        _recv_exactly,
-        _type_cast,
-        make_header,
-        iptup_to_str,
-        validate_ipv4,
-    )
     from _shared import _HiSockBase
+    from utils import (ClientException, ClientInfo, ClientNotFound,
+                       MessageCacheMember, Sendable, ServerException,
+                       ServerNotRunning, _recv_exactly, _removeprefix,
+                       _type_cast, iptup_to_str, make_header, validate_ipv4)
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -238,9 +216,7 @@ class HiSockClient(_HiSockBase):
         """
 
         if self.connected:
-            raise ClientException(
-                f"Client is already connected! (connected {time() - self.connect_time} seconds ago)"
-            )
+            raise ClientException(f"Client is already connected! (connected {time() - self.connect_time} seconds ago)")
 
         hello_dict = {"name": self.name, "group": self.group}
         self._send_raw(f"$CLTHELLO${json.dumps(hello_dict)}")
@@ -255,9 +231,7 @@ class HiSockClient(_HiSockBase):
 
     # On decorator
 
-    def on(
-        self, command: str, threaded: bool = False, override: bool = False
-    ) -> Callable:
+    def on(self, command: str, threaded: bool = False, override: bool = False) -> Callable:
         """
         A decorator that adds a function that gets called when the client
         receives a matching command.
@@ -329,9 +303,7 @@ class HiSockClient(_HiSockBase):
 
         return self.cache[idx]
 
-    def get_client(
-        self, client: Union[tuple[str, int], str]
-    ) -> ClientInfo:
+    def get_client(self, client: Union[tuple[str, int], str]) -> ClientInfo:
         """
         Gets the client data for a client.
 
@@ -365,9 +337,7 @@ class HiSockClient(_HiSockBase):
         if "traceback" in response:
             if response["traceback"] == "$NOEXIST$":
                 raise ClientNotFound(f"Client {client} not connected to the server.")
-            raise ServerException(
-                f"Failed to get client from server: {response['traceback']}"
-            )
+            raise ServerException(f"Failed to get client from server: {response['traceback']}")
 
         # Type cast
         return ClientInfo.from_dict(response)
@@ -404,9 +374,7 @@ class HiSockClient(_HiSockBase):
         :type content: Sendable, optional
         """
 
-        data_to_send = (
-            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
-        )
+        data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         self.sock.sendall(content_header + data_to_send)
 
@@ -480,9 +448,7 @@ class HiSockClient(_HiSockBase):
             try:
                 content_header = _recv_exactly(self.sock, self.header_len, 16)
             except ConnectionResetError:
-                raise ServerNotRunning(
-                    "Server has stopped running, aborting..."
-                ) from None
+                raise ServerNotRunning("Server has stopped running, aborting...") from None
             except ConnectionAbortedError:
                 # Keepalive timeout reached
                 self.closed = True
@@ -494,7 +460,7 @@ class HiSockClient(_HiSockBase):
                 # Happens when the client is closing the connection while receiving
                 # data. The content header will be empty.
                 return
-            
+
             data = _recv_exactly(self.sock, int(content_header), self.RECV_BUFFERSIZE)
 
             self._receiving_data = False
@@ -556,9 +522,7 @@ class HiSockClient(_HiSockBase):
             elif not data.startswith(b"$CMD$"):
                 if "*" not in self.funcs:
                     return
-                self._call_wildcard_function(
-                    client_info=None, command=None, content=data
-                )
+                self._call_wildcard_function(client_info=None, command=None, content=data)
                 return
 
             has_listener = False  # For cache
@@ -597,20 +561,14 @@ class HiSockClient(_HiSockBase):
             # No listener found
             if not has_listener and "*" in self.funcs:
                 # No recv and no catchall. A command and some data.
-                self._call_wildcard_function(
-                    client_info=None, command=command, content=content
-                )
+                self._call_wildcard_function(client_info=None, command=command, content=content)
 
             # Caching
             self._cache(has_listener, command, content, data, content_header)
 
         except IOError as e:
             # Normal, means message has ended
-            if not (
-                e.errno != errno.EAGAIN
-                and e.errno != errno.EWOULDBLOCK
-                and not self.closed
-            ):
+            if not (e.errno != errno.EAGAIN and e.errno != errno.EWOULDBLOCK and not self.closed):
                 return
 
             # Fatal error, abort client
@@ -720,9 +678,7 @@ class ThreadedHiSockClient(HiSockClient):
         For documentation, see :meth:`HiSockClient.start`.
         """
 
-        self._thread = threading.Thread(
-            target=self._start, args=(callback, error_handler)
-        )
+        self._thread = threading.Thread(target=self._start, args=(callback, error_handler))
         self._thread.start()
 
 
@@ -786,17 +742,11 @@ if __name__ == "__main__":
 
     @client.on("client_connect")
     def on_connect(client: ClientInfo):
-        print(
-            f"{client.name} has joined! "
-            f"Their IP is {client.ipstr}. "
-            f'Their group is {client.group}.'
-        )
+        print(f"{client.name} has joined! " f"Their IP is {client.ipstr}. " f"Their group is {client.group}.")
 
     @client.on("client_disconnect", override=True)
     def on_disconnect(leave_data: dict):
-        print(
-            f'{leave_data["name"]} disconnected from the server because {leave_data["reason"]} :('
-        )
+        print(f'{leave_data["name"]} disconnected from the server because {leave_data["reason"]} :(')
 
     @client.on("force_disconnect")
     def on_force_disconnect():
@@ -852,9 +802,7 @@ if __name__ == "__main__":
             elif choice == "genocide":
                 input("You will kill many people. Do you wish to proceed? ")
                 print("Just kidding, your input had no effect. Time for genocide!")
-                client.send(
-                    "set_timer", input("How many seconds for the genocide to last?")
-                )
+                client.send("set_timer", input("How many seconds for the genocide to last?"))
                 client.recv("timer_done")
                 print("Genociding...")
                 client.send("commit_genocide")
@@ -866,13 +814,7 @@ if __name__ == "__main__":
                 )
                 client.send(
                     "uncaught_command",
-                    "Random data: "
-                    + "".join(
-                        [
-                            chr(choice((randint(65, 90), randint(97, 122))))
-                            for _ in range(100)
-                        ]
-                    ),
+                    "Random data: " + "".join([chr(choice((randint(65, 90), randint(97, 122)))) for _ in range(100)]),
                 )
             else:
                 print("Invalid choice.")

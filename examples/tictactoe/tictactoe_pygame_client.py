@@ -1,16 +1,20 @@
 """HiSock TicTacToe client side (GUI)"""
 
 ### Setup ###
+from __future__ import annotations
+
 import os
 import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
-import hisock
+from typing import Union
+
 import pygame
 import pygame_gui
 from shared import connect_to_server, log_error
-from typing import Union
+
+import hisock
 
 # Pygame setup
 SCREEN_SIZE = (400, 600)
@@ -93,9 +97,7 @@ def text_display(message: str, position: tuple, size: int = 48):
         if (position, message) in Cache.text_cache:
             return Cache.text_cache[(position, message)]
 
-        text_surface = pygame.font.SysFont("Arial", size).render(
-            message, False, "black"
-        )
+        text_surface = pygame.font.SysFont("Arial", size).render(message, False, "black")
         text_rect = text_surface.get_rect(center=position)
 
         # Add to cache
@@ -120,9 +122,7 @@ def get_button_rect(position: tuple, size: tuple) -> pygame.Rect:
     return button_rect
 
 
-def button_display(
-    position: tuple, size: tuple, color: Union[tuple, str], border_width: int = 0
-):
+def button_display(position: tuple, size: tuple, color: Union[tuple, str], border_width: int = 0):
     """
     Draw a button on the screen
     Returns if the button has been clicked or not
@@ -131,10 +131,7 @@ def button_display(
     button_rect = get_button_rect(position, size)
     pygame.draw.rect(screen, color, button_rect, border_width)
 
-    return (
-        button_rect.collidepoint(pygame.mouse.get_pos())
-        and pygame.mouse.get_pressed()[0]
-    )
+    return button_rect.collidepoint(pygame.mouse.get_pos()) and pygame.mouse.get_pressed()[0]
 
 
 ### Pygame states ###
@@ -169,13 +166,7 @@ class ConnectToServerState(BaseState):
 
         # Set allowed characters to be alphanum with an underscore
         alpha_num_underscore = [
-            char
-            for char in str(
-                "abcdefghijklmnopqrstuvwxyz"
-                + "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
-                + "0123456789"
-                + "_"
-            )
+            char for char in str("abcdefghijklmnopqrstuvwxyz" + "ABCDEFGHIJKLMNOPQRSTUVWXYZ" + "0123456789" + "_")
         ]
         self.username_input.set_allowed_characters(alpha_num_underscore)
         self.server_input.set_allowed_characters(alpha_num_underscore + [".", ":"])
@@ -273,22 +264,14 @@ class GameState(BaseState):
         client.start()
 
     def draw_status_text(self):
-        text_display(
-            f"Your name: {self.client.name}", (SCREEN_SIZE[0] // 2, 24), size=24
-        )
+        text_display(f"Your name: {self.client.name}", (SCREEN_SIZE[0] // 2, 24), size=24)
         if TicTacToe.our_turn:
-            text_display(
-                "Your turn, make a move!", (SCREEN_SIZE[0] // 2, 24 + 48), size=24
-            )
+            text_display("Your turn, make a move!", (SCREEN_SIZE[0] // 2, 24 + 48), size=24)
         else:
-            text_display(
-                "Waiting for opponent move...", (SCREEN_SIZE[0] // 2, 24 + 48), size=24
-            )
+            text_display("Waiting for opponent move...", (SCREEN_SIZE[0] // 2, 24 + 48), size=24)
 
     def available_space_button(self, position: tuple):
-        button_rect = get_button_rect(
-            position, (BOARD_SIZE[0] // 3, BOARD_SIZE[1] // 3)
-        )
+        button_rect = get_button_rect(position, (BOARD_SIZE[0] // 3, BOARD_SIZE[1] // 3))
         # Collision checking
         mouse_pos = pygame.mouse.get_pos()
         if pygame.mouse.get_pressed()[0] and button_rect.collidepoint(mouse_pos):
@@ -315,9 +298,7 @@ class GameState(BaseState):
 
                 position_center = (
                     (BOARD_SIZE[0] // 3) * (col_idx + 1) - BOARD_SIZE[0] // 6,
-                    (BOARD_SIZE[1] // 3) * (row_idx + 1)
-                    - BOARD_SIZE[1] // 6
-                    + TOP_MARGIN,
+                    (BOARD_SIZE[1] // 3) * (row_idx + 1) - BOARD_SIZE[1] // 6 + TOP_MARGIN,
                 )
 
                 # Draw an X or O
@@ -352,9 +333,7 @@ class GameState(BaseState):
 
     def draw_game_over(self):
         text_display("Game over!", (SCREEN_SIZE[0] // 2, 24), size=24)
-        text_display(
-            TicTacToe.game_over_message, (SCREEN_SIZE[0] // 2, 24 * 2), size=24
-        )
+        text_display(TicTacToe.game_over_message, (SCREEN_SIZE[0] // 2, 24 * 2), size=24)
         text_display("Go again?", (SCREEN_SIZE[0] // 2, 24 * 4), size=24)
         if button_display((SCREEN_SIZE[0] // 2, 24 * 6), size=(200, 50), color="red"):
             self.client.send("go_again", {"go_again": False})

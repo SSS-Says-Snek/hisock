@@ -12,48 +12,27 @@ Copyright SSS_Says_Snek 2021-present
 # Imports
 from __future__ import annotations  # Remove when 3.10 is used by majority
 
-import socket
-import select  # Handle multiple clients at once
 import json  # Handle sending dictionaries
+import select  # Handle multiple clients at once
+import socket
 import threading  # Threaded server and decorators
-import warnings  # Non-severe errors
-from typing import Callable, Literal, Optional, Union, Iterable  # Type hints
 from ipaddress import IPv4Address  # Comparisons
+from typing import Callable, Iterable, Optional, Union  # Type hints
 
 try:
     # Pip builds require relative import
-    from .utils import (
-        ServerException,
-        ClientException,
-        ClientNotFound,
-        GroupNotFound,
-        ClientInfo,
-        Sendable,
-        _removeprefix,
-        _type_cast,
-        receive_message,
-        make_header,
-        validate_ipv4,
-        ipstr_to_tup,
-    )
     from ._shared import _HiSockBase
+    from .utils import (ClientException, ClientInfo, ClientNotFound,
+                        GroupNotFound, Sendable, ServerException,
+                        _removeprefix, _type_cast, ipstr_to_tup, make_header,
+                        receive_message, validate_ipv4)
 except ImportError:
     # Relative import doesn't work for non-pip builds
-    from utils import (
-        ServerException,
-        ClientException,
-        ClientNotFound,
-        GroupNotFound,
-        ClientInfo,
-        Sendable,
-        _removeprefix,
-        _type_cast,
-        receive_message,
-        make_header,
-        validate_ipv4,
-        ipstr_to_tup,
-    )
     from _shared import _HiSockBase
+    from utils import (ClientException, ClientInfo, ClientNotFound,
+                       GroupNotFound, Sendable, ServerException, _removeprefix,
+                       _type_cast, ipstr_to_tup, make_header, receive_message,
+                       validate_ipv4)
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -173,9 +152,7 @@ class HiSockServer(_HiSockBase):
         self._keepalive = keepalive
 
         if self._keepalive:
-            keepalive_thread = threading.Thread(
-                target=self._keepalive_thread, daemon=True
-            )
+            keepalive_thread = threading.Thread(target=self._keepalive_thread, daemon=True)
             keepalive_thread.start()
 
     def __str__(self):
@@ -244,9 +221,7 @@ class HiSockServer(_HiSockBase):
 
     # Internal methods
 
-    def _new_client_connection(
-        self, connection: socket.socket, address: tuple[str, int]
-    ):
+    def _new_client_connection(self, connection: socket.socket, address: tuple[str, int]):
         """
         Handle the client hello handshake.
 
@@ -355,9 +330,7 @@ class HiSockServer(_HiSockBase):
 
     # On decorator
 
-    def on(
-        self, command: str, threaded: bool = False, override: bool = False
-    ) -> Callable:
+    def on(self, command: str, threaded: bool = False, override: bool = False) -> Callable:
         """
         A decorator that adds a function that gets called when the server
         receives a matching command.
@@ -415,7 +388,7 @@ class HiSockServer(_HiSockBase):
         return self._on(self, command, threaded, override)
 
     # Getters
-    
+
     def _get_clientinfo(self, client: Union[tuple[str, int], str, ClientInfo]):
         if isinstance(client, ClientInfo):
             return client
@@ -425,7 +398,7 @@ class HiSockServer(_HiSockBase):
                 return client_info
             elif isinstance(client, str) and client_info.name == client:
                 return client_info
-        
+
         return None
 
     def _get_client_socket(self, client: Union[tuple[str, int], str, ClientInfo]) -> Optional[socket.socket]:
@@ -461,7 +434,9 @@ class HiSockServer(_HiSockBase):
            If the group does not exist, an empty iterable is returned.
         """
 
-        return map(lambda client: self.clients_rev[client], filter(lambda client: client.group == group, self.clients_rev))
+        return map(
+            lambda client: self.clients_rev[client], filter(lambda client: client.group == group, self.clients_rev)
+        )
 
     def get_group(self, group: Union[ClientInfo, str]) -> list[ClientInfo]:
         """
@@ -510,9 +485,7 @@ class HiSockServer(_HiSockBase):
                 filter_clients.append(filter_client.as_dict()[key])
         return filter_clients
 
-    def get_client(
-        self, client: Union[str, tuple[str, int]]
-    ) -> ClientInfo:
+    def get_client(self, client: Union[str, tuple[str, int]]) -> ClientInfo:
         """
         Gets the client data for a client from a name or tuple in the form of (ip, port).
 
@@ -523,7 +496,7 @@ class HiSockServer(_HiSockBase):
         :raises UserWarning: Using client name, and more than one client with
             the same name is detected.
         """
-        
+
         client_socket = self._get_client_socket(client)
         if client_socket is None:
             raise ClientNotFound(f"Client {client} does not exist.")
@@ -552,9 +525,7 @@ class HiSockServer(_HiSockBase):
         :type content: Sendable, optional
         """
 
-        data_to_send = (
-            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
-        )
+        data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         for client in self.clients:
             client.sendall(content_header + data_to_send)
@@ -579,9 +550,7 @@ class HiSockServer(_HiSockBase):
         for client in self.clients:
             client.sendall(content_header + content)
 
-    def send_group(
-        self, group: Union[ClientInfo, str], command: str, content: Sendable = None
-    ):
+    def send_group(self, group: Union[ClientInfo, str], command: str, content: Sendable = None):
         """
         Sends data to a specific group.
         Groups are recommended for more complicated servers or multipurpose
@@ -602,9 +571,7 @@ class HiSockServer(_HiSockBase):
         if isinstance(group, ClientInfo):
             group = group.group
 
-        data_to_send = (
-            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
-        )
+        data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
         for client in self._get_group_sockets(group):
             client.sendall(content_header + data_to_send)
@@ -627,13 +594,9 @@ class HiSockServer(_HiSockBase):
             the same name is detected.
         """
 
-        data_to_send = (
-            b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
-        )
+        data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + self._send_type_cast(content)
         content_header = make_header(data_to_send, self.header_len)
-        self._get_client_socket(client).sendall(
-            content_header + data_to_send
-        )
+        self._get_client_socket(client).sendall(content_header + data_to_send)
 
     # Disconnect
 
@@ -709,9 +672,7 @@ class HiSockServer(_HiSockBase):
         if self.closed:
             return
 
-        read_socket, write_socket, exception_socket = select.select(
-            self._sockets_list, [], self._sockets_list
-        )
+        read_socket, write_socket, exception_socket = select.select(self._sockets_list, [], self._sockets_list)
 
         client_socket: socket.socket
         for client_socket in read_socket:
@@ -726,9 +687,7 @@ class HiSockServer(_HiSockBase):
                     if client_socket not in self.clients:
                         continue
 
-                    self.disconnect_client(
-                        self.clients[client_socket], force=True, call_func=False
-                    )
+                    self.disconnect_client(self.clients[client_socket], force=True, call_func=False)
                     continue
 
                 # Handle new connection
@@ -751,43 +710,34 @@ class HiSockServer(_HiSockBase):
                 try:
                     client_info = self.clients[client_socket]
                 except KeyError:
-                    raise ClientNotFound(
-                        "Client data not found, but is not a new client."
-                    ) from KeyError
+                    raise ClientNotFound("Client data not found, but is not a new client.") from KeyError
 
                 ### Reserved commands ###
 
                 # Handle client disconnection
-                if (
-                    not raw_data  # Most likely client disconnect, could be client error
-                    or data.startswith(b"$USRCLOSE$")
+                if not raw_data or data.startswith(  # Most likely client disconnect, could be client error
+                    b"$USRCLOSE$"
                 ):
 
                     try:
-                        self.disconnect_client(
-                            client_info, force=False, call_func=True
-                        )
+                        self.disconnect_client(client_info, force=False, call_func=True)
                     except BrokenPipeError:  # UNIX
                         # Client is already gone
                         pass
                     except ConnectionResetError:
-                        self.disconnect_client(
-                            client_info, force=True, call_func=True
-                        )
+                        self.disconnect_client(client_info, force=True, call_func=True)
 
                     continue
 
                 # Change name or group
-                for matching_reserve, key in zip(
-                    (b"$CHNAME$", b"$CHGROUP$"), ("name", "group")
-                ):
+                for matching_reserve, key in zip((b"$CHNAME$", b"$CHGROUP$"), ("name", "group")):
 
                     if not data.startswith(matching_reserve):
                         continue
 
                     change_to = _removeprefix(data, matching_reserve).decode()
                     client_info_dict = client_info.as_dict()
-                    
+
                     # Resetting
                     if change_to == "":
                         change_to = client_info_dict[key]
@@ -852,9 +802,7 @@ class HiSockServer(_HiSockBase):
                 # Handle random data with no command
                 elif not data.startswith(b"$CMD$"):
                     if "*" in self.funcs:
-                        self._call_wildcard_function(
-                            client_info=client_info, command=None, content=data
-                        )
+                        self._call_wildcard_function(client_info=client_info, command=None, content=data)
                     return
 
                 has_listener = False  # For cache
@@ -903,9 +851,7 @@ class HiSockServer(_HiSockBase):
                 # No listener found
                 if not has_listener and "*" in self.funcs:
                     # No recv and no catchall. A command and some data.
-                    self._call_wildcard_function(
-                        client_info=client_info, command=command, content=content
-                    )
+                    self._call_wildcard_function(client_info=client_info, command=command, content=content)
 
                 # Caching
                 self._cache(has_listener, command, content, data, raw_data["header"])
@@ -914,9 +860,7 @@ class HiSockServer(_HiSockBase):
                 if "message" in self.funcs:
                     self._call_function_reserved(
                         "message",
-                        self._type_cast_client_info(
-                            command="message", client_info=client_info
-                        ),
+                        self._type_cast_client_info(command="message", client_info=client_info),
                         _type_cast(
                             type_cast=self.funcs["message"]["type_hint"]["command"],
                             content_to_type_cast=command,
@@ -931,9 +875,7 @@ class HiSockServer(_HiSockBase):
             except (BrokenPipeError, ConnectionResetError):
                 if client_socket in self.clients:
                     # Does it need to be forced?? Investigate further
-                    self.disconnect_client(
-                        self.clients[client_socket]["ip"], force=True
-                    )
+                    self.disconnect_client(self.clients[client_socket]["ip"], force=True)
                 print("[DEBUG] 10054 exception, we're investigating")
 
     # Stop
@@ -1019,9 +961,7 @@ class ThreadedHiSockServer(HiSockServer):
         For documentation, see :meth:`HiSockServer.start`.
         """
 
-        self._thread = threading.Thread(
-            target=self._start, args=(callback, error_handler)
-        )
+        self._thread = threading.Thread(target=self._start, args=(callback, error_handler))
         self._thread.start()
 
     def _start(self, callback: Callable = None, error_handler: Callable = None):
@@ -1046,9 +986,7 @@ def start_server(addr, max_connections=0, header_len=16):
     :return: A :class:`HiSockServer` instance.
     """
 
-    return HiSockServer(
-        addr=addr, max_connections=max_connections, header_len=header_len
-    )
+    return HiSockServer(addr=addr, max_connections=max_connections, header_len=header_len)
 
 
 def start_threaded_server(*args, **kwargs):
@@ -1071,22 +1009,17 @@ if __name__ == "__main__":
         print(
             f"{client.name} has joined! "
             f'Their IP is {":".join(map(str, client.ip))}. '
-            f'Their group is {client.group}.'
+            f"Their group is {client.group}."
         )
 
     @server.on("leave")
     def on_leave(client: ClientInfo):
         print(f"{client.name} has left!")
-        server.send_all_clients(
-            "client_disconnect", {"name": client.name, "reason": "they left"}
-        )
+        server.send_all_clients("client_disconnect", {"name": client.name, "reason": "they left"})
 
     @server.on("message")
     def on_message(client: ClientInfo, command: str, message: str):
-        print(
-            f"[MESSAGE CATCH-ALL] {client.name} sent a command, {command} "
-            f'with the message "{message}".'
-        )
+        print(f"[MESSAGE CATCH-ALL] {client.name} sent a command, {command} " f'with the message "{message}".')
 
     @server.on("name_change")
     def on_name_change(_, old_name: str, new_name: str):  # Client data isn't used
@@ -1124,9 +1057,7 @@ if __name__ == "__main__":
 
     @server.on("broadcast_message_to_group")
     def on_broadcast_message_to_group(client: ClientInfo, message: str):
-        print(
-            f'{client.name} said "{message}" to their group, {client.group}!'
-        )
+        print(f'{client.name} said "{message}" to their group, {client.group}!')
         server.send_group(client, "message", message)
 
     @server.on("set_timer", threaded=True)
@@ -1143,10 +1074,7 @@ if __name__ == "__main__":
 
     @server.on("*")
     def on_wildcard(client: ClientInfo, command: str, data: str):
-        print(
-            f"There was some unhandled data from {client.name}. "
-            f"{command=}, {data=}"
-        )
+        print(f"There was some unhandled data from {client.name}. " f"{command=}, {data=}")
 
         server.send_client(client, "uncaught_command", data.replace("a", "ඞ"))
 

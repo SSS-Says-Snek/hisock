@@ -12,14 +12,17 @@ Copyright SSS_Says_Snek, 2021-present
 """
 
 from __future__ import annotations
-import socket
-import builtins
-import sys
+
 import ast
+import builtins
+import socket
+import sys
 from dataclasses import dataclass
-from re import search
-from typing import Literal, Union, Any, Optional, Type, Tuple, Dict, List  # Must use these for bare annots
 from ipaddress import IPv4Address
+from re import search
+from typing import (Any, Dict, List, Literal,  # Must use these for bare annots
+                    Optional, Tuple, Type, Union)
+
 
 # Custom exceptions
 class ClientException(Exception):
@@ -91,6 +94,7 @@ class MessageCacheMember:
     def __repr__(self):
         return self.__str__()
 
+
 @dataclass(frozen=True)
 class ClientInfo:
     ip: Optional[tuple[str, int]]
@@ -107,10 +111,10 @@ class ClientInfo:
 
     def as_dict(self):
         return {"ip": self.ip, "name": self.name, "group": self.group, "ipstr": self.ipstr}
-    
+
     def copy(self):
         return type(self)(self.ip, self.name, self.group)
-    
+
     def __str__(self):
         return f"<ClientInfo: IP: {self.ipstr}, Name: {self.name}, Group: {self.group}>"
 
@@ -135,9 +139,7 @@ Sendable = Union[
 SendableTypes = Type[Sendable]
 
 
-def make_header(
-    header_message: Union[str, bytes], header_len: int, encode=True
-) -> Union[str, bytes]:
+def make_header(header_message: Union[str, bytes], header_len: int, encode=True) -> Union[str, bytes]:
     """
     Makes a header of ``header_message``, with a maximum
     header length of ``header_len``
@@ -171,16 +173,14 @@ def _recv_exactly(connection: socket.socket, length: int, buffer_size: int) -> O
         if not data_part:
             data = None
             break
-            
+
         data += data_part
         bytes_left -= len(data_part)
-    
+
     return data
 
 
-def receive_message(
-    connection: socket.socket, header_len: int, buffer_size: int
-) -> Union[dict[str, bytes], bool]:
+def receive_message(connection: socket.socket, header_len: int, buffer_size: int) -> Union[dict[str, bytes], bool]:
     """
     Receives a message from a server or client.
 
@@ -197,10 +197,10 @@ def receive_message(
     """
 
     try:
-        header_message = _recv_exactly(connection, header_len, 16) # Header's super tiny
+        header_message = _recv_exactly(connection, header_len, 16)  # Header's super tiny
         if header_message is not None:
             message_len = int(header_message)
-            
+
             data = _recv_exactly(connection, message_len, buffer_size)
 
             return {"header": header_message, "data": data}
@@ -252,9 +252,7 @@ def _str_type_to_type_annotations_dict(annotations_dict: dict):
     return fixed_annotations
 
 
-def _type_cast(
-    type_cast: SendableTypes, content_to_type_cast: Sendable, func_name: str
-) -> Sendable:
+def _type_cast(type_cast: SendableTypes, content_to_type_cast: Sendable, func_name: str) -> Sendable:
     """
     Type casts data to be sent.
 
@@ -299,9 +297,7 @@ def _type_cast(
             if content_to_type_cast_type in (str, int, float, list, dict):
                 content_to_type_cast = str(content_to_type_cast).encode()
             else:
-                raise TypeError(
-                    f"Cannot type cast {content_to_type_cast_type} to bytes"
-                )
+                raise TypeError(f"Cannot type cast {content_to_type_cast_type} to bytes")
 
         if type_cast == bytes:
             return content_to_type_cast
@@ -324,8 +320,7 @@ def _type_cast(
             return result
 
         raise InvalidTypeCast(
-            f"Cannot type cast bytes to {type(type_cast).__name__}."
-            " See `HiSockServer.on` for available type hints."
+            f"Cannot type cast bytes to {type(type_cast).__name__}." " See `HiSockServer.on` for available type hints."
         )
 
     except Exception as e:
@@ -348,8 +343,7 @@ def validate_command_not_reserved(command: str):
 
     if search(r"\$.+\$", command):
         raise ValueError(
-            'The format "$command$" is used for reserved functions - '
-            "consider using a different format."
+            'The format "$command$" is used for reserved functions - ' "consider using a different format."
         )
 
 

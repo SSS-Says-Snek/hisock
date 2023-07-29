@@ -1,11 +1,15 @@
-import _shared as shared
+from __future__ import annotations
+
+import os
 import random
 import sys
-import os
+
+import _shared as shared
 
 sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
-from hisock import HiSockServer, ClientInfo, input_server_config
+from hisock import ClientInfo, HiSockServer, input_server_config
+
 
 class ServerData:
     def __init__(self):
@@ -83,10 +87,12 @@ def on_join(client: ClientInfo):
     data.add_client(client)
     clt_pair = data.find_client(client)
 
-    print(f"Player {client.name} joined, total players {len(server.clients)}\n"
-          f"    - Paired? {len(clt_pair) == 4}\n"
-          f"    - Client obj: {client}\n"
-          f"    - Board obj: {clt_pair[-2]}")
+    print(
+        f"Player {client.name} joined, total players {len(server.clients)}\n"
+        f"    - Paired? {len(clt_pair) == 4}\n"
+        f"    - Client obj: {client}\n"
+        f"    - Board obj: {clt_pair[-2]}"
+    )
 
 
 @server.on("leave")
@@ -133,14 +139,13 @@ def on_turn_made(client: ClientInfo, move_info: dict):
         server.send_client(client, "win")
         server.send_client(other_client, "lose")
 
-    server.send_client(
-        other_client, "new_move", {"opp_move": [x, y], "opp_piece": move_info["piece"]}
-    )
+    server.send_client(other_client, "new_move", {"opp_move": [x, y], "opp_piece": move_info["piece"]})
 
     client_pair[2].total_moves += 1
     if client_pair[2].total_moves % 2 == 0:
         for client in (client, other_client):
             server.send_client(client, "new_turn", client_pair[2].total_moves // 2 + 1)
+
 
 print("Successfully started server!")
 
