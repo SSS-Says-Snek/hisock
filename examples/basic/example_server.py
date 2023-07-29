@@ -5,13 +5,10 @@ Not an advanced example, but gets the main advantages of hisock across
 
 from __future__ import annotations
 
-import os
 import random
 # Builtin modules
 import sys
 import time
-
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 from hisock import ClientInfo, get_local_ip, start_server
 

@@ -1,12 +1,8 @@
 from __future__ import annotations
 
 import abc
-import os
 import string
-import sys
 import time
-
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 import _shared as shared
 import pygame

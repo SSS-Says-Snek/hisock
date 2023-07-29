@@ -1,12 +1,7 @@
 from __future__ import annotations
-
-import os
 import random
-import sys
 
 import _shared as shared
-
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 from hisock import ClientInfo, HiSockServer, input_server_config
 

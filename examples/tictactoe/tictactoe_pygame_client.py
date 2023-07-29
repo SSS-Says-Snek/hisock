@@ -3,11 +3,6 @@
 ### Setup ###
 from __future__ import annotations
 
-import os
-import sys
-
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
-
 from typing import Union
 
 import pygame

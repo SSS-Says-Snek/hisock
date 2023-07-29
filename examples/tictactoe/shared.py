@@ -4,11 +4,6 @@
 from __future__ import annotations
 
 ### Setup ###
-import os
-import sys
-
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
-
 import traceback
 from typing import Union
 

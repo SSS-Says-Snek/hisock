@@ -5,12 +5,8 @@ Not an advanced example, but gets the main advantages of hisock across
 
 from __future__ import annotations
 
-import os
-import sys
 # Builtin module
 import time
-
-sys.path.insert(0, os.path.abspath(os.path.join("..", "..")))
 
 from hisock import connect, get_local_ip
 
