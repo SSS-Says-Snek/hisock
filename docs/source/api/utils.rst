@@ -1,10 +1,7 @@
 hisock.utils
 ============
 
-A module containing some utilities to either:
-
-1. Help :mod:`hisock.client` and :mod:`hisock.server` run (denoted with leading underscore)
-1. Provide functions to use alongside :mod:`HiSock`
+A module containing some utility functions and classes.
 
 .. autoclass:: hisock.utils.MessageCacheMember
    :members:

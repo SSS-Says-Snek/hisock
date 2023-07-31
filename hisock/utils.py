@@ -97,22 +97,52 @@ class MessageCacheMember:
 
 @dataclass(frozen=True)
 class ClientInfo:
+    """
+    The dataclass used to represent a client.
+    """
+
     ip: Optional[tuple[str, int]]
     name: Optional[str] = None
     group: Optional[str] = None
 
     @classmethod
-    def from_dict(cls, dict_: dict):
+    def from_dict(cls, dict_: dict) -> "ClientInfo":
+        """
+        Creates a new ``ClientInfo`` instance given a dictionary. The dictionary should have the keys
+        ``ip``, ``name``, and ``group``.
+        
+        :param dict_: Dictionary that represents a new ``ClientInfo`` to be created from.
+        :type dict_: dict
+        
+        :return: a new instance of ``ClientInfo``.
+        :rtype: ClientInfo
+        """
+
         return cls(dict_["ip"], dict_["name"], dict_["group"])
 
     @property
     def ipstr(self) -> str:
+        """A stringified version of ``self.ip``. Is equivalent to ``f"{self.ip[0]}:{self.ip[1]}``."""
         return f"{self.ip[0]}:{self.ip[1]}"
 
-    def as_dict(self):
+    def as_dict(self) -> dict:
+        """
+        Returns a dictionary represented by the ``ClientInfo``. The dictionary will have the keys
+        ``ip``, ``name``, ``group``, and ``ipstr``.
+
+        :return: A dictionary representing ``ClientInfo``.
+        :rtype: dict
+        """
         return {"ip": self.ip, "name": self.name, "group": self.group, "ipstr": self.ipstr}
 
     def copy(self):
+        """
+        Returns a copy of the current ``ClientInfo``.
+
+        :return: A copy of the current ``ClientInfo``.
+        :rtype: ClientInfo
+        """
+
         return type(self)(self.ip, self.name, self.group)
 
     def __str__(self):
