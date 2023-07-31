@@ -1,4 +1,6 @@
-from . import example_server, example_client
+from __future__ import annotations
+
+from . import example_client, example_server
 
 
 def run(client_or_serv="input"):

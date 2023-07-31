@@ -1,13 +1,15 @@
+from __future__ import annotations
+
 import abc
 import string
 import time
 
-import hisock
 import _shared as shared
-
 import pygame
 import pygame.gfxdraw
 import pygame_gui
+
+import hisock
 
 pygame.init()
 
@@ -73,11 +75,7 @@ class Button:
         )
 
     def handle_event(self, event):
-        if (
-            event.type == pygame.MOUSEBUTTONDOWN
-            and self.rect.collidepoint(event.pos)
-            and self.func_when_clicked
-        ):
+        if event.type == pygame.MOUSEBUTTONDOWN and self.rect.collidepoint(event.pos) and self.func_when_clicked:
             self.func_when_clicked()
 
 
@@ -165,12 +163,8 @@ class ConnectState(BaseState):
                     txt_input.unfocus()
 
     def draw(self):
-        self.blit_text(
-            "Enter username:", (WIDTH // 2, 40), 48, (255, 255, 255), center=True
-        )
-        self.blit_text(
-            "Enter server IP:", (WIDTH // 2, 290), 48, (255, 255, 255), center=True
-        )
+        self.blit_text("Enter username:", (WIDTH // 2, 40), 48, (255, 255, 255), center=True)
+        self.blit_text("Enter server IP:", (WIDTH // 2, 290), 48, (255, 255, 255), center=True)
 
         self.conn_button.draw()
 
@@ -204,14 +198,24 @@ class GameState(BaseState):
 
         self.board = shared.Board()
         self.replay_button = Button(
-            pygame.Rect(WIDTH // 2, 300, 250, 40), (0, 190, 0), "Play again?",
-            (0, 0, 0), 36, hover_color=(0, 215, 0), center=True,
-            func_when_clicked=self.replay
+            pygame.Rect(WIDTH // 2, 300, 250, 40),
+            (0, 190, 0),
+            "Play again?",
+            (0, 0, 0),
+            36,
+            hover_color=(0, 215, 0),
+            center=True,
+            func_when_clicked=self.replay,
         )
         self.exit_button = Button(
-            pygame.Rect(WIDTH // 2, 380, 250, 40), (190, 0, 0), "Exit",
-            (0, 0, 0), 36, hover_color=(215, 0, 0), center=True,
-            func_when_clicked=lambda: self.client.send("player_exit")
+            pygame.Rect(WIDTH // 2, 380, 250, 40),
+            (190, 0, 0),
+            "Exit",
+            (0, 0, 0),
+            36,
+            hover_color=(215, 0, 0),
+            center=True,
+            func_when_clicked=lambda: self.client.send("player_exit"),
         )
 
         self.down_arrow = pygame.image.load("downarrow.png").convert_alpha()
@@ -225,14 +229,8 @@ class GameState(BaseState):
 
             self.paired = True
             self.is_turn = True if data["turn"] == "first" else False
-            self.piece_type = (
-                shared.BoardEnum.RED if self.is_turn else shared.BoardEnum.YELLOW
-            )
-            self.hover_piece_type = (
-                shared.BoardEnum.HOVER_RED
-                if self.is_turn
-                else shared.BoardEnum.HOVER_YELLOW
-            )
+            self.piece_type = shared.BoardEnum.RED if self.is_turn else shared.BoardEnum.YELLOW
+            self.hover_piece_type = shared.BoardEnum.HOVER_RED if self.is_turn else shared.BoardEnum.HOVER_YELLOW
             self.opponent_name = data["opp_name"]
             self.start_time = time.time()
 
@@ -282,7 +280,6 @@ class GameState(BaseState):
             self.replay_button.hover_color = (0, 215, 0)
             self.replay_button.func_when_clicked = self.replay
 
-
         self.client.start()
 
     @staticmethod
@@ -291,12 +288,8 @@ class GameState(BaseState):
 
     @staticmethod
     def update_piece(x, y, piece):
-        pygame.gfxdraw.aacircle(
-            screen, 80 + 80 * x, 180 + 70 * y, 30, shared.PIECE_COLORS[piece]
-        )
-        pygame.gfxdraw.filled_circle(
-            screen, 80 + 80 * x, 180 + 70 * y, 30, shared.PIECE_COLORS[piece]
-        )
+        pygame.gfxdraw.aacircle(screen, 80 + 80 * x, 180 + 70 * y, 30, shared.PIECE_COLORS[piece])
+        pygame.gfxdraw.filled_circle(screen, 80 + 80 * x, 180 + 70 * y, 30, shared.PIECE_COLORS[piece])
 
     def pos_to_coord(self, mouse_x, mouse_y):
         x = (mouse_x - self.board_rect.x) * 7 // self.board_rect.width
@@ -391,9 +384,7 @@ class GameState(BaseState):
                 self.update_piece(*self.hover_piece_idx, self.hover_piece_type)
 
             if self.board_rect.collidepoint(mouse_pos):
-                self.arrow_column = (
-                    (mouse_pos[0] - self.board_rect.x) * 7 // self.board_rect.width
-                )
+                self.arrow_column = (mouse_pos[0] - self.board_rect.x) * 7 // self.board_rect.width
                 screen.blit(
                     self.down_arrow,
                     (60 + self.arrow_column * (self.board_rect.width - 20) // 7, 80),
@@ -403,24 +394,14 @@ class GameState(BaseState):
             if self.game_status != "in_progress":
                 window_rect = pygame.Rect(0, 0, 275, 275)
                 window_rect.center = (WIDTH // 2, HEIGHT // 2)
-                pygame.draw.rect(
-                    screen, (0, 150, 0),
-                    window_rect
-                )
-                self.blit_text(
-                    f"YOU {self.game_status.upper()}!", (WIDTH // 2, 190), 52,
-                    (0, 0, 0), center=True
-                )
+                pygame.draw.rect(screen, (0, 150, 0), window_rect)
+                self.blit_text(f"YOU {self.game_status.upper()}!", (WIDTH // 2, 190), 52, (0, 0, 0), center=True)
 
                 if self.opp_replay:
-                    self.blit_text(
-                        "Opponent wants to play again", (WIDTH // 2, 260),
-                        20, (0, 0, 0), center=True
-                    )
+                    self.blit_text("Opponent wants to play again", (WIDTH // 2, 260), 20, (0, 0, 0), center=True)
 
                 self.replay_button.draw()
                 self.exit_button.draw()
-
 
             if self.game_status == "win":
                 pass
@@ -446,9 +427,7 @@ class GameState(BaseState):
             if self.board.board[hov_y][hov_x] == shared.BoardEnum.NO_PIECE:
                 self.board.board[hov_y][hov_x] = self.piece_type
 
-                self.client.send(
-                    "turn_made", {"x": hov_x, "y": hov_y, "piece": self.piece_type}
-                )
+                self.client.send("turn_made", {"x": hov_x, "y": hov_y, "piece": self.piece_type})
                 self.is_turn = False
 
             print(hov_x, hov_y)

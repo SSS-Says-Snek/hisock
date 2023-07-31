@@ -6,14 +6,16 @@ Just call `python setup.py sdist bdist_wheel` to generate.
 Copyright SSS_Says_Snek, 2021-present
 ====================================
 """
-import sys
+from __future__ import annotations
+
 import datetime
-import shutil
 import pathlib
 import re
+import shutil
 import subprocess
-from distutils.core import Command
-from setuptools import setup
+import sys
+
+from setuptools import Command, setup
 
 ROOT = pathlib.Path(__file__).parent  # pathlib.Path object of root (/hisock/)
 DIST = ROOT / "dist"
@@ -89,8 +91,7 @@ class TestCmd(Command):
     def run(self):
         print(
             color_text(
-                f"\n[COMMAND] Running hisock tests..."
-                f"\n          Using Python: {sys.executable}\n",
+                f"\n[COMMAND] Running hisock tests..." f"\n          Using Python: {sys.executable}\n",
                 "green",
             )
         )
@@ -170,15 +171,9 @@ else:
 #   EXAMPLE SUBMODULES  #
 #########################
 
-raw_ex_subdirs = [
-    content.relative_to(ROOT) for content in (ROOT / "examples").iterdir()
-]
-stringified_ex_subdirs = list(
-    map(str, list(filter(pathlib.Path.is_dir, raw_ex_subdirs)))
-)
-ex_subdirs = [
-    subdir.replace("\\", ".").replace("/", ".") for subdir in stringified_ex_subdirs
-]
+raw_ex_subdirs = [content.relative_to(ROOT) for content in (ROOT / "examples").iterdir()]
+stringified_ex_subdirs = list(map(str, list(filter(pathlib.Path.is_dir, raw_ex_subdirs))))
+ex_subdirs = [subdir.replace("\\", ".").replace("/", ".") for subdir in stringified_ex_subdirs]
 ex_subdirs = [i for i in ex_subdirs if i != "examples.__pycache__"]
 
 print_ex_subdirs = "- " + "\n- ".join(ex_subdirs)
@@ -193,13 +188,8 @@ print(
 #      REQUIREMENTS     #
 #########################
 
-requirements = [
-    line.strip() for line in (ROOT / "requirements.txt").read_text().splitlines()
-]
-requirements_dev = [
-    line.strip()
-    for line in (ROOT / "requirements_contrib.txt").read_text().splitlines()
-]
+requirements = [line.strip() for line in (ROOT / "requirements.txt").read_text().splitlines()]
+requirements_dev = [line.strip() for line in (ROOT / "requirements_contrib.txt").read_text().splitlines()]
 print_requirements = "- " + "\n- ".join(requirements)
 print_requirements_dev = "- " + "\n- ".join(requirements_dev)
 
@@ -210,9 +200,7 @@ print(
     )
 )
 
-print(
-    color_text(f"[INFO] Developer requirements:\n{print_requirements_dev}\n", "green")
-)
+print(color_text(f"[INFO] Developer requirements:\n{print_requirements_dev}\n", "green"))
 
 #########################
 #  REMOVE OLD VERSIONS  #
@@ -239,12 +227,8 @@ if DIST.exists():
         for old_build_file in DIST.iterdir():
             if not yes_to_all and VERSION in str(old_build_file):
                 build_file_stats = old_build_file.stat()
-                file_create_time = datetime.datetime.fromtimestamp(
-                    build_file_stats.st_ctime
-                )
-                file_create_time_days = (
-                    datetime.datetime.now() - file_create_time
-                ).days
+                file_create_time = datetime.datetime.fromtimestamp(build_file_stats.st_ctime)
+                file_create_time_days = (datetime.datetime.now() - file_create_time).days
 
                 indentation = "          "
 
@@ -276,11 +260,7 @@ if DIST.exists():
                 elif continue_building == "a":
                     yes_to_all = True
 
-            print(
-                color_text(
-                    f"[INFO] Removing build file {old_build_file.name}...", "green"
-                )
-            )
+            print(color_text(f"[INFO] Removing build file {old_build_file.name}...", "green"))
             old_build_file.unlink()
     print()
 

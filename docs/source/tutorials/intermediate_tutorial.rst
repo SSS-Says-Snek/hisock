@@ -38,9 +38,9 @@ Here is an example with a server-side code-block.
    server = ...
 
    @server.on("leave", override=True)
-   def on_leave(client_data, reason: str):
-       print(f"{client_data.name} left because {reason}")
-       server.disconnect_client(client_data.ip, force=True)
+   def on_leave(client: hisock.ClientInfo, reason: str):
+       print(f"{client.name} left because {reason}")
+       server.disconnect_client(client, force=True)
 
    server.run()
 
@@ -92,7 +92,7 @@ For the server:
 - ``<connecting socket is same as server socket>``
 
    This happens when a new client connects to server.
-- ``<bad client file number>`` OR ``<client data is falsy>`` OR ``$USRCLOSE$``
+- ``<bad client file number>`` OR ``<client info is falsy>`` OR ``$USRCLOSE$``
   
    This happens when the client closes the connection and emits its leave, or it encounters an error when transmitting data. The client will be disconnected.
 - ``$KEEPACK$``
@@ -111,7 +111,7 @@ For the server:
 Unreserved commands
 ===================
 
-For reserved commands, the data is sent as follows:
+For unreserved commands, the data is sent as follows:
 
 - ``command`` and ``message`` sent
 
@@ -130,12 +130,6 @@ In :mod:`HiSock`, there are multiple send methods for the *server*. These method
 - ``send_client`` - sends a command and/or message to a singe client
 - ``send_all_clients`` - sends a command and/or message to every client connected
 - ``send_group`` - sends a command and/or message to every client in a group
-
-There are also a few internal send methods that shouldn't need to be used. They are used for sending *raw* data. These methods are:
-
-- ``_send_client_raw``
-- ``_send_all_clients_raw``
-- ``_send_group_raw``
 
 ----
 
@@ -189,7 +183,7 @@ Catch-all listeners (wildcard)
 
 In :mod:`HiSock`, there is a way to catch every piece of data sent that hasn't been handled by a listener already. This amazing thing is known as the catch-all or wildcard listener. Despite the name, this is not like the ``message`` reserved listener. It will only be called when there is no other handler for the data.
 
-The function that will be called for the catch-all listener will be passed in the client data if it's a server, the command, and the message. If there is no message, it'll be type-casted into the equivalent of ``None``.
+The function that will be called for the catch-all listener will be passed in the client info if it's a server, the command, and the message. If there is no message, it'll be type-casted into the equivalent of ``None``.
 
 Here is an example with a client-side and server-side code block:
 
@@ -209,11 +203,11 @@ Here is an example with a client-side and server-side code block:
    )
 
    @client.on("client_connect")
-   def on_connect(client_data):
+   def on_connect(client: hisock.ClientInfo):
        ...
 
    @client.on("client_disconnect")
-   def on_disconnect(client_data):
+   def on_disconnect(client: hisock.ClientInfo):
        ...
 
    @client.on("*")
@@ -228,21 +222,21 @@ Here is an example with a client-side and server-side code block:
    server = ...
 
    @server.on("join")
-   def on_join(client_data):
+   def on_join(client: hisock.ClientInfo):
       ...
    
    @server.on("leave")
-   def on_leave(client_data):
+   def on_leave(client: hisock.ClientInfo):
       ...
 
    @server.on("*")
-   def on_wildcard(client_data, command: str, data: str):
+   def on_wildcard(client: hisock.ClientInfo, command: str, data: str):
        print(
-           f"There was some unhandled data from {client_data.name}. "
+           f"There was some unhandled data from {client.name}. "
            f"{command=}, {data=}"
        )
 
-       server.send_client(client_data, "i am also an uncaught command", data.replace("a", "ඞ"))
+       server.send_client(client, "i am also an uncaught command", data.replace("a", "ඞ"))
 
    server.start()
 
@@ -252,7 +246,7 @@ Here is an example with a client-side and server-side code block:
 Groups, name, and client info
 -----------------------------
 
-In :mod:`HiSock`, each client has its own client data. Like mentioned in the previous tutorial, this client data can be a dictionary or an instance of :class:`ClientInfo`.
+In :mod:`HiSock`, each client has its own client info. Like mentioned in the previous tutorial, this client info can be a dictionary or an instance of :class:`ClientInfo`.
 
 Client info contains the following:
 
@@ -265,15 +259,3 @@ Client info contains the following:
 - ``ip``
   
    The IP and port of the client as a string.
-
-:class:`ClientInfo` can also act like a dictionary, so you can access the client's data like this:
-
-.. code-block:: python
-   
-   server = ...
-
-   @server.on("join")
-   def on_join(client_data):
-       ip = client_data.ip  # Normal access
-       name = client_data["name"]  # Dictionary-like access
-       group = client_data.group   #Normal access

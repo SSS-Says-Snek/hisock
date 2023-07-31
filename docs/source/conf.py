@@ -1,11 +1,11 @@
-from unittest.mock import Mock
+from __future__ import annotations
 
-import sys
+import json
 import os
 import pathlib
-import json
-
+import sys
 import urllib.request
+from unittest.mock import Mock
 from urllib.error import HTTPError
 
 path = pathlib.Path(os.path.dirname(__file__))
@@ -29,9 +29,7 @@ from hisock import constants
 
 try:
     version_html = json.loads(
-        urllib.request.urlopen(
-            "https://api.github.com/repos/SSS-Says-Snek/hisock/releases/latest"
-        ).read()
+        urllib.request.urlopen("https://api.github.com/repos/SSS-Says-Snek/hisock/releases/latest").read()
     )
 except HTTPError:
     # Most likely rate-limited

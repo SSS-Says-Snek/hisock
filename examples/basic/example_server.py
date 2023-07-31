@@ -3,12 +3,14 @@ Basic example of the structure of `hisock`. This is the server script.
 Not an advanced example, but gets the main advantages of hisock across
 """
 
+from __future__ import annotations
+
+import random
 # Builtin modules
 import sys
 import time
-import random
 
-from hisock import start_server, get_local_ip
+from hisock import ClientInfo, get_local_ip, start_server
 
 
 def run():
@@ -24,23 +26,21 @@ def run():
     server = start_server((ADDR, PORT))
 
     @server.on("join")
-    def client_join(client_data):
-        print(f"Cool, {client_data.ip_as_str} joined!")
-        if client_data["name"] is not None:
-            print(f'    - With a sick name "{client_data.name}", very cool!')
-        if client_data["group"] is not None:
-            print(f'    - In a sick group "{client_data.group}", cool!')
+    def client_join(client: ClientInfo):
+        print(f"Cool, {client.ipstr} joined!")
+        if client.name is not None:
+            print(f'    - With a sick name "{client.name}", very cool!')
+        if client.group is not None:
+            print(f'    - In a sick group "{client.group}", cool!')
 
         print("I'm gonna send them a quick hello message")
 
-        server.send_client(
-            client_data["ip"], "hello_message", str(time.time()).encode()
-        )
+        server.send_client(client, "hello_message", str(time.time()).encode())
 
     @server.on("processing1")
-    def process(client_data, process_request: str):
+    def process(client: ClientInfo, process_request: str):
         print(
-            f"\nAlright, looks like {client_data.ip_as_str} received the hello message, "
+            f"\nAlright, looks like {client.ipstr} received the hello message, "
             "\nas now they're trying to compute something on the server, because they have "
             "potato computers"
         )
@@ -53,7 +53,7 @@ def run():
         result = eval(process_request)  # Insecure, but I'm lazy, so...
         print(f"Cool! The result is {result}! I'mma send it to the client")
 
-        server.send_client(client_data, "something", str(result))
+        server.send_client(client, "something", str(result))
 
     server.start()
 

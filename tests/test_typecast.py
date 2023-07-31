@@ -2,10 +2,13 @@
 Tests if the type-cast works.
 """
 
+from __future__ import annotations
+
+from typing import Any
+
 import pytest
 
-from hisock.utils import _type_cast, InvalidTypeCast, ClientInfo, SendableTypes
-from typing import Any
+from hisock.utils import ClientInfo, InvalidTypeCast, SendableTypes, _type_cast
 
 
 class Error:
@@ -72,19 +75,6 @@ tests = {
         {"original": {"a": "b"}, "expected": Error},
         {"original": "hello", "expected": Error},
     ],
-    "client_info": [
-        {
-            "original": {"ip": ("127.0.0.1", "5000"), "name": "a", "group": None},
-            "expected": ClientInfo(
-                **{"ip": ("127.0.0.1", "5000"), "name": "a", "group": None}
-            ),
-        },
-        {
-            "original": '{"ip": ["127.0.0.1", "5000"], "name": "a", "group": None}"',
-            "expected": Error,
-        },
-        {"original": {"name": "a"}, "expected": Error},  # Missing ip
-    ],
     "random": [
         {"original": "hello", "expected": Error},
     ],
@@ -93,9 +83,7 @@ tests = {
 
 class TestServerTypeCast:
     @staticmethod
-    def _test_type_cast(
-        type_cast: SendableTypes, test: Any, expected: Any, func_name: str
-    ):
+    def _test_type_cast(type_cast: SendableTypes, test: Any, expected: Any, func_name: str):
         """
         Tests a single type-cast.
 
@@ -109,22 +97,13 @@ class TestServerTypeCast:
 
         if expected is Error:
             with pytest.raises(InvalidTypeCast):
-                _type_cast(
-                    type_cast=type_cast, content_to_type_cast=test, func_name=func_name
-                )
+                _type_cast(type_cast=type_cast, content_to_type_cast=test, func_name=func_name)
         else:
-            assert (
-                _type_cast(
-                    type_cast=type_cast, content_to_type_cast=test, func_name=func_name
-                )
-                == expected
-            )
+            assert _type_cast(type_cast=type_cast, content_to_type_cast=test, func_name=func_name) == expected
 
     @pytest.mark.parametrize("test", tests["bytes"])
     def test_bytes(self, test):
-        self._test_type_cast(
-            bytes, test["original"], test["expected"], func_name="bytes"
-        )
+        self._test_type_cast(bytes, test["original"], test["expected"], func_name="bytes")
 
     @pytest.mark.parametrize("test", tests["str"])
     def test_str(self, test):
@@ -136,9 +115,7 @@ class TestServerTypeCast:
 
     @pytest.mark.parametrize("test", tests["float"])
     def test_float(self, test):
-        self._test_type_cast(
-            float, test["original"], test["expected"], func_name="float"
-        )
+        self._test_type_cast(float, test["original"], test["expected"], func_name="float")
 
     @pytest.mark.parametrize("test", tests["dict"])
     def test_dict(self, test):
@@ -148,14 +125,6 @@ class TestServerTypeCast:
     def test_list(self, test):
         self._test_type_cast(list, test["original"], test["expected"], func_name="list")
 
-    @pytest.mark.parametrize("test", tests["client_info"])
-    def test_client_info(self, test):
-        self._test_type_cast(
-            ClientInfo, test["original"], test["expected"], func_name="client info"
-        )
-
     @pytest.mark.parametrize("test", tests["random"])
     def test_random(self, test):
-        self._test_type_cast(
-            any, test["original"], test["expected"], func_name="random"
-        )
+        self._test_type_cast(any, test["original"], test["expected"], func_name="random")

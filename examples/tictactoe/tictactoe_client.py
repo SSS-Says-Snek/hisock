@@ -1,8 +1,12 @@
 """HiSock TicTacToe client side (no GUI)"""
 
 ### Setup ###
+from __future__ import annotations
+
+from os import name as os_name
+from os import system
+
 from shared import connect_to_server, log_error
-from os import system, name as os_name
 
 # HiSock setup
 print("TicTacToe Client - NO GUI")

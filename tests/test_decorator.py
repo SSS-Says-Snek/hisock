@@ -3,10 +3,12 @@ Tests the decorators that make up the core of hisock's receiving system
 Hi, what the heck is this? Please fix this.
 """
 
+from __future__ import annotations
+
 import pytest
 
-from hisock.server import HiSockServer
 from hisock.client import HiSockClient
+from hisock.server import HiSockServer
 
 serv_on = HiSockServer._on
 cli_on = HiSockClient._on

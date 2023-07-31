@@ -10,28 +10,18 @@ from __future__ import annotations
 
 import inspect
 import threading
-from typing import Callable, Union, Any
+from typing import Any, Callable, Union
 
 try:
-    from .utils import (
-        FunctionNotFoundException,
-        ClientInfo,
-        MessageCacheMember,
-        Sendable,
-        validate_command_not_reserved,
-        _type_cast,
-        _str_type_to_type_annotations_dict,
-    )
+    from .utils import (ClientInfo, FunctionNotFoundException,
+                        MessageCacheMember, Sendable,
+                        _str_type_to_type_annotations_dict, _type_cast,
+                        validate_command_not_reserved)
 except ImportError:
-    from utils import (
-        FunctionNotFoundException,
-        ClientInfo,
-        MessageCacheMember,
-        Sendable,
-        validate_command_not_reserved,
-        _type_cast,
-        _str_type_to_type_annotations_dict,
-    )
+    from utils import (ClientInfo, FunctionNotFoundException,
+                       MessageCacheMember, Sendable,
+                       _str_type_to_type_annotations_dict, _type_cast,
+                       validate_command_not_reserved)
 
 
 class _HiSockBase:
@@ -42,9 +32,7 @@ class _HiSockBase:
     See their documentation for more info.
     """
 
-    def __init__(
-        self, addr: tuple[str, int], header_len: int = 16, cache_size: int = -1
-    ):
+    def __init__(self, addr: tuple[str, int], header_len: int = 16, cache_size: int = -1):
         self.addr = addr
         self.header_len = header_len
 
@@ -68,29 +56,27 @@ class _HiSockBase:
 
     # Internal methods
 
-    def _type_cast_client_data(
-        self, command: str, client_data: dict
-    ) -> Union[ClientInfo, dict]:
+    def _type_cast_client_info(self, command: str, client_info: ClientInfo) -> Union[ClientInfo, dict]:
         """
         Type cast client info accordingly.
         If the type hint is None, then the client info is returned as is (a dict).
 
         :param command: The name of the function that called this method.
         :type command: str
-        :param client_data: The client data to type cast.
-        :type client_data: dict
+        :param client_info: The client info to type cast.
+        :type client_info: dict
 
-        :return: The type casted client data from the type hint.
+        :return: The type casted client info from the type hint.
         :rtype: Union[ClientInfo, dict]
         """
 
-        type_cast_to = self.funcs[command]["type_hint"]["client_data"]
+        type_cast_to = self.funcs[command]["type_hint"]["client_info"]
         if type_cast_to is None:
             type_cast_to = ClientInfo
 
         if type_cast_to is ClientInfo:
-            return ClientInfo(**client_data)
-        return client_data
+            return client_info
+        return client_info.as_dict()
 
     @staticmethod
     def _send_type_cast(content: Sendable) -> bytes:
@@ -147,7 +133,7 @@ class _HiSockBase:
         self,
         command: Union[str, None],
         content: bytes,
-        client_data: Union[dict, None] = None,
+        client_info: Union[dict, None] = None,
     ):
         """
         Call the wildcard command.
@@ -158,8 +144,8 @@ class _HiSockBase:
         :param content: The data to pass to the wildcard command. Will be
             type-casted accordingly.
         :type content: bytes
-        :param client_data: The client data. If None, then there is no client data.
-        :type client_data: dict, optional
+        :param client_info: The client info. If None, then there is no client info.
+        :type client_info: dict, optional
 
         :raises FunctionNotFoundException: If there is no wildcard listener.
         """
@@ -167,13 +153,11 @@ class _HiSockBase:
         try:
             wildcard_func = self.funcs["*"]
         except KeyError:
-            raise FunctionNotFoundException(
-                "A wildcard function doesn't exist."
-            ) from None
+            raise FunctionNotFoundException("A wildcard function doesn't exist.") from None
 
         arguments = []
-        if client_data is not None:
-            arguments.append(self._type_cast_client_data("*", client_data))
+        if client_info is not None:
+            arguments.append(self._type_cast_client_info("*", client_info))
 
         arguments += [
             _type_cast(
@@ -244,9 +228,7 @@ class _HiSockBase:
         """
 
         if func_name not in self.funcs:
-            raise FunctionNotFoundException(
-                f"Function with command {func_name} not found"
-            )
+            raise FunctionNotFoundException(f"Function with command {func_name} not found")
 
         # Normal
         if not self.funcs[func_name]["threaded"]:
@@ -304,16 +286,12 @@ class _HiSockBase:
             # Map function arguments into type hint compliant ones
             type_cast_arguments: tuple
             if self.command in self.outer._reserved_funcs:
-                type_cast_arguments = (
-                    self.outer._reserved_funcs[self.command]["type_cast_arguments"],
-                )[0]
+                type_cast_arguments = (self.outer._reserved_funcs[self.command]["type_cast_arguments"],)[0]
             else:
                 type_cast_arguments = self.outer._unreserved_func_arguments
 
             for func_argument, argument_name in zip(func_args, type_cast_arguments):
-                parameter_annotations[argument_name] = annotations.get(
-                    func_argument, None
-                )
+                parameter_annotations[argument_name] = annotations.get(func_argument, None)
 
             # Add function
             self.outer.funcs[self.command] = {
@@ -341,16 +319,12 @@ class _HiSockBase:
 
             # Reserved commands
             if self.command in self.outer._reserved_funcs:
-                needed_number_of_args = (
-                    self.outer._reserved_funcs[self.command]["number_arguments"],
-                )[0]
+                needed_number_of_args = (self.outer._reserved_funcs[self.command]["number_arguments"],)[0]
                 valid = number_of_func_args == needed_number_of_args
 
             # Unreserved commands
             else:
-                valid = number_of_func_args <= len(
-                    self.outer._unreserved_func_arguments
-                )
+                valid = number_of_func_args <= len(self.outer._unreserved_func_arguments)
 
             if not valid:
                 raise TypeError(
@@ -437,6 +411,4 @@ class _HiSockBase:
         del self._recv_on_events[listen_on]
 
         # Return
-        return _type_cast(
-            type_cast=recv_as, content_to_type_cast=data, func_name="<recv function>"
-        )
+        return _type_cast(type_cast=recv_as, content_to_type_cast=data, func_name="<recv function>")

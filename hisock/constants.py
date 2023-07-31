@@ -6,6 +6,8 @@ Copyright SSS_Says_Snek, 2021-present
 ====================================
 """
 
+from __future__ import annotations
+
 __version__ = "2.0.2"
 __license__ = "MIT"
 __name__ = "hisock"

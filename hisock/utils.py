@@ -13,15 +13,16 @@ Copyright SSS_Says_Snek, 2021-present
 
 from __future__ import annotations
 
-import json
-import pathlib
-import socket
-import builtins
-import sys
 import ast
-from re import search
-from typing import Union, Any, Optional, Type, Tuple, Dict, List  # Must use these for bare annots
+import builtins
+import socket
+import sys
+from dataclasses import dataclass
 from ipaddress import IPv4Address
+from re import search
+from typing import (Dict, List, Optional,  # Must use these for bare annots
+                    Type, Union)
+
 
 # Custom exceptions
 class ClientException(Exception):
@@ -94,25 +95,61 @@ class MessageCacheMember:
         return self.__str__()
 
 
+@dataclass(frozen=True)
 class ClientInfo:
-    def __init__(self, ip, name, group):
-        self.ip: tuple[str, int] = tuple(
-            ip
-        )  # _type_cast converts tuple to list to be JSON-serializable
-        self.name: Union[str, None] = name
-        self.group: Union[str, None] = group
+    """
+    The dataclass used to represent a client.
+    """
 
-        self.client_dict: dict = {"ip": self.ip, "name": self.name, "group": self.group}
-        self.ip_as_str: str = f"{self.ip[0]}:{self.ip[1]}"
+    ip: Optional[tuple[str, int]]
+    name: Optional[str] = None
+    group: Optional[str] = None
 
-    def __getitem__(self, item):
-        return self.client_dict[item]
+    @classmethod
+    def from_dict(cls, dict_: dict) -> "ClientInfo":
+        """
+        Creates a new ``ClientInfo`` instance given a dictionary. The dictionary should have the keys
+        ``ip``, ``name``, and ``group``.
+        
+        :param dict_: Dictionary that represents a new ``ClientInfo`` to be created from.
+        :type dict_: dict
+        
+        :return: a new instance of ``ClientInfo``.
+        :rtype: ClientInfo
+        """
+
+        return cls(dict_["ip"], dict_["name"], dict_["group"])
+
+    @property
+    def ipstr(self) -> str:
+        """A stringified version of ``self.ip``. Is equivalent to ``f"{self.ip[0]}:{self.ip[1]}``."""
+        return f"{self.ip[0]}:{self.ip[1]}"
+
+    def as_dict(self) -> dict:
+        """
+        Returns a dictionary represented by the ``ClientInfo``. The dictionary will have the keys
+        ``ip``, ``name``, ``group``, and ``ipstr``.
+
+        :return: A dictionary representing ``ClientInfo``.
+        :rtype: dict
+        """
+        return {"ip": self.ip, "name": self.name, "group": self.group, "ipstr": self.ipstr}
+
+    def copy(self):
+        """
+        Returns a copy of the current ``ClientInfo``.
+
+        :return: A copy of the current ``ClientInfo``.
+        :rtype: ClientInfo
+        """
+
+        return type(self)(self.ip, self.name, self.group)
 
     def __str__(self):
-        return f"<ClientInfo: IP: {self.ip_as_str}, Name: {self.name}, Group: {self.group}>"
+        return f"<ClientInfo: IP: {self.ipstr}, Name: {self.name}, Group: {self.group}>"
 
     def __eq__(self, other: ClientInfo):
-        return self.client_dict == other.client_dict
+        return (self.ip, self.name, self.group) == (other.ip, other.name, other.group)
 
 
 # Custom type hints
@@ -131,16 +168,8 @@ Sendable = Union[
 ]
 SendableTypes = Type[Sendable]
 
-Client = Union[
-    str,  # Name
-    Tuple[str, int],  # Port
-    ClientInfo,  # Returned by function, etc
-]
 
-
-def make_header(
-    header_message: Union[str, bytes], header_len: int, encode=True
-) -> Union[str, bytes]:
+def make_header(header_message: Union[str, bytes], header_len: int, encode=True) -> Union[str, bytes]:
     """
     Makes a header of ``header_message``, with a maximum
     header length of ``header_len``
@@ -174,16 +203,14 @@ def _recv_exactly(connection: socket.socket, length: int, buffer_size: int) -> O
         if not data_part:
             data = None
             break
-            
+
         data += data_part
         bytes_left -= len(data_part)
-    
+
     return data
 
 
-def receive_message(
-    connection: socket.socket, header_len: int, buffer_size: int
-) -> Union[dict[str, bytes], bool]:
+def receive_message(connection: socket.socket, header_len: int, buffer_size: int) -> Union[dict[str, bytes], bool]:
     """
     Receives a message from a server or client.
 
@@ -200,10 +227,10 @@ def receive_message(
     """
 
     try:
-        header_message = _recv_exactly(connection, header_len, 16) # Header's super tiny
+        header_message = _recv_exactly(connection, header_len, 16)  # Header's super tiny
         if header_message is not None:
             message_len = int(header_message)
-            
+
             data = _recv_exactly(connection, message_len, buffer_size)
 
             return {"header": header_message, "data": data}
@@ -222,38 +249,6 @@ def _removeprefix(
     if string.startswith(prefix):
         return string[len(prefix) :]
     return string[:]
-
-
-def _dict_tupkey_lookup(
-    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
-) -> Any:
-    """
-    Returns the value of the dict looked up,
-    given a key that is part of a key-tuple
-    """
-
-    for key, value in _dict.items():
-        if idx_to_match is None:
-            if multikey in key:
-                yield value
-        elif isinstance(idx_to_match, int) and multikey == key[idx_to_match]:
-            yield value
-
-
-def _dict_tupkey_lookup_key(
-    multikey: Any, _dict: dict, idx_to_match: Union[int, None] = None
-) -> Any:
-    """
-    Returns the key of the dict looked up,
-    given a key that is part of a key-tuple
-    """
-
-    for key in _dict.keys():
-        if idx_to_match is None:
-            if multikey in key:
-                yield key
-        elif isinstance(idx_to_match, int) and multikey == key[idx_to_match]:
-            yield key
 
 
 def _str_type_to_type_annotations_dict(annotations_dict: dict):
@@ -287,9 +282,7 @@ def _str_type_to_type_annotations_dict(annotations_dict: dict):
     return fixed_annotations
 
 
-def _type_cast(
-    type_cast: SendableTypes, content_to_type_cast: Sendable, func_name: str
-) -> Sendable:
+def _type_cast(type_cast: SendableTypes, content_to_type_cast: Sendable, func_name: str) -> Sendable:
     """
     Type casts data to be sent.
 
@@ -317,7 +310,7 @@ def _type_cast(
 
         # Handle client info
         if type_cast is ClientInfo:
-            return ClientInfo(**content_to_type_cast)
+            return ClientInfo.from_dict(content_to_type_cast)
 
         # Handle boolean
         if content_to_type_cast_type == bool:
@@ -334,9 +327,7 @@ def _type_cast(
             if content_to_type_cast_type in (str, int, float, list, dict):
                 content_to_type_cast = str(content_to_type_cast).encode()
             else:
-                raise TypeError(
-                    f"Cannot type cast {content_to_type_cast_type} to bytes"
-                )
+                raise TypeError(f"Cannot type cast {content_to_type_cast_type} to bytes")
 
         if type_cast == bytes:
             return content_to_type_cast
@@ -359,8 +350,7 @@ def _type_cast(
             return result
 
         raise InvalidTypeCast(
-            f"Cannot type cast bytes to {type(type_cast).__name__}."
-            " See `HiSockServer.on` for available type hints."
+            f"Cannot type cast bytes to {type(type_cast).__name__}." " See `HiSockServer.on` for available type hints."
         )
 
     except Exception as e:
@@ -383,8 +373,7 @@ def validate_command_not_reserved(command: str):
 
     if search(r"\$.+\$", command):
         raise ValueError(
-            'The format "$command$" is used for reserved functions - '
-            "consider using a different format."
+            'The format "$command$" is used for reserved functions - ' "consider using a different format."
         )
 
 
