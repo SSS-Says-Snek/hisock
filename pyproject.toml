@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "hisock"
-version = "2.0.2"
+dynamic = ["version"]
 license = {file = "LICENSE"}
 description = "A higher-level extension of the socket module, with simpler and more efficient usages"
 readme = "README.md"
@@ -34,6 +34,9 @@ dependencies = [
 Homepage = "https://github.com/SSS-Says-Snek/hisock"
 Documentation = "https://hisock.readthedocs.io"
 Issues = "https://github.com/SSS-Says-Snek/hisock/issues"
+
+[tool.setuptools.dynamic]
+version = {attr = "hisock.__version__"}
 
 # [tool.setuptools.packages.find]
 # include = [
