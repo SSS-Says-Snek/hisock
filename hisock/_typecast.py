@@ -65,20 +65,9 @@ def _write_fmt(data: Any, top: bool = True):
     return fmt, encoded_data, container_len
 
 
-def write_fmt(data: Any):  # hide top param and container len
+def write_fmt(data: Any) -> tuple[str, bytes]:  # hide top param and container len
     fmt, encoded_data, _ = _write_fmt(data)
     return fmt, encoded_data
-
-
-data = {"3": 4, b"5": 6}
-# g, h, i = write_fmt({(1, 2): "2", "8888": b"sdgoisdhga"})
-# g, h, i = write_fmt([[[[[[[[[[1, 2]]]]]]]]]])
-fmt, encoded_data = write_fmt(data)
-# g, h, i = write_fmt({"hi": "amogus"})
-# g, h, i = write_fmt([1, 2, {"hi": "amogus"}])
-# g, h, i = write_fmt([1, 2, {((1, 2),): 358568568}])
-# g, h, i = write_fmt([1, "32362", b"sdgs", 326236236, (1, 2)])
-print(f'Wrote str fmt "{fmt}" from "{data}" for encoded data {encoded_data}')
 
 
 def _read_fmt_dict(
@@ -96,7 +85,7 @@ def _read_fmt_dict(
 
 
 def read_fmt(fmts: str):
-    print(f'NEW read_fmt CALL w/ str format "{fmts}"')
+    # print(f'NEW read_fmt CALL w/ str format "{fmts}"')
     i = 0  # Starting char determines tuple, list, or dict
     start = 0
     container_type = fmts[0]
@@ -115,7 +104,7 @@ def read_fmt(fmts: str):
 
         if char.isalpha():  # End of primitive
             if container_type == "d":
-                _read_fmt_dict(fmt_list, pair_info, pair_counter, int(fmts[start:i]), "primitive", FMT_TO_TYPE[char])
+                _read_fmt_dict(fmt_list, pair_info, pair_counter, int(fmts[start:i]), "p", FMT_TO_TYPE[char])
                 pair_counter += 1
             else:
                 # print(fmts[start:i])
@@ -158,19 +147,16 @@ def read_fmt(fmts: str):
 
     if container_type in "tld":
         return container_type, fmt_list
+    elif len(fmts) == 0:
+        return []
     elif len(fmt_list) == 1:
         return "p", fmt_list  # p for PRIMITIVE
     else:
         return "l", fmt_list  # Default to list
 
 
-fmt = read_fmt(fmt)
-print("READ FORMAT")
-pprint.pprint(fmt)
-
-
 def _typecast_data_container(fmt, data: bytes, start):
-    print(f"NEW CALL OF typecast_data_container with format {fmt}, encoded data {data}, and start {start}")
+    # print(f"NEW CALL OF typecast_data_container with format {fmt}, encoded data {data}, and start {start}")
     data_len, data_flag, data_type = fmt
     data_part = data[start : start + data_len]
 
@@ -191,8 +177,10 @@ def typecast_data(fmts: list, data: bytes, data_flag: str = "", top: bool = True
 
     container_type = ""
     if top:
+        if len(fmts) == 1:
+            return None
         container_type, fmts = fmts
-    print(f'NEW CALL OF typecast_data with container type "{container_type}, format {fmts}, and encoded data {data}')
+    # print(f'NEW CALL OF typecast_data with container type "{container_type}, format {fmts}, and encoded data {data}')
 
     if container_type == "d" or data_flag == "d":
         typecasted_data = {}
@@ -214,9 +202,23 @@ def typecast_data(fmts: list, data: bytes, data_flag: str = "", top: bool = True
         tuple(typecasted_data)
         if container_type == "t"
         else typecasted_data[0]
-        if container_type == "s"
+        if container_type == "p"
         else typecasted_data
     )
 
+if __name__ == "__main__":
+    data = 3
+    # g, h, i = write_fmt({(1, 2): "2", "8888": b"sdgoisdhga"})
+    # g, h, i = write_fmt([[[[[[[[[[1, 2]]]]]]]]]])
+    fmt, encoded_data = write_fmt(data)
+    # g, h, i = write_fmt({"hi": "amogus"})
+    # g, h, i = write_fmt([1, 2, {"hi": "amogus"}])
+    # g, h, i = write_fmt([1, 2, {((1, 2),): 358568568}])
+    # g, h, i = write_fmt([1, "32362", b"sdgs", 326236236, (1, 2)])
+    print(f'Wrote str fmt "{fmt}" from "{data}" for encoded data {encoded_data}')
 
-print(typecast_data(fmt, encoded_data))
+    fmt = read_fmt(fmt)
+    print("READ FORMAT")
+    pprint.pprint(fmt)
+
+    print(typecast_data(fmt, encoded_data))

@@ -45,8 +45,8 @@ def run():
         )
         print("In response, I'm going to send the server a request to do some processing")
 
-        client.send("processing1", b"randnum**2")
-        result = client.recv("something", int)
+        client.send("processing1", "randnum**2")
+        result = client.recv("something")
 
         print(f"WHOAAA! The result is {result}! Thanks server!")
 
