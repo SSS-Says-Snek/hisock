@@ -110,10 +110,10 @@ class ClientInfo:
         """
         Creates a new ``ClientInfo`` instance given a dictionary. The dictionary should have the keys
         ``ip``, ``name``, and ``group``.
-        
+
         :param dict_: Dictionary that represents a new ``ClientInfo`` to be created from.
         :type dict_: dict
-        
+
         :return: a new instance of ``ClientInfo``.
         :rtype: ClientInfo
         """
