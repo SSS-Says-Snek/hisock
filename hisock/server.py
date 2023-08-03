@@ -23,16 +23,16 @@ try:
     from . import _typecast
     from ._shared import _HiSockBase
     from .utils import (ClientException, ClientInfo, ClientNotFound,
-                        GroupNotFound, Sendable, ServerException, _removeprefix,
-                        ipstr_to_tup, make_header, receive_message,
-                        validate_ipv4)
+                        GroupNotFound, Sendable, ServerException,
+                        _removeprefix, ipstr_to_tup, make_header,
+                        receive_message, validate_ipv4)
 except ImportError:
     import _typecast
     from _shared import _HiSockBase
     from utils import (ClientException, ClientInfo, ClientNotFound,
-                        GroupNotFound, Sendable, ServerException, _removeprefix,
-                        ipstr_to_tup, make_header, receive_message,
-                        validate_ipv4)
+                       GroupNotFound, Sendable, ServerException, _removeprefix,
+                       ipstr_to_tup, make_header, receive_message,
+                       validate_ipv4)
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -115,7 +115,7 @@ class HiSockServer(_HiSockBase):
         self._sockets_list = [self.socket]  # Our socket will always be the first
         self.clients: dict[socket.socket, ClientInfo] = {}
         self.clients_rev: dict[ClientInfo, socket.socket] = {}
-        
+
         self._reserved_funcs = {
             "join": {
                 "number_arguments": 1,
@@ -254,10 +254,7 @@ class HiSockServer(_HiSockBase):
         # Send reserved command to existing clients
         self._send_all_clients_raw(f"$CLTCONN${json.dumps(client_info.as_dict())}".encode())
 
-        self._call_function_reserved(
-            "join",
-            client_info
-        )
+        self._call_function_reserved("join", client_info)
 
     def _client_disconnection(self, client_socket: socket.socket):
         """
@@ -349,19 +346,10 @@ class HiSockServer(_HiSockBase):
         Other unreserved functions will also be passed in the same
         parameters as ``message``.
 
-        In addition, certain type casting is available to both reserved and unreserved
-        functions.
-        That means, that, using type hints, you can automatically convert
-        between needed instances. The type casting currently supports:
-
-        - ``bytes``
-        - ``str``
-        - ``int``
-        - ``float``
-        - ``bool``
-        - ``None``
-        - ``list`` (with the types listed here)
-        - ``dict`` (with the types listed here)
+        .. versionchanged:: 3.0
+            Manual type casting has been removed in favor of automatic type casting. This means that
+            annotations now do not matter in the context of how data will be manipulated, and that 
+            supported datatypes should automatically be casted to and from bytes.
 
         For more information, read the documentation for type casting.
 
@@ -512,7 +500,7 @@ class HiSockServer(_HiSockBase):
         return self.addr
 
     # Transmit data
-    
+
     def _send_all_clients_raw(self, content: bytes):
         """
         Sends the command and content to *ALL* clients connected *without a command*.
@@ -534,7 +522,7 @@ class HiSockServer(_HiSockBase):
         :param content: The message / content to send
         :type content: Sendable, optional
         """
-        
+
         data = self._prepare_send(command, content)
         for client in self.clients:
             client.sendall(data)
@@ -564,7 +552,9 @@ class HiSockServer(_HiSockBase):
         for client in self._get_group_sockets(group):
             client.sendall(data)
 
-    def send_client(self, client: Union[str, tuple[str, int], ClientInfo], command: str, content: Optional[Sendable] = None):
+    def send_client(
+        self, client: Union[str, tuple[str, int], ClientInfo], command: str, content: Optional[Sendable] = None
+    ):
         """
         Sends data to a specific client.
 
@@ -623,10 +613,7 @@ class HiSockServer(_HiSockBase):
         self._client_disconnection(client_socket)
 
         if call_func and "leave" in self.funcs:
-            self._call_function_reserved(
-                "leave",
-                client_info
-            )
+            self._call_function_reserved("leave", client_info)
 
     def disconnect_all_clients(self, force=False):
         """Disconnect all clients."""
@@ -780,32 +767,24 @@ class HiSockServer(_HiSockBase):
                     continue
 
                 ### Unreserved commands ###
-
-                # Handle random data with no command
-                elif not data.startswith(b"$CMD$"):
-                    if "*" in self.funcs:
-                        self._call_wildcard_function(client_info=client_info, command=None, content=data)
-                    return
-
                 has_listener = False  # For cache
 
                 # Get command and message
                 command = data.lstrip(b"$CMD$").split(b"$MSG$")[0].decode()
                 content = _removeprefix(data, f"$CMD${command}$MSG$".encode())
                 unfmt_content = content
-                
+
                 fmt = ""
                 # No content? (`_removeprefix` didn't do anything)
                 if not content or content == data:
                     content = None
                 else:
                     fmt_len = int(content[:8])
-                    fmt = content[8:8+fmt_len].decode()
-                    content = content[8+fmt_len:]
-                
+                    fmt = content[8 : 8 + fmt_len].decode()
+                    content = content[8 + fmt_len :]
+
                 fmt_ast = _typecast.read_fmt(fmt)
                 typecasted_content = _typecast.typecast_data(fmt_ast, content)
-                    
 
                 # Call functions that are listening for this command from the `on`
                 # decorator
@@ -817,19 +796,12 @@ class HiSockServer(_HiSockBase):
 
                     # Call function with dynamic args
                     arguments = ()
-                    # if func["num_args"] != 0:
-                    #     type_casted_client_info = self._type_cast_client_info(
-                    #         command=matching_command, client_info=client_info
-                    #     )
                     # client_info
                     if func["num_args"] == 1:
                         arguments = (client_info,)
                     # client_info, message
                     elif func["num_args"] >= 2:
-                        arguments = (
-                            client_info,
-                            typecasted_content
-                        )
+                        arguments = (client_info, typecasted_content)
                     self._call_function(matching_command, *arguments)
                     break
 
@@ -839,19 +811,14 @@ class HiSockServer(_HiSockBase):
                 # No listener found
                 if not has_listener and "*" in self.funcs:
                     # No recv and no catchall. A command and some data.
-                    self._call_wildcard_function(client_info=client_info, command=command, content=content)
+                    self._call_wildcard_function(client_info=client_info, command=command, content=typecasted_content)
 
                 # Caching
                 self._cache(has_listener, command, content, data, raw_data["header"])
 
                 # Call `message` function
                 if "message" in self.funcs:
-                    self._call_function_reserved(
-                        "message",
-                        client_info,
-                        command,
-                        typecasted_content
-                    )
+                    self._call_function_reserved("message", client_info, command, typecasted_content)
             except (BrokenPipeError, ConnectionResetError):
                 if client_socket in self.clients:
                     # Does it need to be forced?? Investigate further

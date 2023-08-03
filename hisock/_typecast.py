@@ -27,6 +27,10 @@ CONTAINER_SYMBOLS = {list: ("[", "]"), tuple: ("(", ")"), dict: ("{", "}")}
 SYMBOL_TO_FMT = {"[": "l", "(": "t", "{": "d"}
 
 
+class TypecastException(Exception):
+    pass
+
+
 def _write_fmt(data: Any, top: bool = True):
     fmt = ""
     encoded_data = b""
@@ -56,7 +60,13 @@ def _write_fmt(data: Any, top: bool = True):
         else:  # Container: add container len with symbols surrounding the inner fmt
             fmt += f"{container_len}{open_punc}{inner_fmt}{close_punc}"
     else:  # Primitive
-        encode_func = TYPE_TO_ENCODE_FUNC[type(data)]
+        try:
+            encode_func = TYPE_TO_ENCODE_FUNC[type(data)]
+        except KeyError:
+            raise TypecastException(
+                f'Failed to find default encoding function for "{data}" of type "{type(data)}". If you want to send this, convert it manually to and from bytes.'
+            ) from None
+
         fmt_letter = TYPE_TO_FMT[type(data)]
         encoded_data = encode_func(data)
 
@@ -206,6 +216,7 @@ def typecast_data(fmts: list, data: bytes, data_flag: str = "", top: bool = True
         if container_type == "p"
         else typecasted_data
     )
+
 
 if __name__ == "__main__":
     data = 3

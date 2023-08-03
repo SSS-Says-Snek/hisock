@@ -34,9 +34,9 @@ except ImportError:
     import _typecast
     from _shared import _HiSockBase
     from utils import (ClientException, ClientInfo, ClientNotFound,
-                        MessageCacheMember, Sendable, ServerException,
-                        ServerNotRunning, _recv_exactly, _removeprefix,
-                        iptup_to_str, make_header, validate_ipv4)
+                       MessageCacheMember, Sendable, ServerException,
+                       ServerNotRunning, _recv_exactly, _removeprefix,
+                       iptup_to_str, make_header, validate_ipv4)
 
 
 # ░█████╗░░█████╗░██╗░░░██╗████████╗██╗░█████╗░███╗░░██╗██╗
@@ -247,18 +247,10 @@ class HiSockClient(_HiSockBase):
         ``client_disconnect`` gets the client's data passed in as an argument.
         All other unreserved functions get the message passed in.
 
-        In addition, certain type casting is available to unreserved functions.
-        That means, that, using type hints, you can automatically convert
-        between needed instances. The type casting currently supports:
-
-        - ``bytes``
-        - ``str``
-        - ``int``
-        - ``float``
-        - ``bool``
-        - ``None``
-        - ``list`` (with the types listed here)
-        - ``dict`` (with the types listed here)
+        .. versionchanged:: 3.0
+            Manual type casting has been removed in favor of automatic type casting. This means that
+            annotations now do not matter in the context of how data will be manipulated, and that 
+            supported datatypes should automatically be casted to and from bytes.
 
         For more information, read the documentation for type casting.
 
@@ -494,14 +486,6 @@ class HiSockClient(_HiSockBase):
                 return
 
             ### Unreserved commands ###
-
-            # Handle random data
-            elif not data.startswith(b"$CMD$"):
-                if "*" not in self.funcs:
-                    return
-                self._call_wildcard_function(client_info=None, command=None, content=data)
-                return
-
             has_listener = False  # For cache
 
             # Get the command and the message
@@ -515,9 +499,9 @@ class HiSockClient(_HiSockBase):
                 content = None
             else:
                 fmt_len = int(content[:8])
-                fmt = content[8:8+fmt_len].decode()
-                content = content[8+fmt_len:]
-                
+                fmt = content[8 : 8 + fmt_len].decode()
+                content = content[8 + fmt_len :]
+
             fmt_ast = _typecast.read_fmt(fmt)
             typecasted_content = _typecast.typecast_data(fmt_ast, content)
 
@@ -532,9 +516,7 @@ class HiSockClient(_HiSockBase):
                 # Call function with dynamic args
                 arguments = ()
                 if func["num_args"] == 1:
-                    arguments = (
-                        typecasted_content,
-                    )
+                    arguments = (typecasted_content,)
                 self._call_function(matching_command, *arguments)
                 break
             else:
@@ -543,7 +525,7 @@ class HiSockClient(_HiSockBase):
             # No listener found
             if not has_listener and "*" in self.funcs:
                 # No recv and no catchall. A command and some data.
-                self._call_wildcard_function(client_info=None, command=command, content=content)
+                self._call_wildcard_function(client_info=None, command=command, content=typecasted_content)
 
             # Caching
             self._cache(has_listener, command, content, data, content_header)

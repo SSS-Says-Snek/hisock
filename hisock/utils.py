@@ -13,15 +13,11 @@ Copyright SSS_Says_Snek, 2021-present
 
 from __future__ import annotations
 
-import ast
-import builtins
 import socket
-import sys
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from re import search
-from typing import (Dict, List, Optional,  # Must use these for bare annots
-                    Type, Union)
+from typing import Optional, Type, Union  # Must use these for bare annots
 
 
 # Custom exceptions
@@ -160,9 +156,9 @@ Sendable = Union[
     float,
     None,
     ClientInfo,
-    List["Sendable"],
-    Dict[
-        str,
+    list["Sendable"],
+    dict[
+        Union[bytes, str, int, float, None, ClientInfo],
         "Sendable",
     ],
 ]

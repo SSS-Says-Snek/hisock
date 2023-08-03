@@ -15,15 +15,13 @@ from typing import Any, Callable, Optional, Union
 try:
     from . import _typecast
     from .utils import (ClientInfo, FunctionNotFoundException,
-                        MessageCacheMember, Sendable,
-                        make_header,
+                        MessageCacheMember, Sendable, make_header,
                         validate_command_not_reserved)
 except ImportError:
     import _typecast
     from utils import (ClientInfo, FunctionNotFoundException,
-                        MessageCacheMember, Sendable,
-                        make_header,
-                        validate_command_not_reserved)
+                       MessageCacheMember, Sendable, make_header,
+                       validate_command_not_reserved)
 
 
 class _HiSockBase:
@@ -111,8 +109,8 @@ class _HiSockBase:
 
     def _call_wildcard_function(
         self,
-        command: Optional[str],
-        content: bytes,
+        command: str,
+        content: Sendable,
         client_info: Optional[ClientInfo] = None,
     ):
         """
@@ -138,11 +136,7 @@ class _HiSockBase:
         arguments = []
         if client_info is not None:
             arguments.append(client_info)
-
-        arguments.extend([
-            command,
-            content
-        ])
+        arguments.extend([command, content])
 
         self._call_function(
             "*",
@@ -215,13 +209,13 @@ class _HiSockBase:
             daemon=True,
         )
         function_thread.start()
-    
+
     def _prepare_send(self, command: str, content: Optional[Sendable] = None) -> bytes:
         fmt, encoded_content = _typecast.write_fmt(content) if content is not None else ("", b"")
-        
+
         data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + make_header(fmt, 8) + fmt.encode() + encoded_content
         data_header = make_header(data_to_send, self.header_len)
-        
+
         return data_header + data_to_send
 
     class _on:  # NOSONAR (it's used in child classes)
@@ -373,11 +367,11 @@ class _HiSockBase:
         # Clean up
         data = self._recv_on_events[listen_on]["data"]
         del self._recv_on_events[listen_on]
-        
+
         fmt_len = int(data[:8])
-        fmt = data[8:8+fmt_len].decode()
-        data = data[8+fmt_len:]
-        
+        fmt = data[8 : 8 + fmt_len].decode()
+        data = data[8 + fmt_len :]
+
         fmt_ast = _typecast.read_fmt(fmt)
         typecasted_data = _typecast.typecast_data(fmt_ast, data)
 

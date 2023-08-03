@@ -103,7 +103,7 @@ When a function is prefaced with the ``on`` decorator, it will run on something.
 
 The ``on`` decorator takes a maximum of three parameters. One of the parameters is the command to listen on. The second (optional) parameter is whether to run the listener in its own thread or not. The third (optional) parameter is whether to override a reserved command, and this tutorial won't be covering it.
 
-For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client info. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in (can be type-casted to a dict). The second parameter is the data that is being received.
+For the server: The ``on`` decorator will send a maximum of two parameters to the function it is decorating (there are a few exceptions we will touch on). The first parameter is the client info. It is an instance of :class:`ClientInfo` that includes the client's name, client IP address, and the group the client is in. The second parameter is the data that is being received.
 
 For the client: the ``on`` decorator will send a maximum of one parameter to the function it is decorating, which will be the message or content the client receives (in most cases).
 
@@ -209,9 +209,6 @@ As I stated before, not every receiver has a maximum of two parameters passed to
 
 :mod:`HiSock` has reserved events. These events shouldn't be sent by the client or server explicitly as it is currently unsupported.
 
-.. note::
-   Besides for ``string`` and ``bytes`` for ``message``, these reserved events do not have type casting.
-
 Here is a list of the reserved events:
 
 Server:
@@ -254,49 +251,32 @@ Client:
 ----
 
 ============
-Type-casting
+Typecasting
 ============
-:mod:`HiSock` has a system called "type-casting" when transmitting data.
 
-Data sent and received can be one of the following types:
+.. versionchanged::
+   Previously, :mod:`HiSock` used manual type casting, where the type hints of the event's function actually determinesd
+   the type the data was supposed to be interpreted. However, now, it doesn't matter. Even if it doesn't matter, it's still recommended
+   to type hint your functions!
+
+You shouldn't worry about this too much, but :mod:`HiSock` has a system called "typecasting" when transmitting data. 
+This system is how hisock will convert supported datatypes to and from bytes to get sent along the network.
+
+Data sent and received can be one of the following supported types:
 
 - ``bytes``
 - ``str``
 - ``int``
 - ``float``
 - ``bool``
-- ``None``
+- ``NoneType``
 - ``list`` (with the types listed here)
-- ``dict`` (with the types listed here)
+- ``dict`` (with the immutable types listed here)
 
 .. note::
-   There is a type hint in ``hisock.utils`` called ``Sendable`` which has these.
+   There is a type alias in ``hisock.utils`` called ``Sendable`` which is a union of all of these.
 
-The type that the data gets type-casted to depends on the type hint for the message argument for the function for the event receiving the data. If there is no type hint for the argument, the data received will be bytes.
-
-Here are a few examples this server-side code block:
-
-.. code-block:: python
-
-   @server.on("string_sent")
-   def on_string_sent(client: hisock.ClientInfo, message: str):
-       """``message`` will be of type ``string``"""
-       ...
-
-   @server.on("integer_sent")
-   def on_integer_sent(client: hisock.ClientInfo, integer: int):
-      """``integer`` will be of type ``int``"""
-      ...
-
-   @server.on("dictionary_sent")
-   def on_dictionary_sent(client: hisock.ClientInfo, dictionary: dict):
-      """``dictionary`` will be of type ``dict``"""
-      ...
-
-.. note::
-   Although these examples are on the server-side, they work the exact same for the client-side.
-
-Of course, you need to be careful that the type-casting will work. Turning ``b"hello there"`` to ``int`` will fail.
+If you have a type that isn't one of these supported types, such as a class, consider manually converting to and from bytes.
 
 ----
 
@@ -309,7 +289,7 @@ In :mod:`HiSock` with an _unreserved_ event, the function to handle it can be ca
 
 As an example, for the server: If an event has 1 argument, it will only be called with the client info. If it has 2 arguments, it will be called with the client info and the message. If it has 0 arguments, it'll be called as a void (no arguments).
 
-Data can be sent similarly. If there is no data sent, the server will receive the equivalent of ``None`` for the type-casted data.
+Data can be sent similarly. If there is no data sent, the server will receive the equivalent of ``None`` for the typecasted data.
 
 Here are a few examples of this with a server-side code block.
 
