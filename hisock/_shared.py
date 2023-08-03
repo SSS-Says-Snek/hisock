@@ -16,13 +16,13 @@ try:
     from . import _typecast
     from .utils import (ClientInfo, FunctionNotFoundException,
                         MessageCacheMember, Sendable,
-                        _type_cast, make_header,
+                        make_header,
                         validate_command_not_reserved)
 except ImportError:
     import _typecast
     from utils import (ClientInfo, FunctionNotFoundException,
                         MessageCacheMember, Sendable,
-                        _type_cast, make_header,
+                        make_header,
                         validate_command_not_reserved)
 
 
@@ -80,28 +80,6 @@ class _HiSockBase:
             return client_info
         return client_info.as_dict()
 
-    @staticmethod
-    def _send_type_cast(content: Sendable) -> bytes:
-        """
-        Type casting content for the send methods.
-        This method exists so type casting can easily be changed without changing
-        all the send methods.
-
-        :param content: The content to type cast
-        :type content: Sendable
-
-        :return: The type casted content
-        :rtype: bytes
-
-        :raises InvalidTypeCast: If the content cannot be type casted
-        """
-
-        return _type_cast(
-            type_cast=bytes,
-            content_to_type_cast=content,
-            func_name="<sending function>",
-        )
-
     def _cache(
         self,
         has_listener: bool,
@@ -133,9 +111,9 @@ class _HiSockBase:
 
     def _call_wildcard_function(
         self,
-        command: Union[str, None],
+        command: Optional[str],
         content: bytes,
-        client_info: Union[ClientInfo, None] = None,
+        client_info: Optional[ClientInfo] = None,
     ):
         """
         Call the wildcard command.
@@ -161,10 +139,10 @@ class _HiSockBase:
         if client_info is not None:
             arguments.append(client_info)
 
-        arguments += [
+        arguments.extend([
             command,
             content
-        ]
+        ])
 
         self._call_function(
             "*",
@@ -243,8 +221,6 @@ class _HiSockBase:
         
         data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + make_header(fmt, 8) + fmt.encode() + encoded_content
         data_header = make_header(data_to_send, self.header_len)
-        
-        print("E", data_header + data_to_send)
         
         return data_header + data_to_send
 

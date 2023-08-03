@@ -85,6 +85,9 @@ def _read_fmt_dict(
 
 
 def read_fmt(fmts: str):
+    if fmts == "":
+        return []
+
     # print(f'NEW read_fmt CALL w/ str format "{fmts}"')
     i = 0  # Starting char determines tuple, list, or dict
     start = 0
@@ -140,15 +143,13 @@ def read_fmt(fmts: str):
             )  # Skip over container (recursion will handle that). Sub 1 if char signals dict for the extra "d" added
             start = i + 1  # Reset start to char after
         elif char in "])}":  # End of container
-            print("JUMP UP", i)
+            # print("JUMP UP", i)
             return i, fmt_list  # Specify index to jump to
 
         i += 1
 
     if container_type in "tld":
         return container_type, fmt_list
-    elif len(fmts) == 0:
-        return []
     elif len(fmt_list) == 1:
         return "p", fmt_list  # p for PRIMITIVE
     else:
@@ -177,7 +178,7 @@ def typecast_data(fmts: list, data: bytes, data_flag: str = "", top: bool = True
 
     container_type = ""
     if top:
-        if len(fmts) == 1:
+        if len(fmts) == 0:
             return None
         container_type, fmts = fmts
     # print(f'NEW CALL OF typecast_data with container type "{container_type}, format {fmts}, and encoded data {data}')
