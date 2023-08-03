@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-import hisock
+from hisock import ClientInfo, ThreadedHiSockClient, ThreadedHiSockServer
 
-server = hisock.server.ThreadedHiSockServer(("localhost", 6969))
-client = hisock.client.ThreadedHiSockClient(("localhost", 6969))
+server = ThreadedHiSockServer(("localhost", 6969))
+client = ThreadedHiSockClient(("localhost", 6969))
 
 info = {}
 
@@ -19,8 +19,8 @@ def finish():
 
 
 @server.on("join")
-def join(clt_data: dict):
-    server.send_client(clt_data["ip"], "sus", b"AMOGUS")
+def join(client: ClientInfo):
+    server.send_client(client, "sus", b"AMOGUS")
 
 
 ########################
@@ -29,9 +29,9 @@ def join(clt_data: dict):
 
 
 @client.on("sus")
-def recv(data: str):
+def recv(data: bytes):
     info["serv_to_clt"] = data
-    client.send("client2server", b"")
+    # client.send("client2server", b"")
 
     finish()
 
@@ -41,4 +41,4 @@ client.start()
 
 
 def test_serv_to_clt():
-    assert info["serv_to_clt"] == "AMOGUS"
+    assert info["serv_to_clt"] == b"AMOGUS"

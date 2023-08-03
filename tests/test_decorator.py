@@ -94,7 +94,7 @@ class TestServerDecs:
         assert server_dummy.funcs["e"] == {
             "func": func_server_no_typecast,
             "name": func_server_no_typecast.__name__,
-            "type_hint": {"client_data": None, "message": None},
+            "num_args": 2,
             "threaded": False,
             "override": False,
         }
@@ -103,7 +103,7 @@ class TestServerDecs:
         assert server_dummy.funcs["f"] == {
             "func": func_server_two_typecast,
             "name": func_server_two_typecast.__name__,
-            "type_hint": {"client_data": str, "message": int},
+            "num_args": 2,
             "threaded": False,
             "override": False,
         }
@@ -112,7 +112,7 @@ class TestServerDecs:
         assert server_dummy.funcs["g"] == {
             "func": func_server_one_typecast,
             "name": func_server_one_typecast.__name__,
-            "type_hint": {"client_data": None, "message": float},
+            "num_args": 2,
             "threaded": False,
             "override": False,
         }
@@ -121,7 +121,7 @@ class TestServerDecs:
         assert server_dummy.funcs["h"] == {
             "func": func_server_clt_typecast,
             "name": func_server_clt_typecast.__name__,
-            "type_hint": {"client_data": list, "message": None},
+            "num_args": 2,
             "threaded": False,
             "override": False,
         }
@@ -132,7 +132,7 @@ class TestClientDecs:
         assert client_dummy.funcs["i"] == {
             "func": func_client_no_typecast,
             "name": func_client_no_typecast.__name__,
-            "type_hint": {"message": None},
+            "num_args": 1,
             "threaded": False,
             "override": False,
         }
@@ -141,7 +141,7 @@ class TestClientDecs:
         assert client_dummy.funcs["j"] == {
             "func": func_client_typecast,
             "name": func_client_typecast.__name__,
-            "type_hint": {"message": int},
+            "num_args": 1,
             "threaded": False,
             "override": False,
         }
