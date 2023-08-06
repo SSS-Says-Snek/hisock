@@ -115,33 +115,8 @@ class HiSockServer(_HiSockBase):
         self._sockets_list = [self.socket]  # Our socket will always be the first
         self.clients: dict[socket.socket, ClientInfo] = {}
         self.clients_rev: dict[ClientInfo, socket.socket] = {}
-
-        self._reserved_funcs = {
-            "join": {
-                "number_arguments": 1,
-                "type_cast_arguments": ("client_info",),
-            },
-            "leave": {
-                "number_arguments": 1,
-                "type_cast_arguments": ("client_info",),
-            },
-            "message": {
-                "number_arguments": 3,
-                "type_cast_arguments": ("client_info", "command", "message"),
-            },
-            "name_change": {
-                "number_arguments": 3,
-                "type_cast_arguments": ("client_info",),
-            },
-            "group_change": {
-                "number_arguments": 3,
-                "type_cast_arguments": ("client_info",),
-            },
-            "*": {
-                "number_arguments": 3,
-                "type_cast_arguments": ("client_info", "command", "message"),
-            },
-        }
+        
+        self._reserved_funcs = {"join": 1, "leave": 1, "message": 3, "name_change": 3, "group_change": 3, "*": 3}
         self._unreserved_func_arguments = ("client", "message")
 
         # Keepalive

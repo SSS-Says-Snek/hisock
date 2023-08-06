@@ -56,28 +56,6 @@ class _HiSockBase:
 
     # Internal methods
 
-    def _type_cast_client_info(self, command: str, client_info: ClientInfo) -> Union[ClientInfo, dict]:
-        """
-        Type cast client info accordingly.
-        If the type hint is None, then the client info is returned as is (a dict).
-
-        :param command: The name of the function that called this method.
-        :type command: str
-        :param client_info: The client info to type cast.
-        :type client_info: dict
-
-        :return: The type casted client info from the type hint.
-        :rtype: Union[ClientInfo, dict]
-        """
-
-        type_cast_to = self.funcs[command]["type_hint"]["client_info"]
-        if type_cast_to is None:
-            type_cast_to = ClientInfo
-
-        if type_cast_to is ClientInfo:
-            return client_info
-        return client_info.as_dict()
-
     def _cache(
         self,
         has_listener: bool,
@@ -277,7 +255,7 @@ class _HiSockBase:
 
             # Reserved commands
             if self.command in self.outer._reserved_funcs:
-                needed_number_of_args = (self.outer._reserved_funcs[self.command]["number_arguments"],)[0]
+                needed_number_of_args = self.outer._reserved_funcs[self.command]
                 valid = number_of_func_args == needed_number_of_args
 
             # Unreserved commands

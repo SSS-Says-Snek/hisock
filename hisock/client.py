@@ -120,21 +120,7 @@ class HiSockClient(_HiSockBase):
         self.sock.setblocking(True)
 
         # Stores the names of the reserved functions and information about them
-        self._reserved_funcs = {
-            "client_connect": {
-                "number_arguments": 1,
-                "type_cast_arguments": ("client_info",),
-            },
-            "client_disconnect": {
-                "number_arguments": 1,
-                "type_cast_arguments": ("client_info",),
-            },
-            "force_disconnect": {
-                "number_arguments": 0,
-                "type_cast_arguments": (),
-            },
-            "*": {"number_arguments": 2, "type_cast_arguments": ("command", "message")},
-        }
+        self._reserved_funcs = {"client_connect": 1, "client_disconnect": 1, "force_disconnect": 0, "*": 2}
         self._unreserved_func_arguments = ("message",)
 
         # Flags
