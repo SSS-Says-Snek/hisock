@@ -17,7 +17,7 @@ import socket
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from re import search
-from typing import Optional, Type, Union  # Must use these for bare annots
+from typing import List, Dict, Optional, Type, Union  # Must use these for bare annots
 
 
 # Custom exceptions
@@ -156,8 +156,8 @@ Sendable = Union[
     float,
     None,
     ClientInfo,
-    list["Sendable"],
-    dict[
+    List["Sendable"],
+    Dict[
         Union[bytes, str, int, float, None, ClientInfo],
         "Sendable",
     ],
