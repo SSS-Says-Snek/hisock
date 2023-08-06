@@ -10,17 +10,17 @@ from __future__ import annotations
 
 import inspect
 import threading
-from typing import Any, Callable, Union
+from typing import Any, Callable, Optional, Union
 
 try:
+    from . import _typecast
     from .utils import (ClientInfo, FunctionNotFoundException,
-                        MessageCacheMember, Sendable,
-                        _str_type_to_type_annotations_dict, _type_cast,
+                        MessageCacheMember, Sendable, make_header,
                         validate_command_not_reserved)
 except ImportError:
+    import _typecast
     from utils import (ClientInfo, FunctionNotFoundException,
-                       MessageCacheMember, Sendable,
-                       _str_type_to_type_annotations_dict, _type_cast,
+                       MessageCacheMember, Sendable, make_header,
                        validate_command_not_reserved)
 
 
@@ -56,50 +56,6 @@ class _HiSockBase:
 
     # Internal methods
 
-    def _type_cast_client_info(self, command: str, client_info: ClientInfo) -> Union[ClientInfo, dict]:
-        """
-        Type cast client info accordingly.
-        If the type hint is None, then the client info is returned as is (a dict).
-
-        :param command: The name of the function that called this method.
-        :type command: str
-        :param client_info: The client info to type cast.
-        :type client_info: dict
-
-        :return: The type casted client info from the type hint.
-        :rtype: Union[ClientInfo, dict]
-        """
-
-        type_cast_to = self.funcs[command]["type_hint"]["client_info"]
-        if type_cast_to is None:
-            type_cast_to = ClientInfo
-
-        if type_cast_to is ClientInfo:
-            return client_info
-        return client_info.as_dict()
-
-    @staticmethod
-    def _send_type_cast(content: Sendable) -> bytes:
-        """
-        Type casting content for the send methods.
-        This method exists so type casting can easily be changed without changing
-        all the send methods.
-
-        :param content: The content to type cast
-        :type content: Sendable
-
-        :return: The type casted content
-        :rtype: bytes
-
-        :raises InvalidTypeCast: If the content cannot be type casted
-        """
-
-        return _type_cast(
-            type_cast=bytes,
-            content_to_type_cast=content,
-            func_name="<sending function>",
-        )
-
     def _cache(
         self,
         has_listener: bool,
@@ -131,9 +87,9 @@ class _HiSockBase:
 
     def _call_wildcard_function(
         self,
-        command: Union[str, None],
-        content: bytes,
-        client_info: Union[dict, None] = None,
+        command: str,
+        content: Sendable,
+        client_info: Optional[ClientInfo] = None,
     ):
         """
         Call the wildcard command.
@@ -141,36 +97,24 @@ class _HiSockBase:
         :param command: The command that was sent. If None, then it is just
             random data.
         :type command: str, optional
-        :param content: The data to pass to the wildcard command. Will be
-            type-casted accordingly.
+        :param content: The data to pass to the wildcard command. Will NOT be
+            type-casted.
         :type content: bytes
         :param client_info: The client info. If None, then there is no client info.
-        :type client_info: dict, optional
+        :type client_info: ClientInfo, optional
 
         :raises FunctionNotFoundException: If there is no wildcard listener.
         """
 
         try:
-            wildcard_func = self.funcs["*"]
+            self.funcs["*"]
         except KeyError:
             raise FunctionNotFoundException("A wildcard function doesn't exist.") from None
 
         arguments = []
         if client_info is not None:
-            arguments.append(self._type_cast_client_info("*", client_info))
-
-        arguments += [
-            _type_cast(
-                type_cast=wildcard_func["type_hint"]["command"],
-                content_to_type_cast=command,
-                func_name="<wildcard function> <command>",
-            ),
-            _type_cast(
-                type_cast=wildcard_func["type_hint"]["message"],
-                content_to_type_cast=content,
-                func_name="<wildcard function> <data>",
-            ),
-        ]
+            arguments.append(client_info)
+        arguments.extend([command, content])
 
         self._call_function(
             "*",
@@ -244,6 +188,14 @@ class _HiSockBase:
         )
         function_thread.start()
 
+    def _prepare_send(self, command: str, content: Optional[Sendable] = None) -> bytes:
+        fmt, encoded_content = _typecast.write_fmt(content) if content is not None else ("", b"")
+
+        data_to_send = b"$CMD$" + command.encode() + b"$MSG$" + make_header(fmt, 8) + fmt.encode() + encoded_content
+        data_header = make_header(data_to_send, self.header_len)
+
+        return data_header + data_to_send
+
     class _on:  # NOSONAR (it's used in child classes)
         """Decorator for handling a command"""
 
@@ -277,28 +229,12 @@ class _HiSockBase:
 
             self._assert_num_func_args_valid(len(func_args))
 
-            # Store annotations of function
-            annotations = _str_type_to_type_annotations_dict(
-                inspect.getfullargspec(func).annotations
-            )  # {"param": type}
-            parameter_annotations = {}
-
-            # Map function arguments into type hint compliant ones
-            type_cast_arguments: tuple
-            if self.command in self.outer._reserved_funcs:
-                type_cast_arguments = (self.outer._reserved_funcs[self.command]["type_cast_arguments"],)[0]
-            else:
-                type_cast_arguments = self.outer._unreserved_func_arguments
-
-            for func_argument, argument_name in zip(func_args, type_cast_arguments):
-                parameter_annotations[argument_name] = annotations.get(func_argument, None)
-
             # Add function
             self.outer.funcs[self.command] = {
                 "func": func,
                 "name": func.__name__,
-                "type_hint": parameter_annotations,
                 "threaded": self.threaded,
+                "num_args": len(func_args),
                 "override": self.override,
             }
 
@@ -319,7 +255,7 @@ class _HiSockBase:
 
             # Reserved commands
             if self.command in self.outer._reserved_funcs:
-                needed_number_of_args = (self.outer._reserved_funcs[self.command]["number_arguments"],)[0]
+                needed_number_of_args = self.outer._reserved_funcs[self.command]
                 valid = number_of_func_args == needed_number_of_args
 
             # Unreserved commands
@@ -366,7 +302,7 @@ class _HiSockBase:
 
         return False
 
-    def recv(self, recv_on: str = None, recv_as: Sendable = bytes) -> Sendable:
+    def recv(self, recv_on: str = None) -> Sendable:
         """
         Receive data from the server while blocking.
         Can receive on a command, which is used as like one-time on decorator.
@@ -410,5 +346,12 @@ class _HiSockBase:
         data = self._recv_on_events[listen_on]["data"]
         del self._recv_on_events[listen_on]
 
+        fmt_len = int(data[:8])
+        fmt = data[8 : 8 + fmt_len].decode()
+        data = data[8 + fmt_len :]
+
+        fmt_ast = _typecast.read_fmt(fmt)
+        typecasted_data = _typecast.typecast_data(fmt_ast, data)
+
         # Return
-        return _type_cast(type_cast=recv_as, content_to_type_cast=data, func_name="<recv function>")
+        return typecasted_data

@@ -54,7 +54,7 @@ import sys
 import time
 import random
 
-from hisock import start_server, get_local_ip
+from hisock import ClientInfo, start_server, get_local_ip
 
 ADDR = get_local_ip()
 PORT = 6969
@@ -68,16 +68,16 @@ print(f"Serving at {ADDR}")
 server = start_server((ADDR, PORT))
 
 @server.on("join")
-def client_join(client_data):
-    print(f"Cool, {client_data.ip_as_str} joined!")
-    if client_data['name'] is not None:
+def client_join(client: ClientInfo):
+    print(f"Cool, {client.ipstr} joined!")
+    if client.name is not None:
         print(f"    - With a sick name \"{client_data.name}\", very cool!")
-    if client_data['group'] is not None:
+    if client.group is not None:
         print(f"    - In a sick group \"{client_data.group}\", cool!")
 
     print("I'm gonna send them a quick hello message")
 
-    server.send_client(client_data['ip'], "hello_message", str(time.time()).encode())
+    server.send_client(client, "hello_message", str(time.time()).encode())
 
 @server.on("processing1")
 def process(client_data, process_request: str):
@@ -93,7 +93,7 @@ def process(client_data, process_request: str):
     result = eval(process_request)  # Insecure, but I'm lazy, so...
     print(f"Cool! The result is {result}! I'mma send it to the client")
 
-    server.send_client(client_data, "something", str(result))
+    server.send_client(client_data, "something", result)
 
 
 server.start()
@@ -133,7 +133,7 @@ client = connect(
 join_time = time.time()
 
 
-@client.on("hello_message")
+@client.on("hello_message", threaded=True)
 def handle_hello(msg: str):
     print("Thanks, server, for sending a hello, just for me!")
     print(f"Looks like, the message was sent on timestamp {msg}, "
