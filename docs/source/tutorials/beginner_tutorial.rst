@@ -254,8 +254,8 @@ Client:
 Typecasting
 ============
 
-.. versionchanged::
-   Previously, :mod:`HiSock` used manual type casting, where the type hints of the event's function actually determinesd
+.. versionchanged:: 3.0
+   Previously, :mod:`HiSock` used manual type casting, where the type hints of the event's function actually determined
    the type the data was supposed to be interpreted. However, now, it doesn't matter. Even if it doesn't matter, it's still recommended
    to type hint your functions!
 
