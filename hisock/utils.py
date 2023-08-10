@@ -204,7 +204,7 @@ def _recv_exactly(connection: socket.socket, length: int, buffer_size: int) -> O
     return data
 
 
-def receive_message(connection: socket.socket, header_len: int, buffer_size: int) -> Union[dict[str, bytes], Literal["False"]]:
+def receive_message(connection: socket.socket, header_len: int, buffer_size: int) -> Union[dict[str, bytes], Literal[False]]:
     """
     Receives a message from a server or client.
 

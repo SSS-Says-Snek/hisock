@@ -21,7 +21,7 @@ import threading  # Threaded client and decorators
 import traceback  # Error handling
 from ipaddress import IPv4Address  # Comparisons
 from time import time  # Unix timestamp support
-from typing import Callable, Union  # Type hints
+from typing import Optional, Callable, Union  # Type hints
 
 try:
     from . import _typecast
@@ -98,8 +98,8 @@ class HiSockClient(_HiSockBase):
     def __init__(
         self,
         addr: tuple[str, int],
-        name: Union[str, None] = None,
-        group: Union[str, None] = None,
+        name: Optional[str] = None,
+        group: Optional[str] = None,
         header_len: int = 16,
         cache_size: int = -1,
     ):
@@ -364,7 +364,7 @@ class HiSockClient(_HiSockBase):
 
     # Changers
 
-    def change_name(self, new_name: Union[str, None]):
+    def change_name(self, new_name: Optional[str]):
         """
         Changes the name of the client
 
@@ -379,7 +379,7 @@ class HiSockClient(_HiSockBase):
         data_to_send = "$CHNAME$" + new_name
         self._send_raw(data_to_send.encode())
 
-    def change_group(self, new_group: Union[str, None]):
+    def change_group(self, new_group: Optional[str]):
         """
         Changes the client's group.
 
