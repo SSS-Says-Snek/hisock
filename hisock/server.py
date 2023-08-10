@@ -77,18 +77,11 @@ class HiSockServer(_HiSockBase):
         If this is True, then a signal will be sent to every client every minute to prevent
         hanging clients in the server. The clients have thirty seconds to send back an
         acknowledge signal to show that they are still alive.
-        Default is False FOR NOW. Investigating further.
+        
+        .. important::
+           There is currently a bug in the keepalive system. As such, it has been disabled by default FOR NOW. 
+           When it is fixed, the default will be reverted back.
     :type keepalive: bool, optional
-
-    :ivar tuple addr: A two-element tuple containing the IP address and the port.
-    :ivar int header_len: An integer storing the header length of each "message".
-    :ivar dict clients: A dictionary with the socket as its key and the
-        client info as its value.
-    :ivar dict clients_rev: A dictionary with the client info as its key
-        and the socket as its value (for reverse lookup, up-to-date with
-        :attr:`clients`).
-    :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
-        **This is mainly used for under-the-hood-code.**
 
     :raises TypeError: If the address is not a tuple.
     """
@@ -576,6 +569,10 @@ class HiSockServer(_HiSockBase):
         :type client: Client
         :param force: A boolean, specifying whether to force a disconnection
             or not. Defaults to False.
+            
+            .. note::
+               Usually, ``hisock`` will try to notify the client socket to disconnect safely. 
+               What the ``force`` parameter does is basically not say anything at all.
         :type force: bool, optional
         :param call_func: A boolean, specifying whether to call the ``leave`` reserved
             function when client is disconnected. Defaults to False.
@@ -603,8 +600,17 @@ class HiSockServer(_HiSockBase):
         if call_func and "leave" in self.funcs:
             self._call_function_reserved("leave", client_info)
 
-    def disconnect_all_clients(self, force=False):
-        """Disconnect all clients."""
+    def disconnect_all_clients(self, force: bool = False):
+        """
+        Disconnect all clients. Similar to :meth:`disconnect_client`, but disconnects all clients.
+        
+        :param force: A boolean, specifying whether to force a disconnection 
+            or not. Defaults to False.
+            
+            .. note::
+               Read the ``force`` parameter in :meth:`disconnect_client` for more information on what it does.
+        :type force: bool, optional
+        """
 
         if not force:
             self._send_all_clients_raw(b"$DISCONN$")
@@ -810,8 +816,7 @@ class HiSockServer(_HiSockBase):
             except (BrokenPipeError, ConnectionResetError):
                 if client_socket in self.clients:
                     # Does it need to be forced?? Investigate further
-                    self.disconnect_client(self.clients[client_socket]["ip"], force=True)
-                print("[DEBUG] 10054 exception, we're investigating")
+                    self.disconnect_client(self.clients[client_socket], force=True)
 
     # Stop
 

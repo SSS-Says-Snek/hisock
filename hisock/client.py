@@ -81,18 +81,6 @@ class HiSockClient(_HiSockBase):
         -1 or below for no message cache, 0 for an unlimited cache size,
         and any other number for the cache size.
     :type cache_size: int, optional
-
-    :ivar tuple addr: A two-element tuple containing the IP address and the
-        port number of the server.
-    :ivar int header_len: An integer storing the header length of each "message".
-    :ivar str name: A string representing the name of the client to identify by.
-        Default is None.
-    :ivar str group: A string representing the group of the client to identify by.
-        Default is None.
-    :ivar dict funcs: A list of functions registered with decorator :meth:`on`.
-        **This is mainly used for under-the-hood-code.**
-    :ivar int connect_time: An integer sotring the Unix timestamp of when the
-        client connected to the server.
     """
 
     def __init__(
