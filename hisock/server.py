@@ -17,7 +17,8 @@ import select  # Handle multiple clients at once
 import socket
 import threading  # Threaded server and decorators
 from ipaddress import IPv4Address  # Comparisons
-from typing import Callable, Iterable, Optional, Union  # Type hints
+from typing import Callable, Iterable, Optional, Union, overload  # Type hints
+from typing_extensions import Literal
 
 try:
     from . import _typecast
@@ -423,17 +424,29 @@ class HiSockServer(_HiSockBase):
         if len(group_clients) == 0:
             raise GroupNotFound(f'Group "{group}" does not exist.')
         return group_clients
+    
+    @overload
+    def get_all_clients(self, key: Literal[None]) -> list[ClientInfo]:
+        ...
+    
+    @overload
+    def get_all_clients(self, key: Literal["ip"]) -> list[tuple[str, int]]: 
+        ...
+    
+    @overload
+    def get_all_clients(self, key: Literal["name", "group"]) -> list[str]: 
+        ...
 
-    def get_all_clients(self, key: Optional[str] = None) -> list[Union[ClientInfo, tuple[str, int], str]]:
+    def get_all_clients(self, key: Optional[Literal["ip", "name", "group"]] = None) -> list[Union[ClientInfo, tuple[str, int], str]]:
         """
         Get all clients currently connected to the server.
 
-        :param key: If a string is specified as a key,
-            it will search through the ClientInfo for the key, and output it to a list
-        :type key: Union[Callable, str], optional
+        :param key: If a string is specified as a key (ip, name, or group),
+            it will search through the ClientInfo for the key, and output it to a list.
+        :type key: Literal["ip", "name", "group"], optional
 
         :return: A list of either ClientInfo or the content as filtered by the key
-        :rtype: list[Union[ClientInfo, tuple[str, int], str]]
+        :rtype: list[ClientInfo | tuple[str, int] | str]
         """
 
         clients = list(self.clients.values())

@@ -17,7 +17,8 @@ import socket
 from dataclasses import dataclass
 from ipaddress import IPv4Address
 from re import search
-from typing import List, Dict, Optional, Type, Union  # Must use these for bare annots
+from typing import List, Dict, Optional, Type, Union, overload  # Must use these for bare annots
+from typing_extensions import Literal
 
 
 # Custom exceptions
@@ -165,27 +166,24 @@ Sendable = Union[
 SendableTypes = Type[Sendable]
 
 
-def make_header(header_message: Union[str, bytes], header_len: int, encode=True) -> Union[str, bytes]:
+def make_header(header_message: Union[str, bytes], header_len: int) -> bytes:
     """
     Makes a header of ``header_message``, with a maximum
     header length of ``header_len``
 
     :param header_message: A string OR bytes-like object, representing
         the data to make a header from
-    :type header_message: Union[str, bytes]
+    :type header_message: str | bytes
     :param header_len: An integer, specifying
         the actual header length (will be padded)
     :type header_len: int
-    :param encode: A boolean, specifying the
     :return: The constructed header, padded to ``header_len``
         bytes
-    :rtype: Union[str, bytes]
+    :rtype: str | bytes
     """
 
     message_len = len(header_message)
-    constructed_header = f"{message_len}{' ' * (header_len - len(str(message_len)))}"
-    if encode:
-        return constructed_header.encode()
+    constructed_header = f"{message_len}{' ' * (header_len - len(str(message_len)))}".encode()
     return constructed_header
 
 
@@ -206,7 +204,7 @@ def _recv_exactly(connection: socket.socket, length: int, buffer_size: int) -> O
     return data
 
 
-def receive_message(connection: socket.socket, header_len: int, buffer_size: int) -> Union[dict[str, bytes], bool]:
+def receive_message(connection: socket.socket, header_len: int, buffer_size: int) -> Union[dict[str, bytes], Literal["False"]]:
     """
     Receives a message from a server or client.
 
@@ -219,7 +217,7 @@ def receive_message(connection: socket.socket, header_len: int, buffer_size: int
     :return: A dictionary, with two key-value pairs;
         The first key-value pair refers to the header,
         while the second one refers to the actual data
-    :rtype: Union[dict["header": bytes, "data": bytes], False
+    :rtype: {"header": bytes, "data": bytes} | False
     """
 
     try:
@@ -235,6 +233,12 @@ def receive_message(connection: socket.socket, header_len: int, buffer_size: int
         pass
     return False
 
+
+@overload
+def _removeprefix(string: str, prefix: str) -> str: ...
+
+@overload
+def _removeprefix(string: bytes, prefix: bytes) -> bytes: ...
 
 def _removeprefix(
     string: Union[str, bytes],
