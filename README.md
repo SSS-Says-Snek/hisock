@@ -1,11 +1,11 @@
-![CircleCI Badge](https://img.shields.io/circleci/build/github/SSS-Says-Snek/hisock)
 [![Documentation Status](https://readthedocs.org/projects/hisock/badge/?version=latest)](https://hisock.readthedocs.io/en/latest/?badge=latest)
 [![Codacy Badge](https://app.codacy.com/project/badge/Grade/b071d22550484b5db3ad95434f2713dd)](https://www.codacy.com/gh/SSS-Says-Snek/hisock/dashboard?utm_source=github.com&amp;utm_medium=referral&amp;utm_content=SSS-Says-Snek/hisock&amp;utm_campaign=Badge_Grade)
 [![Downloads](https://static.pepy.tech/personalized-badge/hisock?period=total&units=international_system&left_color=grey&right_color=green&left_text=Downloads)](https://pepy.tech/project/hisock)
 
-![PyPI Version](https://img.shields.io/pypi/v/hisock)
-![Github Version](https://img.shields.io/github/v/release/SSS-Says-Snek/hisock)
-![Github Commits](https://img.shields.io/github/commits-since/SSS-Says-Snek/hisock/latest)
+![CircleCI Badge](https://img.shields.io/circleci/build/github/SSS-Says-Snek/hisock?style=for-the-badge)
+![PyPI Version](https://img.shields.io/pypi/v/hisock?style=for-the-badge)
+![Github Version](https://img.shields.io/github/v/release/SSS-Says-Snek/hisock?style=for-the-badge)
+![Github Commits](https://img.shields.io/github/commits-since/SSS-Says-Snek/hisock/latest?style=for-the-badge)
 
 <img src="https://raw.githubusercontent.com/SSS-Says-Snek/SSS-Says-Snek.github.io/master/assets/logo.png" width=200 class="center">
 
